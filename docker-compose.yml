@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  auditor:
+    build: .
+    container_name: auditor
+    ports:
+      - "3000:3000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ASSEMBLYAI_API_KEY=${ASSEMBLYAI_API_KEY}
+      - APP_URL=${APP_URL:-http://localhost:3000}
+      - SUPERVISOR_PASSWORD=${SUPERVISOR_PASSWORD:-supervisoresutel}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS}
+    restart: unless-stopped

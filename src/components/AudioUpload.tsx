@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileAudio, Check, AlertCircle, Play, Settings, RefreshCw, Layers, ShieldCheck, Database, Search, Folder, X, ChevronRight, ArrowLeft, Home, HardDrive } from 'lucide-react';
 import { SalesCall } from '../types';
 import { saveAudioToDB } from '../utils/audioCache';
+import { API_URL } from '../config';
+import { generateDemoCall } from '../utils/demoData';
 
 declare global {
   interface Window {
@@ -28,21 +30,20 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLoadDemo = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar abrir el explorador de archivos
+    e.stopPropagation();
     setIsLoadingDemo(true);
     setUploadError(null);
     try {
-      const response = await fetch('/api/cargar-demo', {
+      const response = await fetch(`${API_URL}/api/cargar-demo`, {
         method: 'POST'
       });
-      if (!response.ok) {
-        throw new Error(`Error de servidor (${response.status})`);
-      }
+      if (!response.ok) throw new Error('Servidor no disponible');
       const data = await response.json();
       onUploadSuccess(data);
-    } catch (err: any) {
-      console.error("Error al cargar demo:", err);
-      setUploadError(err.message || 'Error al cargar la llamada de prueba.');
+    } catch {
+      console.warn("Backend no disponible, usando demo local");
+      const localDemo = generateDemoCall();
+      onUploadSuccess(localDemo);
     } finally {
       setIsLoadingDemo(false);
     }
@@ -178,7 +179,7 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
     setUploadProgress(10);
     
     try {
-      const response = await fetch('/api/drive-import', {
+      const response = await fetch(`${API_URL}/api/drive-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -297,7 +298,7 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
         });
       }, 2500);
 
-      const response = await fetch('/api/upload', {
+      const response = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });

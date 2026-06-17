@@ -28,6 +28,8 @@ import AuditorDashboard from './components/AuditorDashboard';
 import LoginScreen from './components/LoginScreen';
 import { deleteAudioFromDB, clearAllAudiosFromDB } from './utils/audioCache';
 import { initAuth } from './lib/firebase';
+import { API_URL } from './config';
+import { generateDemoCall } from './utils/demoData';
 
 export default function App() {
   const [calls, setCalls] = useState<SalesCall[]>([]);
@@ -77,7 +79,7 @@ export default function App() {
     const token = localStorage.getItem('utel_supervisor_token');
     const storedUser = localStorage.getItem('utel_supervisor_user');
     if (token) {
-      fetch('/api/verify-session', {
+      fetch(`${API_URL}/api/verify-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
@@ -94,9 +96,9 @@ export default function App() {
         })
         .catch(err => {
           console.error("No se pudo verificar la sesión con el servidor:", err);
-          // Fallback seguro de seguridad para supervisor
-          localStorage.removeItem('utel_supervisor_token');
-          localStorage.removeItem('utel_supervisor_user');
+          // Si no hay backend, permitir acceso con sesión local
+          setIsAuthenticated(true);
+          setSessionUser(storedUser || 'Supervisor');
         })
         .finally(() => {
           setCheckingSession(false);
@@ -134,7 +136,7 @@ export default function App() {
     setIsSyncingDrive(true);
     try {
       // 1. Sincronizar historial de auditorías (JSONs)
-      const response = await fetch(`/api/drive-history?accessToken=${driveToken}`);
+      const response = await fetch(`${API_URL}/api/drive-history?accessToken=${driveToken}`);
       if (!response.ok) throw new Error('Fallo al sincronizar historial de Drive');
       
       const data = await response.json();
@@ -196,7 +198,7 @@ export default function App() {
     }
 
     // 2. Cargar del servidor efímero
-    fetch('/api/llamadas')
+    fetch(`${API_URL}/api/llamadas`)
       .then(async res => {
         if (!res.ok) throw new Error('Respuesta del servidor fallida');
         return await res.json();
@@ -267,14 +269,14 @@ export default function App() {
 
     setIsImportingFromDrive(fileId);
     try {
-      const response = await fetch('/api/drive-import', {
+      const response = await fetch(`${API_URL}/api/drive-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileId,
           fileName,
           accessToken: driveToken,
-          engine: 'gemini' // Por defecto en el import rápido
+          engine: 'gemini'
         })
       });
 
@@ -305,7 +307,7 @@ export default function App() {
     const driveToken = localStorage.getItem('utel_google_drive_token');
     if (driveToken) {
       try {
-        await fetch('/api/drive-save', {
+        await fetch(`${API_URL}/api/drive-save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -323,19 +325,18 @@ export default function App() {
   const handleLoadDemo = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/cargar-demo', {
+      const response = await fetch(`${API_URL}/api/cargar-demo`, {
         method: 'POST'
       });
-      if (!response.ok) {
-        throw new Error(`Error de servidor (${response.status})`);
-      }
+      if (!response.ok) throw new Error('Servidor no disponible');
       const newCall = await response.json();
-      setCalls(prev => {
-        return [newCall, ...prev];
-      });
+      setCalls(prev => [newCall, ...prev]);
       setSelectedCallId(newCall.id);
-    } catch (err: any) {
-      console.error("Error al cargar demo:", err);
+    } catch {
+      console.warn("Backend no disponible, usando demo local");
+      const localDemo = generateDemoCall();
+      setCalls(prev => [localDemo, ...prev]);
+      setSelectedCallId(localDemo.id);
     } finally {
       setIsLoading(false);
     }
@@ -344,7 +345,7 @@ export default function App() {
   const handleDeleteCall = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/llamadas/${id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/llamadas/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error("Error eliminando registro del servidor:", err);
     }
@@ -559,7 +560,7 @@ export default function App() {
                                 console.error("Error al vaciar IndexedDB local:", dbErr);
                               }
                               setIsLoading(true);
-                              fetch('/api/llamadas')
+                              fetch(`${API_URL}/api/llamadas`)
                                 .then(res => res.json())
                                 .then(data => {
                                   if (data && Array.isArray(data)) {

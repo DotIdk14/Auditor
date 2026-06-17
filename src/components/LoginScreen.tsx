@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, ShieldAlert, BadgeCheck, Loader2, Key, User, Eye, EyeOff } from 'lucide-react';
 import { googleSignIn, logoutGoogle } from '../lib/firebase';
+import { API_URL } from '../config';
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, username: string) => void;
@@ -29,7 +30,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       const { user } = result;
 
       // Comunicar con nuestro backend para validar autorización del correo electrónico
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,7 +73,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setErrorMessage('');
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
