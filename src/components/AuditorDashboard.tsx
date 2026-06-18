@@ -20,10 +20,15 @@ import {
   BookOpen,
   Briefcase,
   Users,
-  Download
+  Download,
+  MessageSquare,
+  Flag,
+  Trash2,
+  Plus
 } from 'lucide-react';
-import { SalesCall, TranscriptionUtterance, UtelChecklistItem } from '../types';
+import { SalesCall, TranscriptionUtterance, UtelChecklistItem, Nota, Objecion, TipoObjecion, Severidad } from '../types';
 import { downloadPDFReport, downloadCSVReport, downloadTranscriptionPDF } from '../utils/reportGenerator';
+import { API_URL } from '../config';
 
 interface AuditorDashboardProps {
   activeCall: SalesCall;
@@ -72,6 +77,102 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
   // Registrar el ID del item de la lista UTEL PCE que está expandido
   const [expandedChecklistId, setExpandedChecklistId] = useState<string | null>("C1");
   const [showFullTranscript, setShowFullTranscript] = useState(false);
+
+  const [notas, setNotas] = useState<Nota[]>([]);
+  const [objeciones, setObjeciones] = useState<Objecion[]>([]);
+  const [showAnnotationModal, setShowAnnotationModal] = useState(false);
+  const [annotationType, setAnnotationType] = useState<'nota' | 'objecion'>('nota');
+  const [annotationSegment, setAnnotationSegment] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [notaText, setNotaText] = useState('');
+  const [objecionText, setObjecionText] = useState('');
+  const [objecionTipo, setObjecionTipo] = useState<TipoObjecion>('otro');
+  const [objecionSeveridad, setObjecionSeveridad] = useState<Severidad>('media');
+
+  const supervisorEmail = localStorage.getItem('utel_supervisor_user') || 'supervisor@utel.mx';
+  const supervisorName = localStorage.getItem('utel_supervisor_user') || 'Supervisor';
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/llamadas/${activeCall.id}/notas`)
+      .then(r => r.json())
+      .then(data => setNotas(Array.isArray(data) ? data : []))
+      .catch(() => {});
+    fetch(`${API_URL}/api/llamadas/${activeCall.id}/objeciones`)
+      .then(r => r.json())
+      .then(data => setObjeciones(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [activeCall.id]);
+
+  const handleAddAnnotation = async () => {
+    const endpoint = annotationType === 'nota' ? 'notas' : 'objeciones';
+    const body: any = {
+      supervisorEmail,
+      supervisorName,
+      segmentStart: annotationSegment.start,
+      segmentEnd: annotationSegment.end,
+    };
+    if (annotationType === 'nota') {
+      body.text = notaText;
+    } else {
+      body.text = objecionText;
+      body.tipoObjecion = objecionTipo;
+      body.severidad = objecionSeveridad;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/llamadas/${activeCall.id}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        if (annotationType === 'nota') setNotas(prev => [...prev, created]);
+        else setObjeciones(prev => [...prev, created]);
+      }
+    } catch (e) {
+      console.error(`Error adding ${annotationType}:`, e);
+    }
+
+    setShowAnnotationModal(false);
+    setNotaText('');
+    setObjecionText('');
+    setObjecionTipo('otro');
+    setObjecionSeveridad('media');
+  };
+
+  const handleDeleteNota = async (notaId: string) => {
+    try {
+      await fetch(`${API_URL}/api/llamadas/${activeCall.id}/notas/${notaId}`, { method: 'DELETE' });
+      setNotas(prev => prev.filter(n => n.id !== notaId));
+    } catch (e) {
+      console.error('Error deleting nota:', e);
+    }
+  };
+
+  const handleDeleteObjecion = async (objecionId: string) => {
+    try {
+      await fetch(`${API_URL}/api/llamadas/${activeCall.id}/objeciones/${objecionId}`, { method: 'DELETE' });
+      setObjeciones(prev => prev.filter(o => o.id !== objecionId));
+    } catch (e) {
+      console.error('Error deleting objecion:', e);
+    }
+  };
+
+  const openNotaModal = (start: number, end: number) => {
+    setAnnotationType('nota');
+    setAnnotationSegment({ start, end });
+    setNotaText('');
+    setShowAnnotationModal(true);
+  };
+
+  const openObjecionModal = (start: number, end: number) => {
+    setAnnotationType('objecion');
+    setAnnotationSegment({ start, end });
+    setObjecionText('');
+    setObjecionTipo('otro');
+    setObjecionSeveridad('media');
+    setShowAnnotationModal(true);
+  };
 
   // Saltar al segundo exacto de la frase seleccionada en la transcripción
   const handleSeekToSentence = (seconds: number) => {
@@ -584,6 +685,55 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
                           <span className="font-mono bg-[#0f0f11] py-0.5 px-1.5 rounded text-gray-400">Confianza: {Math.round(dialogue.confidence * 100)}%</span>
                         </div>
                       </div>
+
+                      {/* Annotations for this segment */}
+                      {(() => {
+                        const segmentNotas = notas.filter(n =>
+                          n.segmentStart >= dialogue.start && n.segmentEnd <= dialogue.end
+                        );
+                        const segmentObjeciones = objeciones.filter(o =>
+                          o.segmentStart >= dialogue.start && o.segmentEnd <= dialogue.end
+                        );
+                        return (
+                          <div className={`flex flex-col gap-1.5 mt-1.5 ${isSeller ? 'ml-0' : 'mr-0'} opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                            {segmentNotas.map(nota => (
+                              <div key={nota.id} className="flex items-start gap-2 bg-blue-500/5 border border-blue-500/15 rounded-lg px-3 py-1.5 text-[11px]">
+                                <MessageSquare className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
+                                <span className="text-gray-300 flex-1">{nota.text}</span>
+                                <span className="text-[9px] text-gray-500 shrink-0">{nota.supervisorName}</span>
+                                <button onClick={() => handleDeleteNota(nota.id)} className="text-gray-500 hover:text-rose-400 shrink-0">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            {segmentObjeciones.map(obj => (
+                              <div key={obj.id} className="flex items-start gap-2 bg-rose-500/5 border border-rose-500/15 rounded-lg px-3 py-1.5 text-[11px]">
+                                <Flag className="w-3.5 h-3.5 text-rose-400 mt-0.5 shrink-0" />
+                                <span className="text-gray-300 flex-1">{obj.text}</span>
+                                <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded font-bold uppercase">{obj.tipoObjecion.replace(/_/g, ' ')}</span>
+                                <span className="text-[9px] text-gray-500">{obj.supervisorName}</span>
+                                <button onClick={() => handleDeleteObjecion(obj.id)} className="text-gray-500 hover:text-rose-400 shrink-0">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openNotaModal(dialogue.start, dialogue.end); }}
+                                className="text-[10px] text-blue-400 hover:text-blue-300 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 rounded px-2 py-0.5 flex items-center gap-1"
+                              >
+                                <Plus className="w-3 h-3" /> Nota
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openObjecionModal(dialogue.start, dialogue.end); }}
+                                className="text-[10px] text-rose-400 hover:text-rose-300 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 rounded px-2 py-0.5 flex items-center gap-1"
+                              >
+                                <Flag className="w-3 h-3" /> Objeción
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })
@@ -901,6 +1051,88 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
         </div>
       </div>
 
+      {/* Annotation Modal */}
+      {showAnnotationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowAnnotationModal(false)}>
+          <div className="bg-[#181818] border border-[#333333] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                {annotationType === 'nota' ? (
+                  <><MessageSquare className="w-4 h-4 text-blue-400" /> Agregar Nota</>
+                ) : (
+                  <><Flag className="w-4 h-4 text-rose-400" /> Marcar Objeción</>
+                )}
+              </h3>
+              <button onClick={() => setShowAnnotationModal(false)} className="text-gray-500 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-[10px] text-gray-500 font-mono mb-4">
+              Segmento: {formatTime(annotationSegment.start)} – {formatTime(annotationSegment.end)}
+            </div>
+
+            {annotationType === 'objecion' && (
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Tipo</label>
+                  <select
+                    value={objecionTipo}
+                    onChange={e => setObjecionTipo(e.target.value as TipoObjecion)}
+                    className="w-full bg-[#111] border border-zinc-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="tono_inadecuado">Tono Inadecuado</option>
+                    <option value="info_erronea">Info Errénea</option>
+                    <option value="proceso_omitido">Proceso Omitido</option>
+                    <option value="oportunidad_perdida">Oportunidad Perdida</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-gray-400 uppercase tracking-wider block mb-1">Severidad</label>
+                  <select
+                    value={objecionSeveridad}
+                    onChange={e => setObjecionSeveridad(e.target.value as Severidad)}
+                    className="w-full bg-[#111] border border-zinc-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="baja">Baja</option>
+                    <option value="media">Media</option>
+                    <option value="alta">Alta</option>
+                    <option value="critica">Crítica</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <textarea
+              value={annotationType === 'nota' ? notaText : objecionText}
+              onChange={e => annotationType === 'nota' ? setNotaText(e.target.value) : setObjecionText(e.target.value)}
+              placeholder={annotationType === 'nota' ? 'Escribe tu nota sobre este segmento...' : 'Describe la objeción detectada...'}
+              className="w-full bg-[#111] border border-zinc-700 rounded-lg px-3 py-2.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-none h-24"
+            />
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowAnnotationModal(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white border border-zinc-700 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddAnnotation}
+                disabled={annotationType === 'nota' ? !notaText.trim() : !objecionText.trim()}
+                className={`px-4 py-2 text-xs font-bold rounded-lg disabled:opacity-40 ${
+                  annotationType === 'nota'
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                    : 'bg-rose-600 hover:bg-rose-500 text-white'
+                }`}
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
