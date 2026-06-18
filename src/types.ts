@@ -83,3 +83,33 @@ export interface SalesCall {
   transcription: TranscriptionUtterance[];
   isLocalCacheOnly?: boolean;
 }
+
+// ── Audit Annotations: Notas and Objeciones ──────────────────────
+
+export type TipoObjecion = 'tono_inadecuado' | 'info_erronea' | 'proceso_omitido' | 'oportunidad_perdida' | 'otro';
+
+export type Severidad = 'baja' | 'media' | 'alta' | 'critica';
+
+export interface Nota {
+  id: string;
+  auditoriaId: string;
+  supervisorEmail: string;
+  supervisorName: string;
+  segmentStart: number;
+  segmentEnd: number;
+  text: string;
+  createdAt: string;
+}
+
+export interface Objecion {
+  id: string;
+  auditoriaId: string;
+  supervisorEmail: string;
+  supervisorName: string;
+  segmentStart: number;
+  segmentEnd: number;
+  tipoObjecion: TipoObjecion;
+  severidad: Severidad;
+  text: string;
+  createdAt: string;
+}
