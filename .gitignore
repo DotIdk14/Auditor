@@ -9,3 +9,4 @@ coverage/
 .vercel
 supabase/.temp/
 .omo/
+firebase-service-account.json

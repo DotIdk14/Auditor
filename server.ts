@@ -13,6 +13,7 @@ import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import { evaluateHeuristic, buildChecklist, Modalidad } from "./src/shared/pce-rubric.js";
 import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-calls.js";
+import { syncSupervisoresFromSupabase } from "./src/utils/firebaseSync.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -1651,6 +1652,19 @@ app.get("/api/supervisores/:email/historial", async (req, res) => {
   } catch (err: any) {
     console.warn("[SUPABASE] Error fetching supervisor history:", err.message);
     return res.json({ supervisorEmail, totalAuditorias: 0, auditorias: [] });
+  }
+});
+
+// API: Sincronizar supervisores de Supabase a Firebase Auth
+app.post("/api/sync-supervisores", async (req, res) => {
+  try {
+    console.log("[SYNC] Iniciando sincronización Supabase → Firebase Auth...");
+    const result = await syncSupervisoresFromSupabase();
+    console.log(`[SYNC] Completado: ${result.created} creados, ${result.updated} actualizados, ${result.errors.length} errores`);
+    return res.json(result);
+  } catch (err: any) {
+    console.error("[SYNC] Error:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
