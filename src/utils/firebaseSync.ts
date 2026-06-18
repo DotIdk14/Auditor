@@ -3,17 +3,25 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 let firebaseInitialized = false;
+let cachedDirname: string | null = null;
+
+function getDirname(): string {
+  if (cachedDirname) return cachedDirname;
+  try {
+    cachedDirname = dirname(fileURLToPath(import.meta.url));
+  } catch {
+    cachedDirname = process.cwd();
+  }
+  return cachedDirname;
+}
 
 function getServiceAccount(): admin.ServiceAccount {
   const envJson = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (envJson) {
     return JSON.parse(envJson) as admin.ServiceAccount;
   }
-  const filePath = join(__dirname, "../../firebase-service-account.json");
+  const filePath = join(getDirname(), "../../firebase-service-account.json");
   return JSON.parse(readFileSync(filePath, "utf-8")) as admin.ServiceAccount;
 }
 
