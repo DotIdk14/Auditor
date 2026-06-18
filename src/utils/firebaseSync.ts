@@ -1,9 +1,5 @@
 import admin from "firebase-admin";
-import { createClient } from "@supabase/supabase-js";
 import serviceAccount from "../../firebase-service-account.json";
-
-const supabaseUrl = process.env.SUPABASE_URL || "";
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 
 let firebaseInitialized = false;
 
@@ -15,7 +11,7 @@ function initFirebaseAdmin() {
   firebaseInitialized = true;
 }
 
-export async function syncSupervisoresFromSupabase(): Promise<{
+export async function syncSupervisoresFromSupabase(supabase: any): Promise<{
   created: number;
   updated: number;
   errors: string[];
@@ -24,12 +20,10 @@ export async function syncSupervisoresFromSupabase(): Promise<{
 
   const result = { created: 0, updated: 0, errors: [] as string[] };
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    result.errors.push("SUPABASE_URL or SUPABASE_ANON_KEY not configured");
+  if (!supabase) {
+    result.errors.push("Supabase client not configured");
     return result;
   }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   const { data: profiles, error } = await supabase
     .from("profiles")

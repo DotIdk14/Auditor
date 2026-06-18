@@ -1659,7 +1659,7 @@ app.get("/api/supervisores/:email/historial", async (req, res) => {
 app.post("/api/sync-supervisores", async (req, res) => {
   try {
     console.log("[SYNC] Iniciando sincronización Supabase → Firebase Auth...");
-    const result = await syncSupervisoresFromSupabase();
+    const result = await syncSupervisoresFromSupabase(supabase);
     console.log(`[SYNC] Completado: ${result.created} creados, ${result.updated} actualizados, ${result.errors.length} errores`);
     return res.json(result);
   } catch (err: any) {
