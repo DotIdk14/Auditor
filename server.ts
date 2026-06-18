@@ -1675,6 +1675,24 @@ app.post("/api/sync-supervisores", async (req, res) => {
   }
 });
 
+// API: Fijar contraseñas conocidas para supervisores (respaldo Email/Password)
+app.post("/api/set-supervisor-passwords", async (req, res) => {
+  try {
+    const password = req.body.password || "Supervisor2026!";
+    console.log(`[PASSWORDS] Asignando contraseña a supervisores en Firebase Auth...`);
+    const result = await syncSupervisoresFromSupabase(supabase, password);
+    return res.json({
+      message: "Contraseñas asignadas. Usa Email/Password para iniciar sesion desde cualquier dominio.",
+      passwords: result.passwords,
+      updated: result.updated,
+      errors: result.errors,
+    });
+  } catch (err: any) {
+    console.error("[PASSWORDS] Error:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Middleware de integración de Vite
 const startServer = async () => {
   if (process.env.NODE_ENV !== "production") {

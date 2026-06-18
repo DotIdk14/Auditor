@@ -25,14 +25,17 @@ function initFirebaseAdmin() {
   firebaseInitialized = true;
 }
 
-export async function syncSupervisoresFromSupabase(supabase: any): Promise<{
+const DEFAULT_PASSWORD = "Supervisor2026!";
+
+export async function syncSupervisoresFromSupabase(supabase: any, setPassword?: string): Promise<{
   created: number;
   updated: number;
+  passwords: { email: string; password: string }[];
   errors: string[];
 }> {
   initFirebaseAdmin();
 
-  const result = { created: 0, updated: 0, errors: [] as string[] };
+  const result = { created: 0, updated: 0, passwords: [] as { email: string; password: string }[], errors: [] as string[] };
 
   if (!supabase) {
     result.errors.push("Supabase client not configured");
@@ -51,6 +54,7 @@ export async function syncSupervisoresFromSupabase(supabase: any): Promise<{
 
   for (const profile of profiles) {
     if (!profile.email) continue;
+    const pwd = setPassword || DEFAULT_PASSWORD;
 
     try {
       const existingUser = await admin.auth().getUserByEmail(profile.email).catch(() => null);
@@ -58,16 +62,18 @@ export async function syncSupervisoresFromSupabase(supabase: any): Promise<{
       if (existingUser) {
         await admin.auth().updateUser(existingUser.uid, {
           displayName: profile.nombre || profile.email.split("@")[0],
+          password: setPassword ? pwd : undefined,
         });
+        if (setPassword) result.passwords.push({ email: profile.email, password: pwd });
         result.updated++;
       } else {
-        const tempPassword = generateSecurePassword();
         await admin.auth().createUser({
           email: profile.email,
           emailVerified: true,
-          password: tempPassword,
+          password: pwd,
           displayName: profile.nombre || profile.email.split("@")[0],
         });
+        result.passwords.push({ email: profile.email, password: pwd });
         result.created++;
       }
     } catch (err: any) {
