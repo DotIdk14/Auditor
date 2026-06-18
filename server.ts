@@ -236,6 +236,13 @@ if (supabase) {
   }).catch((err) => {
     console.warn("[SUPABASE] Failed to load calls on startup:", err.message);
   });
+
+  // Auto-sync supervisors from Supabase to Firebase Auth
+  syncSupervisoresFromSupabase(supabase).then((result) => {
+    console.log(`[SYNC] Supervisores: ${result.created} creados, ${result.updated} actualizados${result.errors.length ? `, ${result.errors.length} errores` : ''}`);
+  }).catch((err) => {
+    console.warn("[SYNC] Auto-sync failed:", err.message);
+  });
 }
 
 const app = express();

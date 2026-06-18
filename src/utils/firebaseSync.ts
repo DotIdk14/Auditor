@@ -1,12 +1,26 @@
 import admin from "firebase-admin";
-import serviceAccount from "../../firebase-service-account.json";
+import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 let firebaseInitialized = false;
+
+function getServiceAccount(): admin.ServiceAccount {
+  const envJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (envJson) {
+    return JSON.parse(envJson) as admin.ServiceAccount;
+  }
+  const filePath = join(__dirname, "../../firebase-service-account.json");
+  return JSON.parse(readFileSync(filePath, "utf-8")) as admin.ServiceAccount;
+}
 
 function initFirebaseAdmin() {
   if (firebaseInitialized) return;
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    credential: admin.credential.cert(getServiceAccount()),
   });
   firebaseInitialized = true;
 }
