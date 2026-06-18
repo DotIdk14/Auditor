@@ -3,23 +3,23 @@
 ## Architecture
 
 - **Full-stack app**: React 19 (Vite) frontend + Express backend in a single repo
-- **Dual runtime**: Backend runs as a real HTTP server locally (`PORT=3000`) and as a Vercel serverless function when deployed. The `if (!process.env.VERCEL)` guard in `server.ts:1765` controls this.
+- **Dual runtime**: Backend runs as a real HTTP server locally (`PORT=3000`) and as a Vercel serverless function when deployed. The `if (!process.env.VERCEL)` guard in `server.ts` controls this.
 - **Frontend API calls**: The React SPA calls the backend via `VITE_API_URL` env var (`src/config.ts`). In production this is an ngrok URL pointing to the VPS. The SPA does NOT call its own origin for API requests.
+- **Shared modules**: PCE rubric logic lives in `src/shared/pce-rubric.ts` (single source of truth). Simulated call fixtures in `src/__fixtures__/simulated-calls.ts`.
 
 ## Commands
 
 ```bash
 npm run dev          # Dev server (tsx server.ts + Vite HMR)
-npm run build        # Full production build (3 steps below)
+npm run build        # Full production build (Vite + esbuild, no obfuscation)
 npm run lint         # TypeScript check only (tsc --noEmit)
 ```
 
 **Build pipeline** (`npm run build`) runs sequentially:
 1. `vite build` → outputs SPA to `dist/`
 2. `esbuild server.ts --bundle --platform=node --format=cjs --packages=external --outfile=dist/server.cjs`
-3. `node ./scripts/obfuscate.js` → obfuscates ALL `.js` files in `dist/` (hex identifiers, string arrays)
 
-There are **no tests** and **no CI workflows** in this repo.
+There are **no tests** and **no CI workflows** in this repo. Supabase migration files are in `supabase/migrations/`.
 
 ## Vercel Deployment
 
@@ -44,9 +44,11 @@ There are **no tests** and **no CI workflows** in this repo.
 - `api/whisper.ts` — thin proxy to `APP_URL/api/whisper` (backend on VPS)
 - Max duration for all: **60 seconds** (set in `vercel.json`)
 
-**Required Vercel env vars:**
+**Required Vercel/Server env vars:**
 | Variable | Purpose |
 |---|---|
+| `JWT_SECRET` | HMAC-SHA256 secret for session token signing |
+| `ALLOWED_EMAILS` | Comma-separated authorized emails (fallback when Supabase unavailable) |
 | `VITE_API_URL` | Backend URL the frontend calls (ngrok) |
 | `APP_URL` | Backend URL for serverless function proxies |
 | `OLLAMA_URL` | Ollama server URL (ngrok) |
@@ -69,7 +71,7 @@ There are **no tests** and **no CI workflows** in this repo.
 
 ## Dev Server Quirks
 
-- `npm run dev` uses `tsx server.ts` directly — no pre-build, no obfuscation
+- `npm run dev` uses `tsx server.ts` directly — no pre-build
 - Vite runs in middleware mode, serving the React dev build with HMR
 - `DISABLE_HMR=true` env var disables HMR and file watching (used by AI Studio agent)
 
@@ -77,6 +79,7 @@ There are **no tests** and **no CI workflows** in this repo.
 
 1. Frontend calls Firebase `signInWithPopup` (Google) → gets email + access token
 2. Frontend POSTs `{ email, displayName }` to `${VITE_API_URL}/api/login`
-3. Backend validates email against Supabase CRM (`profiles` table, `rol: admin/coordinador`) or hardcoded allowlist
-4. Backend returns `{ token: "utel-supervisor-session-token" }` (static token)
-5. Access token is cached in `localStorage` under `utel_google_drive_token` for Google Drive API access
+3. Backend validates email against Supabase CRM (`profiles` table, `rol: admin/coordinador`) or `ALLOWED_EMAILS` env var (fallback)
+4. Backend returns `{ token: "<JWT>", username }` — signed with HMAC-SHA256, expires 24h
+5. Backward-compatible: legacy static token `utel-supervisor-session-token` still accepted by `/api/verify-session` during migration
+6. Access token is cached in `localStorage` under `utel_google_drive_token` for Google Drive API access

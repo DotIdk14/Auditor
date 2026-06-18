@@ -44,33 +44,6 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [sessionUser, setSessionUser] = useState<string>('');
 
-  // Protección contra inspección de código y copia no autorizada
-  useEffect(() => {
-    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Bloquear F12
-      if (e.key === 'F12') e.preventDefault();
-      
-      // Bloquear Ctrl+Shift+I (Inspeccionar), Ctrl+Shift+C (Seleccionar elemento), 
-      // Ctrl+Shift+J (Consola), Ctrl+U (Ver código fuente)
-      if (e.ctrlKey && (
-        (e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'i' || e.key === 'c' || e.key === 'j')) || 
-        (e.key === 'U' || e.key === 'u')
-      )) {
-        e.preventDefault();
-      }
-    };
-
-    document.addEventListener('contextmenu', handleContextMenu);
-    document.addEventListener('keydown', handleKeyDown);
-    
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenu);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
   // Inicialización de autenticación para servicios (como Drive) y verificación de sesión
   useEffect(() => {
     // Restaurar sesión de Google Drive si existe
