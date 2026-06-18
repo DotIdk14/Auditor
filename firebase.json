@@ -1,0 +1,22 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "CRM IDK Auditor",
+        "supportEmail": "ianjarquin1403@gmail.com",
+        "authorizedRedirectUris": [
+          "https://auditor-olive.vercel.app",
+          "https://auditor-idkboooi-s-projects.vercel.app",
+          "http://localhost:5173",
+          "http://localhost:3000"
+        ]
+      }
+    },
+    "authorizedDomains": [
+      "localhost",
+      "auditor-olive.vercel.app",
+      "auditor-idkboooi-s-projects.vercel.app"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -62,4 +62,20 @@ export const logoutGoogle = async () => {
   await auth.signOut();
   cachedAccessToken = null;
   localStorage.removeItem('utel_google_drive_token');
+};
+
+export const emailPasswordSignIn = async (email: string, password: string): Promise<User> => {
+  const result = await signInWithEmailAndPassword(auth, email, password);
+  return result.user;
+};
+
+export const emailPasswordSignUp = async (email: string, password: string): Promise<User> => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  return result.user;
+};
+
+export const firebaseSignOut = async () => {
+  cachedAccessToken = null;
+  localStorage.removeItem('utel_google_drive_token');
+  await signOut(auth);
 };

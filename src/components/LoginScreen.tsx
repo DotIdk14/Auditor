@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, ShieldAlert, BadgeCheck, Loader2, Key, User, Eye, EyeOff } from 'lucide-react';
-import { googleSignIn, logoutGoogle } from '../lib/firebase';
+import { Lock, ShieldAlert, BadgeCheck, Loader2, Mail, Eye, EyeOff } from 'lucide-react';
+import { googleSignIn, logoutGoogle, emailPasswordSignIn } from '../lib/firebase';
 import { API_URL } from '../config';
 
 interface LoginScreenProps {
@@ -10,10 +10,9 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [showManualLogin, setShowManualLogin] = useState<boolean>(false);
+  const [showEmailLogin, setShowEmailLogin] = useState<boolean>(false);
   
-  // Estados para login manual
-  const [username, setUsername] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
@@ -62,10 +61,10 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }
   };
 
-  const handleManualLogin = async (e: React.FormEvent) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) {
-      setErrorMessage('Por favor ingrese la contraseña de acceso.');
+    if (!email || !password) {
+      setErrorMessage('Ingresa tu correo y contraseña.');
       return;
     }
 
@@ -73,14 +72,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setErrorMessage('');
 
     try {
+      const user = await emailPasswordSignIn(email, password);
+
       const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: username.trim() || 'Supervisor de Calidad',
-          password: password,
+          email: user.email,
+          displayName: user.displayName || user.email?.split('@')[0],
         }),
       });
 
@@ -89,11 +88,21 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       if (response.ok && data.success) {
         onLoginSuccess(data.token, data.username);
       } else {
-        setErrorMessage(data.error || 'Contraseña incorrecta.');
+        setErrorMessage(data.error || 'Correo no autorizado.');
       }
     } catch (err: any) {
-      console.error('Manual login error:', err);
-      setErrorMessage('Fallo al conectar con el servidor de auditoría.');
+      console.error('Email login error:', err);
+      if (err.code === 'auth/user-not-found') {
+        setErrorMessage('No existe cuenta con este correo. Usa Google o contacta al administrador.');
+      } else if (err.code === 'auth/wrong-password') {
+        setErrorMessage('Contraseña incorrecta.');
+      } else if (err.code === 'auth/invalid-credential') {
+        setErrorMessage('Credenciales inválidas. Verifica tu correo y contraseña.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setErrorMessage('Demasiados intentos. Espera unos minutos.');
+      } else {
+        setErrorMessage(err.message || 'Error al iniciar sesión.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -155,7 +164,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         {/* Opciones de Login */}
         <div className="space-y-4">
-          {!showManualLogin ? (
+          {!showEmailLogin ? (
             <>
               <button
                 onClick={handleGoogleLogin}
@@ -182,28 +191,28 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               </button>
               
               <button
-                onClick={() => setShowManualLogin(true)}
+                onClick={() => setShowEmailLogin(true)}
                 className="w-full bg-transparent hover:bg-zinc-800/50 text-gray-400 hover:text-white rounded-2xl py-3 px-4 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
               >
-                <Key className="w-3 h-3" />
-                Acceder mediante correo
+                <Mail className="w-3 h-3" />
+                Correo y Contraseña
               </button>
             </>
           ) : (
-            <form onSubmit={handleManualLogin} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <form onSubmit={handleEmailLogin} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
                 <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
                   Correo Electrónico
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
-                    <User className="w-4 h-4" />
+                    <Mail className="w-4 h-4" />
                   </span>
                   <input
                     type="email"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="usuario@ejemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="supervisor@crmidk.com"
                     className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                 </div>
@@ -211,7 +220,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
               <div>
                 <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
-                  Contraseña de Acceso
+                  Contraseña
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
@@ -241,16 +250,17 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   disabled={isSubmitting}
                   className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Iniciando...' : 'Entrar al Workspace'}
+                  {isSubmitting ? 'Iniciando...' : 'Iniciar Sesión'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
-                    setShowManualLogin(false);
+                    setShowEmailLogin(false);
                     setErrorMessage('');
                   }}
                   className="text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
                 >
-                  Regresar a Google Login
+                  ← Regresar a Google Login
                 </button>
               </div>
             </form>
