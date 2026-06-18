@@ -13,7 +13,6 @@ import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
 import { evaluateHeuristic, buildChecklist, Modalidad } from "./src/shared/pce-rubric.js";
 import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-calls.js";
-import { syncSupervisoresFromSupabase } from "./src/utils/firebaseSync.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -238,11 +237,17 @@ if (supabase) {
   });
 
   // Auto-sync supervisors from Supabase to Firebase Auth
-  syncSupervisoresFromSupabase(supabase).then((result) => {
-    console.log(`[SYNC] Supervisores: ${result.created} creados, ${result.updated} actualizados${result.errors.length ? `, ${result.errors.length} errores` : ''}`);
-  }).catch((err) => {
-    console.warn("[SYNC] Auto-sync failed:", err.message);
-  });
+  try {
+    import("./src/utils/firebaseSync.js").then(mod => {
+      mod.syncSupervisoresFromSupabase(supabase).then((result: any) => {
+        console.log(`[SYNC] Supervisores: ${result.created} creados, ${result.updated} actualizados${result.errors.length ? `, ${result.errors.length} errores` : ''}`);
+      }).catch((err: any) => {
+        console.warn("[SYNC] Auto-sync failed:", err.message);
+      });
+    }).catch((err: any) => {
+      console.warn("[SYNC] Firebase Admin no disponible:", err.message);
+    });
+  } catch (_) {}
 }
 
 const app = express();
@@ -1666,6 +1671,7 @@ app.get("/api/supervisores/:email/historial", async (req, res) => {
 app.post("/api/sync-supervisores", async (req, res) => {
   try {
     console.log("[SYNC] Iniciando sincronización Supabase → Firebase Auth...");
+    const { syncSupervisoresFromSupabase } = await import("./src/utils/firebaseSync.js");
     const result = await syncSupervisoresFromSupabase(supabase);
     console.log(`[SYNC] Completado: ${result.created} creados, ${result.updated} actualizados, ${result.errors.length} errores`);
     return res.json(result);
@@ -1680,6 +1686,7 @@ app.post("/api/set-supervisor-passwords", async (req, res) => {
   try {
     const password = req.body.password || "Supervisor2026!";
     console.log(`[PASSWORDS] Asignando contraseña a supervisores en Firebase Auth...`);
+    const { syncSupervisoresFromSupabase } = await import("./src/utils/firebaseSync.js");
     const result = await syncSupervisoresFromSupabase(supabase, password);
     return res.json({
       message: "Contraseñas asignadas. Usa Email/Password para iniciar sesion desde cualquier dominio.",
