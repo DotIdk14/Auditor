@@ -6,27 +6,236 @@ import axios from "axios";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
-import { Whisper, WhisperFullParams, WhisperSamplingStrategy, decodeAudioAsync } from "@napi-rs/whisper";
 import fs from "fs";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
+import { WebSocket } from "ws";
+import { evaluateHeuristic, buildChecklist, Modalidad } from "./src/shared/pce-rubric.js";
+import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-calls.js";
 
-dotenv.config();
+dotenv.config({ path: ".env.local" });
 
-// Inicializar Whisper local
-let whisperModel: Whisper | null = null;
-const whisperModelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
-try {
-  const modelBuf = fs.readFileSync(whisperModelPath);
-  whisperModel = new Whisper(modelBuf);
-  console.log(`[WHISPER] Modelo cargado: ${whisperModelPath}`);
-} catch (e: any) {
-  console.warn(`[WHISPER] No se pudo cargar modelo local: ${e.message}. Se usará modo simulado.`);
+// Whisper initialization is lazy — native addon may not be available in serverless environments
+let whisperModule: typeof import("@napi-rs/whisper") | null = null;
+let whisperModel: any = null;
+
+async function getWhisperModule() {
+  if (whisperModule) return whisperModule;
+  try {
+    whisperModule = await import("@napi-rs/whisper");
+    return whisperModule;
+  } catch {
+    return null;
+  }
+}
+
+async function initWhisperModel(): Promise<any> {
+  if (whisperModel) return whisperModel;
+  const mod = await getWhisperModule();
+  if (!mod) return null;
+  try {
+    const modelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
+    const modelBuf = fs.readFileSync(modelPath);
+    whisperModel = new mod.Whisper(modelBuf);
+    console.log(`[WHISPER] Modelo cargado: ${modelPath}`);
+    return whisperModel;
+  } catch (e: any) {
+    console.warn(`[WHISPER] No se pudo cargar modelo local: ${e.message}. Se usará modo simulado.`);
+    return null;
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev-secret-change-in-production' : '');
+const JWT_EXPIRY = '24h';
+
+function signToken(payload: Record<string, unknown>): string {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET not configured');
+  }
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
 }
 
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
-const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: { transport: WebSocket as any },
+}) : null;
+
+// ── Supabase persistence helpers ──────────────────────────────────
+async function loadCallsFromSupabase(): Promise<any[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("auditorias")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.warn("[SUPABASE] Could not load calls:", error.message);
+      return [];
+    }
+    console.log(`[SUPABASE] Loaded ${data.length} calls from database.`);
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      metadata: row.metadata,
+      score: row.score,
+      analysis: row.analysis,
+      transcription: row.transcription || [],
+    }));
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error loading calls:", err.message);
+    return [];
+  }
+}
+
+async function saveCallToSupabase(call: any): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("auditorias").upsert({
+      id: call.id,
+      metadata: call.metadata,
+      score: call.score,
+      analysis: call.analysis,
+      transcription: call.transcription || [],
+    });
+    if (error) console.warn("[SUPABASE] Could not save call:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error saving call:", err.message);
+  }
+}
+
+async function deleteCallFromSupabase(id: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("auditorias").delete().eq("id", id);
+    if (error) console.warn("[SUPABASE] Could not delete call:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error deleting call:", err.message);
+  }
+}
+
+// ── Notas & Objeciones persistence helpers ────────────────────────
+
+async function saveNotaToSupabase(nota: any): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("notas").upsert({
+      id: nota.id,
+      auditoria_id: nota.auditoriaId,
+      supervisor_email: nota.supervisorEmail,
+      supervisor_name: nota.supervisorName,
+      segment_start: nota.segmentStart,
+      segment_end: nota.segmentEnd,
+      text: nota.text,
+    });
+    if (error) console.warn("[SUPABASE] Could not save nota:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error saving nota:", err.message);
+  }
+}
+
+async function loadNotasFromSupabase(auditoriaId: string): Promise<any[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("notas")
+      .select("*")
+      .eq("auditoria_id", auditoriaId)
+      .order("created_at", { ascending: true });
+    if (error) return [];
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      auditoriaId: row.auditoria_id,
+      supervisorEmail: row.supervisor_email,
+      supervisorName: row.supervisor_name,
+      segmentStart: row.segment_start,
+      segmentEnd: row.segment_end,
+      text: row.text,
+      createdAt: row.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function deleteNotaFromSupabase(notaId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("notas").delete().eq("id", notaId);
+    if (error) console.warn("[SUPABASE] Could not delete nota:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error deleting nota:", err.message);
+  }
+}
+
+async function saveObjecionToSupabase(objecion: any): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("objeciones").upsert({
+      id: objecion.id,
+      auditoria_id: objecion.auditoriaId,
+      supervisor_email: objecion.supervisorEmail,
+      supervisor_name: objecion.supervisorName,
+      segment_start: objecion.segmentStart,
+      segment_end: objecion.segmentEnd,
+      tipo_objecion: objecion.tipoObjecion,
+      severidad: objecion.severidad,
+      text: objecion.text,
+    });
+    if (error) console.warn("[SUPABASE] Could not save objecion:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error saving objecion:", err.message);
+  }
+}
+
+async function loadObjecionesFromSupabase(auditoriaId: string): Promise<any[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("objeciones")
+      .select("*")
+      .eq("auditoria_id", auditoriaId)
+      .order("created_at", { ascending: true });
+    if (error) return [];
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      auditoriaId: row.auditoria_id,
+      supervisorEmail: row.supervisor_email,
+      supervisorName: row.supervisor_name,
+      segmentStart: row.segment_start,
+      segmentEnd: row.segment_end,
+      tipoObjecion: row.tipo_objecion,
+      severidad: row.severidad,
+      text: row.text,
+      createdAt: row.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function deleteObjecionFromSupabase(objecionId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("objeciones").delete().eq("id", objecionId);
+    if (error) console.warn("[SUPABASE] Could not delete objecion:", error.message);
+  } catch (err: any) {
+    console.warn("[SUPABASE] Connection error deleting objecion:", err.message);
+  }
+}
+
+// Load persisted calls from Supabase on startup (if configured)
+if (supabase) {
+  loadCallsFromSupabase().then((calls) => {
+    if (calls.length > 0) {
+      localCallsMemory = calls;
+      console.log(`[SUPABASE] Restored ${calls.length} calls from database to memory.`);
+    }
+  }).catch((err) => {
+    console.warn("[SUPABASE] Failed to load calls on startup:", err.message);
+  });
+}
 
 const app = express();
 const PORT = 3000;
@@ -93,6 +302,10 @@ const upload = multer({
 let localCallsMemory: any[] = [];
 const audioBuffers = new Map<string, Buffer>();
 
+// In-memory fallback for notas and objeciones (when Supabase is unavailable)
+const localNotasMemory = new Map<string, any[]>();
+const localObjecionesMemory = new Map<string, any[]>();
+
 // Instancia segura de Gemini
 const getGeminiClient = () => {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -103,96 +316,13 @@ const getGeminiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-// Función heurística de evaluación UTEL (Garantiza datos completos y realistas si Gemini está ausente)
+// Función heurística de evaluación UTEL — delega al módulo compartido PCE
 function evaluateUtelHeuristic(transcription: any[], fileName: string): any {
-  const fullText = transcription.map(t => t.text).join(" ").toLowerCase();
-  
-  // Buscar palabras clave de modalidades
-  let modal: 'LÍNEA' | 'EJECUTIVA' | 'HÍBRIDA' = 'LÍNEA';
-  if (fullText.includes("ejecutiva") || fullText.includes("networking") || fullText.includes("expertos")) {
-    modal = 'EJECUTIVA';
-  } else if (fullText.includes("híbrida") || fullText.includes("presencial") || fullText.includes("cdmx")) {
-    modal = 'HÍBRIDA';
-  }
-
-  // 1. CONOCE A TU CLIENTE (1.00 pts)
-  const subC1 = [
-    { id: "c1_linea", name: "Interés en línea", weight: 0.20, checked: fullText.includes("línea") },
-    { id: "c1_programa", name: "Programa de interés", weight: 0.20, checked: fullText.includes("programa") || fullText.includes("licenciatura") },
-    { id: "c1_demo", name: "Datos demográficos (edad/ubicación/medio)", weight: 0.20, checked: fullText.includes("edad") || fullText.includes("dónde") },
-    { id: "c1_ocup", name: "Ocupación/estudios previos", weight: 0.20, checked: fullText.includes("trabajas") || fullText.includes("estudió") },
-    { id: "c1_equiv", name: "Equivalencias", weight: 0.20, checked: fullText.includes("equivalencia") || fullText.includes("revalidar") }
-  ];
-  const scoreC1 = subC1.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0);
-
-  // 2. GENERALIDADES (1.00 pts)
-  const subC2 = [
-    { id: "c2_num", name: "Numeralia (12+ años, 3 países, egresados)", weight: 0.34, checked: fullText.includes("12 años") || fullText.includes("egresados") },
-    { id: "c2_mod", name: "Modelo Educativo", weight: 0.33, checked: fullText.includes("modelo") || fullText.includes("flexibilidad") },
-    { id: "c2_esp", name: "Modalidad específica", weight: 0.33, checked: fullText.includes("modalidad") || fullText.includes(modal.toLowerCase()) }
-  ];
-  const scoreC2 = subC2.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0);
-
-  // 3. OFERTA ACADÉMICA (1.00 pts)
-  const subC3 = [
-    { id: "c3_costos", name: "Costos", weight: 0.20, checked: fullText.includes("costo") || fullText.includes("precio") },
-    { id: "c3_comp", name: "Complemento de colegiatura", weight: 0.20, checked: fullText.includes("inscripción") || fullText.includes("cuota") },
-    { id: "c3_jor", name: "Jornada", weight: 0.20, checked: fullText.includes("jornada") || fullText.includes("horas") },
-    { id: "c3_beca", name: "Vigencia de beca", weight: 0.20, checked: fullText.includes("beca") || fullText.includes("vigencia") },
-    { id: "c3_ciclos", name: "Ciclos de inicio", weight: 0.20, checked: fullText.includes("inicio") || fullText.includes("lunes") }
-  ];
-  const scoreC3 = subC3.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0);
-
-  // 4. ACUERDOS Y CIERRE (1.00 pts)
-  const subC4 = [
-    { id: "c4_res", name: "Resumen de la oferta", weight: 0.25, checked: fullText.includes("resumen") || fullText.includes("repetir") },
-    { id: "c4_doc", name: "Envío de documentos", weight: 0.25, checked: fullText.includes("documento") || fullText.includes("papeles") },
-    { id: "c4_pag", name: "Acuerdos de pago", weight: 0.25, checked: fullText.includes("pago") || fullText.includes("compromiso") },
-    { id: "c4_ref", name: "Solicitud de referidos", weight: 0.25, checked: fullText.includes("referido") || fullText.includes("recomendar") }
-  ];
-  const scoreC4 = subC4.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0);
-
-  // 5. GESTIÓN Y REGISTRO (6.00 pts)
-  const subC5 = [
-    { id: "c5_int", name: "Hablar directamente con el interesado", weight: 1.20, checked: transcription.length > 2 },
-    { id: "c5_tip", name: "Tipificación positiva", weight: 1.20, checked: true },
-    { id: "c5_pla", name: "Interacción dentro de plataformas UTEL", weight: 1.20, checked: true },
-    { id: "c5_reg", name: "Registro de interacción", weight: 1.20, checked: true },
-    { id: "c5_seg", name: "Seguimiento de acuerdos", weight: 1.20, checked: fullText.includes("mañana") || fullText.includes("contacto") }
-  ];
-  const scoreC5 = subC5.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0);
-
-  const totalScore = parseFloat((scoreC1 + scoreC2 + scoreC3 + scoreC4 + scoreC5).toFixed(2));
-
-  return {
-    totalScore,
-    isCompliant: totalScore >= 7.0,
-    checkedItemsCount: 5,
-    modalidadDetectada: modal,
-    evaluacion_detallada: {
-      "CONOCE A TU CLIENTE": `${scoreC1.toFixed(2)} - Evaluación de perfil`,
-      "GENERALIDADES": `${scoreC2.toFixed(2)} - Respaldo institucional`,
-      "OFERTA ACADÉMICA": `${scoreC3.toFixed(2)} - Detalle comercial`,
-      "ACUERDOS Y CIERRE": `${scoreC4.toFixed(2)} - Compromisos finales`,
-      "GESTIÓN Y REGISTRO": `${scoreC5.toFixed(2)} - Proceso administrativo`
-    },
-    checklist: [
-      { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: scoreC1, status: scoreC1 >= 0.8 ? 'passed' : 'failed', feedback: "Indagación de perfil del prospecto.", subitems: subC1 },
-      { id: "C2", title: "GENERALIDADES", weight: 1.00, score: scoreC2, status: scoreC2 >= 0.8 ? 'passed' : 'failed', feedback: "Institucionalidad y modelo educativo.", subitems: subC2 },
-      { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: scoreC3, status: scoreC3 >= 0.8 ? 'passed' : 'failed', feedback: "Información de costos y beneficios.", subitems: subC3 },
-      { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: scoreC4, status: scoreC4 >= 0.75 ? 'passed' : 'failed', feedback: "Cierre de compromisos.", subitems: subC4 },
-      { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: scoreC5, status: scoreC5 >= 4.0 ? 'passed' : 'failed', feedback: "Cumplimiento de procesos UTEL.", subitems: subC5 }
-    ],
-    emotionalAnalysis: {
-      primaryEmotion: totalScore >= 7.0 ? "Interesado y optimista" : "Indiferente y dudoso",
-      emotionalJourney: "Inicia con neutralidad al recibir la información institucional y progresa positivamente conforme se aclaran los costos.",
-      purchaseAptitudeScore: Math.round(totalScore * 10),
-      purchaseAptitudeLabel: totalScore >= 8.5 ? "Muy Alto" : totalScore >= 6.5 ? "Alto" : totalScore >= 4.0 ? "Medio" : "Bajo",
-      barriersToPurchase: scoreC3 >= 0.8 ? ["Disponibilidad de tiempo para el aula virtual"] : ["Precio de inscripción", "Duda sobre financiamiento de becas"],
-      buyingSignals: ["Pregunta detalles de modalidad", "Asiente a los requisitos de documentación", "Quiere comenzar el lunes"],
-      aptitudeReason: `El prospecto demostró un nivel de aptitud del ${(totalScore * 10).toFixed(0)}% impulsado por su interés en iniciar clases de inmediato.`
-    }
-  };
+  const fullText = transcription.map((t: any) => t.text).join(" ").toLowerCase();
+  return evaluateHeuristic(
+    transcription.map((t: any) => ({ text: t.text })),
+    fullText,
+  );
 }
 
 // Interfaces locales para robustecer el tipado
@@ -336,15 +466,18 @@ async function applyTranscriptionGuardrails(transcription: any[]): Promise<Trans
   return cleaned;
 }
 
-// Transcribir audio con Whisper local
+// Transcribir audio con Whisper local (lazy init for serverless compatibility)
 async function whisperTranscribe(audioBuffer: Buffer, fileName: string): Promise<{ segments: any[], duration: number }> {
-  if (!whisperModel) {
+  const model = await initWhisperModel();
+  if (!model) {
     console.warn("[WHISPER] Modelo no disponible, usando simulación");
     return { segments: [], duration: 0 };
   }
   try {
-    const audioData = await decodeAudioAsync(audioBuffer, fileName);
-    const params = new WhisperFullParams(WhisperSamplingStrategy.Greedy);
+    const mod = await getWhisperModule();
+    if (!mod) return { segments: [], duration: 0 };
+    const audioData = await mod.decodeAudioAsync(audioBuffer, fileName);
+    const params = new mod.WhisperFullParams(mod.WhisperSamplingStrategy.Greedy);
     params.language = "es";
     params.printProgress = false;
     params.printRealtime = false;
@@ -355,7 +488,7 @@ async function whisperTranscribe(audioBuffer: Buffer, fileName: string): Promise
     params.durationMs = 0;
     params.nThreads = 4;
 
-    const output = whisperModel.full(params, audioData);
+    const output = model.full(params, audioData);
     const segments: any[] = [];
     let duration = 0;
 
@@ -479,7 +612,7 @@ Responde EXCLUSIVAMENTE con JSON:
     const evaluatedSubitems = analysis.evaluatedSubitems || {};
     const feedbackMap = analysis.feedbackMap || {};
     const modality = 'LÍNEA';
-    const builtChecklist = buildCheckedChecklistForScript(evaluatedSubitems, feedbackMap, modality);
+    const builtChecklist = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
     const guardedTranscription = await applyTranscriptionGuardrails(analysis.transcription || []);
 
     return {
@@ -491,391 +624,6 @@ Responde EXCLUSIVAMENTE con JSON:
     console.error("Error en generateLocalAnalysis:", err);
     return generateHighFidelitySimulatedCall(fileName, audioBuffer.length, fallbackId).analysis;
   }
-}
-
-// Función auxiliar para construir la lista de verificación con puntajes
-function buildCheckedChecklistForScript(
-  evaluatedSubitems: Record<string, boolean>,
-  feedbackMap: Record<string, string>,
-  modalidad: 'LÍNEA' | 'EJECUTIVA' | 'HÍBRIDA'
-) {
-  // C1. CONOCE A TU CLIENTE (1.00 pts)
-  const subC1 = [
-    { id: "c1_linea", name: "Interés en línea", weight: 0.20, checked: !!evaluatedSubitems["c1_linea"] },
-    { id: "c1_programa", name: "Programa de interés", weight: 0.20, checked: !!evaluatedSubitems["c1_programa"] },
-    { id: "c1_demo", name: "Datos demográficos (edad/ubicación/medio)", weight: 0.20, checked: !!evaluatedSubitems["c1_demo"] },
-    { id: "c1_ocup", name: "Ocupación/estudios previos", weight: 0.20, checked: !!evaluatedSubitems["c1_ocup"] },
-    { id: "c1_equiv", name: "Equivalencias", weight: 0.20, checked: !!evaluatedSubitems["c1_equiv"] }
-  ];
-  const scoreC1 = parseFloat(subC1.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-  // C2. GENERALIDADES (1.00 pts)
-  const subC2 = [
-    { id: "c2_num", name: "Numeralia (12+ años, 3 países, egresados)", weight: 0.34, checked: !!evaluatedSubitems["c2_num"] },
-    { id: "c2_mod", name: "Modelo Educativo", weight: 0.33, checked: !!evaluatedSubitems["c2_mod"] },
-    { id: "c2_esp", name: "Modalidad específica", weight: 0.33, checked: !!evaluatedSubitems["c2_esp"] }
-  ];
-  const scoreC2 = parseFloat(subC2.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-  // C3. OFERTA ACADÉMICA (1.00 pts)
-  const subC3 = [
-    { id: "c3_costos", name: "Costos", weight: 0.20, checked: !!evaluatedSubitems["c3_costos"] },
-    { id: "c3_comp", name: "Complemento de colegiatura", weight: 0.20, checked: !!evaluatedSubitems["c3_comp"] },
-    { id: "c3_jor", name: "Jornada", weight: 0.20, checked: !!evaluatedSubitems["c3_jor"] },
-    { id: "c3_beca", name: "Vigencia de beca", weight: 0.20, checked: !!evaluatedSubitems["c3_beca"] },
-    { id: "c3_ciclos", name: "Ciclos de inicio", weight: 0.20, checked: !!evaluatedSubitems["c3_ciclos"] }
-  ];
-  const scoreC3 = parseFloat(subC3.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-  // C4. ACUERDOS Y CIERRE (1.00 pts)
-  const subC4 = [
-    { id: "c4_res", name: "Resumen de la oferta", weight: 0.25, checked: !!evaluatedSubitems["c4_res"] },
-    { id: "c4_doc", name: "Envío de documentos", weight: 0.25, checked: !!evaluatedSubitems["c4_doc"] },
-    { id: "c4_pag", name: "Acuerdos de pago", weight: 0.25, checked: !!evaluatedSubitems["c4_pag"] },
-    { id: "c4_ref", name: "Solicitud de referidos", weight: 0.25, checked: !!evaluatedSubitems["c4_ref"] }
-  ];
-  const scoreC4 = parseFloat(subC4.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-  // C5. GESTIÓN Y REGISTRO (6.00 pts)
-  const subC5 = [
-    { id: "c5_int", name: "Hablar directamente con el interesado", weight: 1.20, checked: !!evaluatedSubitems["c5_int"] },
-    { id: "c5_tip", name: "Tipificación positiva", weight: 1.20, checked: !!evaluatedSubitems["c5_tip"] },
-    { id: "c5_pla", name: "Interacción dentro de plataformas UTEL", weight: 1.20, checked: !!evaluatedSubitems["c5_pla"] },
-    { id: "c5_reg", name: "Registro de interacción", weight: 1.20, checked: !!evaluatedSubitems["c5_reg"] },
-    { id: "c5_seg", name: "Seguimiento de acuerdos", weight: 1.20, checked: !!evaluatedSubitems["c5_seg"] }
-  ];
-  const scoreC5 = parseFloat(subC5.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-  const totalScore = parseFloat((scoreC1 + scoreC2 + scoreC3 + scoreC4 + scoreC5).toFixed(2));
-
-  return {
-    totalScore,
-    checklist: [
-      { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: scoreC1, subitems: subC1 },
-      { id: "C2", title: "GENERALIDADES", weight: 1.00, score: scoreC2, subitems: subC2 },
-      { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: scoreC3, subitems: subC3 },
-      { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: scoreC4, subitems: subC4 },
-      { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: scoreC5, subitems: subC5 }
-    ]
-  };
-}
-function generateHighFidelitySimulatedCall(originalName: string, fileSize: number, uniqueId: string) {
-  const nameLower = originalName.toLowerCase();
-  
-  let program = "Licenciatura en Administración de Empresas";
-  let modality: 'LÍNEA' | 'EJECUTIVA' | 'HÍBRIDA' = 'LÍNEA';
-  let clientName = "Sofía López";
-  let age = 24;
-  let primaryEmotion = "Interesado";
-  let initialDoubt = "sobre cursar en línea y la validez oficial del título";
-  let keyDoubtClass = "los horarios nocturnos de la plataforma y el costo de la matrícula";
-  let salesOutcome: 'venta_cerrada' | 'interesado_seguimiento' | 'no_interesado' | 'agenda_demostracion' = 'interesado_seguimiento';
-  let totalScore = 10.0;
-
-  if (nameLower.includes("ejecut") || nameLower.includes("exec") || nameLower.includes("negoci") || nameLower.includes("mba")) {
-    program = "Maestría en Dirección de Negocios (MBA)";
-    modality = "EJECUTIVA";
-    clientName = "Alejandro Ruiz";
-    age = 32;
-    primaryEmotion = "Receptivo y profesional";
-    initialDoubt = "sobre la modalidad ejecutiva semipresencial y el networking directivo";
-    keyDoubtClass = "los horarios de asesorías en fin de semana y becas para empresas";
-    salesOutcome = "agenda_demostracion";
-  } else if (nameLower.includes("hibrid") || nameLower.includes("presenc") || nameLower.includes("ing") || nameLower.includes("sistem") || nameLower.includes("tech")) {
-    program = "Ingeniería en Sistemas Computacionales";
-    modality = "HÍBRIDA";
-    clientName = "Mateo Silva";
-    age = 21;
-    primaryEmotion = "Entusiasmado y asertivo";
-    initialDoubt = "sobre combinar clases virtuales con laboratorios tecnológicos presenciales";
-    keyDoubtClass = "el proceso de equivalencias/revalidación escolar y los cuatrimestres";
-    salesOutcome = "venta_cerrada";
-  }
-
-  // Conversación de alta fidelidad alineada meticulosamente a la Rúbrica de Auditoría UTEL (22 Parámetros)
-  const transcription = [
-    {
-      speaker: "Vendedor" as const,
-      start: 1.2,
-      end: 6.8,
-      text: `Hola, muy buenos días. Te habla Carlos Alberto del departamento de Admisiones de UTEL Universidad. ¿Con quién tengo el gusto hoy?`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 7.5,
-      end: 12.0,
-      text: `Hola, buenos días Carlos. Habla ${clientName}. Vi un anuncio en internet y quería pedir información para la carrera de ${program}.`,
-      sentiment: "neutral" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 12.8,
-      end: 25.4,
-      text: `¡Un excelente gusto saludarte, ${clientName}! Bienvenido a UTEL. Para poder darte el mejor acompañamiento comercial adaptado a tus necesidades de estudio, coméntame por favor, ¿qué edad tienes, en qué ciudad resides y a qué te dedicas actualmente?`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 26.0,
-      end: 36.5,
-      text: `Tengo ${age} años, radico en Ciudad de México, y trabajo tiempo completo en una oficina en horario administrativo. Por eso me interesa la opción flexible en formato ${modality.toLowerCase()}.`,
-      sentiment: "neutral" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 37.2,
-      end: 46.8,
-      text: `Perfecto, estás en el lugar idóneo. Te comento sobre UTEL: somos la universidad digital número uno, con más de 12 años de trayectoria intachable, presencia activa de alumnos en más de 3 países y más de 100,500 egresados titulados con éxito en todo el continente.`,
-      sentiment: "positive" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 47.3,
-      end: 59.8,
-      text: `Nuestro Modelo Educativo está enfocado en adultos que trabajan, por lo que te ofrece flexibilidad total para ingresar a tus asignaturas las 24 horas del día. Recomendamos una jornada promedio de dedicación de unas 15 horas semanales, organizadas a tu propio ritmo para no descuidar tu empleo. ¿Te resulta amigable este esquema?`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 60.5,
-      end: 67.2,
-      text: `La verdad sí, suena ideal. Oye Carlos, ¿y manejan equivalencia o revalidación? Cursé tres semestres de otra licenciatura inconclusa previamente.`,
-      sentiment: "neutral" as const,
-      confidence: 0.97
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 68.0,
-      end: 78.5,
-      text: `¡Qué gran noticia! Sí, en UTEL contamos con un proceso sumamente ágil y simplificado de equivalencias para revalidar tus materias anteriores. Evaluamos tu historial oficial y nosotros nos encargamos del trámite administrativo ante el ministerio educativo.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 79.2,
-      end: 84.0,
-      text: `Excelente, eso me anima muchísimo. ¿Y respecto a los costos de las mensualidades y otras cuotas adicionales de inscripción cómo están?`,
-      sentiment: "positive" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 84.8,
-      end: 99.5,
-      text: `Claro que sí, ${clientName}. La colegiatura normal regular es de 3,600 pesos al mes. Sin embargo, para este ciclo que inicia, el comité te otorgó una beca de apoyo del 35 por ciento. Con esto, tu colegiatura queda fija y congelada en solo 2,340 pesos mensuales.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 100.0,
-      end: 112.5,
-      text: `Esta beca de estudio se mantiene constante si conservas un promedio mínimo cuatrimestral de ocho de calificación. Adicionalmente, el complemento de colegiatura consiste solo en un pago de inscripción único por cuatrimestre de 850 pesos y una reinscripción de 600 pesos de forma habitual. ¿Cómo ves esta inversión mensual?`,
-      sentiment: "positive" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 113.2,
-      end: 119.8,
-      text: `Es un precio estupendo, muy accesible para mí. ¿La vigencia de la beca cubre todo el plan escolar? ¿Y en qué fechas inician los ciclos escolares?`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 120.5,
-      end: 132.4,
-      text: `Efectivamente, su vigencia es de toda tu carrera escolar si conservas el promedio mínimo de ocho. Y el próximo ciclo de inicio de clases formal es este lunes que viene. Por lo mismo, te sugiero hacer tu registro hoy para apartar tu cupo en aula virtual.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 133.0,
-      end: 138.5,
-      text: `Me parece perfecto. Quiero formalizarlo. ¿Me envías los informes y el detalle de documentos que debo mandarte?`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 139.2,
-      end: 151.8,
-      text: `Con muchísimo gusto. Te haré un resumen exacto con las condiciones comerciales pactadas y el envío de un correo electrónico institucional hoy mismo. Para la admisión requiero tu acta de nacimiento, CURP y certificado de estudios previos en foto o formato PDF por WhatsApp. ¿Podrías hacérmelos llegar el día de hoy?`,
-      sentiment: "positive" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 152.5,
-      end: 156.8,
-      text: `Sí, claro, los tengo en formato PDF en mi celular. Ahora mismo te los mando por WhatsApp.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 157.5,
-      end: 168.2,
-      text: `Excelente atención. Vamos a fijar tu acuerdo de pago de la inscripción de 850 pesos para mañana por la mañana mediante depósito o transferencia para formalizar tu ciclo. Por cierto ${clientName}, ¿tendrás de casualidad dos referidos, amigos o compañeros que también necesiten estudiar en línea para extenderles este beneficio de beca?`,
-      sentiment: "positive" as const,
-      confidence: 0.98
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 168.8,
-      end: 174.5,
-      text: `Claro. Mi compañero de trabajo quería titularse de administración igual de forma flexible para ascender laboralmente. Te paso su celular en un momento.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Vendedor" as const,
-      start: 175.2,
-      end: 184.0,
-      text: `Muchísimas gracias. Procedo al registro. Te llegará el correo formal de bienvenida en unos instantes y agendamos una llamada de seguimiento formal para mañana a las 11:00 AM para verificar que tu matrícula esté validada ante admisiones. ¡Un gran honor darte la bienvenida a UTEL Universidad, ${clientName}!`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    },
-    {
-      speaker: "Cliente" as const,
-      start: 184.6,
-      end: 188.0,
-      text: `Al contrario, gracias a ti Carlos por tu asesoramiento. Hablamos mañana a las once. Lindo día.`,
-      sentiment: "positive" as const,
-      confidence: 0.99
-    }
-  ];
-
-  const subC1 = [
-    { id: "c1_linea", name: "Interés en línea", weight: 0.20, checked: true },
-    { id: "c1_programa", name: "Programa de interés", weight: 0.20, checked: true },
-    { id: "c1_demo", name: "Datos demográficos (edad/ubicación/medio)", weight: 0.20, checked: true },
-    { id: "c1_ocup", name: "Ocupación/estudios previos", weight: 0.20, checked: true },
-    { id: "c1_equiv", name: "Equivalencias", weight: 0.20, checked: true }
-  ];
-  const scoreC1 = 1.00;
-
-  const subC2 = [
-    { id: "c2_num", name: "Numeralia (12+ años, 3 países, egresados)", weight: 0.34, checked: true },
-    { id: "c2_mod", name: "Modelo Educativo", weight: 0.33, checked: true },
-    { id: "c2_esp", name: "Modalidad específica", weight: 0.33, checked: true }
-  ];
-  const scoreC2 = 1.00;
-
-  const subC3 = [
-    { id: "c3_costos", name: "Costos", weight: 0.20, checked: true },
-    { id: "c3_comp", name: "Complemento de colegiatura", weight: 0.20, checked: true },
-    { id: "c3_jor", name: "Jornada", weight: 0.20, checked: true },
-    { id: "c3_beca", name: "Vigencia de beca", weight: 0.20, checked: true },
-    { id: "c3_ciclos", name: "Ciclos de inicio", weight: 0.20, checked: true }
-  ];
-  const scoreC3 = 1.00;
-
-  const subC4 = [
-    { id: "c4_res", name: "Resumen de la oferta", weight: 0.25, checked: true },
-    { id: "c4_doc", name: "Envío de documentos", weight: 0.25, checked: true },
-    { id: "c4_pag", name: "Acuerdos de pago", weight: 0.25, checked: true },
-    { id: "c4_ref", name: "Solicitud de referidos", weight: 0.25, checked: true }
-  ];
-  const scoreC4 = 1.00;
-
-  const subC5 = [
-    { id: "c5_int", name: "Hablar directamente con el interesado", weight: 1.20, checked: true },
-    { id: "c5_tip", name: "Tipificación positiva", weight: 1.20, checked: true },
-    { id: "c5_pla", name: "Interacción dentro de plataformas UTEL", weight: 1.20, checked: true },
-    { id: "c5_reg", name: "Registro de interacción", weight: 1.20, checked: true },
-    { id: "c5_seg", name: "Seguimiento de acuerdos", weight: 1.20, checked: true }
-  ];
-  const scoreC5 = 6.00;
-
-  const utelResult = {
-    totalScore: 10.0,
-    isCompliant: true,
-    checkedItemsCount: 5,
-    modalidadDetectada: modality,
-    evaluacion_detallada: {
-      "CONOCE A TU CLIENTE": "1.00 pts - Excelente indagación. El asesor recabó edad, ubicación, programa idóneo de interés de forma sumamente prolija.",
-      "GENERALIDADES": "1.00 pts - Se transmitió el respaldo institucional oficial (12 años, 3 países, líder virtual) ligándolo con la conveniencia laboral del prospecto.",
-      "OFERTA ACADÉMICA": "1.00 pts - Explicación óptima de colegiaturas, beca directa del 35%, cuotas complementarias y compromiso de promedio escolar.",
-      "ACUERDOS Y CIERRE": "1.00 pts - Amarró de forma exitosa el envío digital de documentos, coordinó el acuerdo de pago de matrícula y obtuvo la ficha de un referido recomendado.",
-      "GESTIÓN Y REGISTRO": "6.00 pts - Servicio excepcional. Se programó el envío por correo la bienvenida formal y se agendó hora matemática para mañana a las 11:00 AM."
-    },
-    checklist: [
-      { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: scoreC1, status: 'passed' as const, feedback: "Indagación de perfil del prospecto.", subitems: subC1 },
-      { id: "C2", title: "GENERALIDADES", weight: 1.00, score: scoreC2, status: 'passed' as const, feedback: "Institucionalidad y modelo educativo.", subitems: subC2 },
-      { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: scoreC3, status: 'passed' as const, feedback: "Información de costos y beneficios.", subitems: subC3 },
-      { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: scoreC4, status: 'passed' as const, feedback: "Cierre de compromisos.", subitems: subC4 },
-      { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: scoreC5, status: 'passed' as const, feedback: "Cumplimiento de procesos UTEL.", subitems: subC5 }
-    ]
-  };
-
-  const finalCallData = {
-    id: uniqueId,
-    metadata: {
-      fileName: originalName,
-      url: `/api/audio/${uniqueId}`,
-      size: fileSize,
-      duration: 188,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: "auditor_sales_prod",
-      status: "completed" as const
-    },
-    score: {
-      global: 100, // 10.0 * 10
-      greeting: 100,
-      needDiscovery: 100,
-      objectionHandling: 100,
-      closingSkills: 100,
-      empathy: 100
-    },
-    analysis: {
-      summary: `La conversación de ${clientName} demuestra el perfecto acoplamiento al guion comercial de UTEL de acuerdo con la Rúbrica de Auditoría PCE. El asesor Carlos Alberto se posicionó de manera sumamente consultiva y empática. Logró identificar que el principal factor limitante del prospecto es el tiempo de estudio diario por su empleo continuo, rebatiéndolo magistralmente con el modelo asíncrono y flexible de 15 horas semanales. Cerró un excelente acuerdo de pago de inscripción de $850 pesos para el día de mañana y la recepción de referidos valiosos.`,
-      strengths: [
-        "Presentación institucional intachable (12 años de trayectoria de UTEL, presencia en 3 países).",
-        "Empatía de neuroventas para encajar la flexibilidad del plan virtual con sus horarios de oficina.",
-        "Manejo preciso de costos desglosando la cuota regular, el descuento por beca congelada y cuotas adicionales.",
-        "Mecanismos efectivos para obtención y registro de referidos de forma asertiva."
-      ],
-      weaknesses: [
-        "Ninguna área de oportunidad crítica. El apego ético y asertividad comercial fueron impecables."
-      ],
-      nextSteps: [
-        "Enviar el correo electrónico formal de cotización comercial personalizada en un plazo menor a 15 minutos.",
-        "Verificar la recepción de los documentos (CURP/acta/certificado) por WhatsApp.",
-        "Efectuar la llamada de seguimiento a las 11:00 AM de mañana acordada para concretar la matrícula."
-      ],
-      customerMood: "interesado" as const,
-      salesOutcome: salesOutcome,
-      utel: utelResult,
-      emotionalAnalysis: {
-        primaryEmotion: primaryEmotion,
-        emotionalJourney: `Se inició de forma neutral con dudas constructivas ${initialDoubt}, mostrando enorme satisfacción durante el desglose del plan promocional adaptado de colegiaturas, y finalizando con total asertividad en el acuerdo de pago.`,
-        purchaseAptitudeScore: 98,
-        purchaseAptitudeLabel: "Muy Alto" as const,
-        barriersToPurchase: [
-          `Fricciones potenciales disipadas de inmediato por el asesor sobre ${keyDoubtClass}.`
-        ],
-        buyingSignals: [
-          "Confirmó poseer listos en formato digital en su celular todos los requisitos solicitados.",
-          "Ofreció proactivamente el contacto telefónico de un referido cercano interesado en estudiar."
-        ],
-        aptitudeReason: `Excelente prospecto para estudiar en línea en UTEL. Tiene ingresos estables y la beca congelada actuó como el acelerador determinante de compra. Se recomienda un seguimiento oportuno mañana a las 11:00 AM para cerrar la matrícula.`
-      }
-    },
-    transcription: transcription
-  };
-
-  return finalCallData;
 }
 
 // Inicializar memoria de respaldo limpia (sin pre-sembrar llamada de prueba)
@@ -940,6 +688,7 @@ app.post("/api/drive-import", async (req, res) => {
 
     audioBuffers.set(uniqueId, audioBuffer);
     localCallsMemory.unshift(newCall);
+    saveCallToSupabase(newCall);
     res.json(newCall);
 
   } catch (err: any) {
@@ -982,17 +731,21 @@ app.post("/api/login", loginLimiter, async (req, res) => {
       }
     }
 
-    // Fallback: administradores hardcodeados por si Supabase no está configurado
-    const fallbackEmails = new Set(["ianjarquin1403@gmail.com", "ian.jarquin@utel.edu.mx", "admin@utel.edu.mx"]);
-    if (!isAuthorized && supabase === null) {
+    // Fallback: authorized emails from environment variable
+    const allowedEmailsEnv = process.env.ALLOWED_EMAILS || "";
+    const fallbackEmails = new Set(
+      allowedEmailsEnv.split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
+    );
+    if (!isAuthorized && supabase === null && fallbackEmails.size > 0) {
       isAuthorized = fallbackEmails.has(searchEmail);
     }
 
     if (isAuthorized) {
       console.log(`[AUTH_SUCCESS] Acceso concedido para: ${searchEmail}`);
+      const token = signToken({ email: searchEmail, username: userName, role: "supervisor" });
       return res.json({
         success: true,
-        token: "utel-supervisor-session-token",
+        token,
         username: userName
       });
     } else {
@@ -1006,11 +759,27 @@ app.post("/api/login", loginLimiter, async (req, res) => {
 
   // Opción 2: Autenticación con Contraseña Tradicional
   if (password) {
-    const correctPassword = process.env.SUPERVISOR_PASSWORD || "supervisoresutel";
+    const correctPassword = process.env.SUPERVISOR_PASSWORD;
+    if (!correctPassword) {
+      const isDev = process.env.NODE_ENV === 'development';
+      if (isDev) {
+        if (password === "supervisoresutel") {
+          const token = signToken({ username: username || "Supervisor", role: "supervisor" });
+          return res.json({
+            success: true,
+            token,
+            username: username || "Supervisor"
+          });
+        }
+        return res.status(401).json({ success: false, error: "Contraseña de acceso incorrecta." });
+      }
+      return res.status(501).json({ success: false, error: "Autenticación por contraseña no configurada en el servidor." });
+    }
     if (password === correctPassword) {
+      const token = signToken({ username: username || "Supervisor", role: "supervisor" });
       return res.json({
         success: true,
-        token: "utel-supervisor-session-token",
+        token,
         username: username || "Supervisor"
       });
     } else {
@@ -1030,10 +799,21 @@ app.post("/api/login", loginLimiter, async (req, res) => {
 // API: Verificar sesión del Supervisor
 app.post("/api/verify-session", (req, res) => {
   const { token } = req.body;
-  if (token === "utel-supervisor-session-token") {
-    return res.json({ success: true });
+  if (!token) {
+    return res.status(401).json({ error: "Token requerido." });
   }
-  return res.status(401).json({ error: "Sesión inválida o expirada" });
+
+  // Backward-compatible: accept legacy static token during migration
+  if (token === "utel-supervisor-session-token") {
+    return res.json({ success: true, legacy: true });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return res.json({ success: true, user: decoded });
+  } catch {
+    return res.status(401).json({ error: "Sesión inválida o expirada" });
+  }
 });
 
 // API: Cargar llamada de prueba / demo bajo demanda
@@ -1045,6 +825,7 @@ app.post("/api/cargar-demo", (req, res) => {
     uniqueId
   );
   localCallsMemory = [demoCall, ...localCallsMemory];
+  saveCallToSupabase(demoCall);
   return res.json(demoCall);
 });
 
@@ -1057,8 +838,7 @@ app.get("/api/llamadas", (req, res) => {
 app.get("/api/audio/:id", (req, res) => {
   const buffer = audioBuffers.get(req.params.id);
   if (!buffer) {
-    // Si no está en memoria, redirigir al respaldo estático para no romper la UI
-    return res.redirect("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3");
+    return res.status(404).json({ error: "Archivo de audio no encontrado en el servidor." });
   }
 
   const totalLength = buffer.length;
@@ -1256,82 +1036,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
     const ollamaModelName = req.body.ollamaModel || "hermes3";
 
     // 5. INTELIGENCIA COGNITIVA Y ANÁLISIS EMOCIONAL (MATRIZ PCE UTEL OFICIAL DE LOS PDF)
-    const buildCheckedChecklist = (
-      evaluatedSubitems: Record<string, boolean>,
-      feedbackMap: Record<string, string>,
-      modalidad: 'LÍNEA' | 'EJECUTIVA' | 'HÍBRIDA'
-    ) => {
-      // C1. CONOCE A TU CLIENTE (1.00 pts en total, cada subítem pesa 0.20 pts)
-      const subC1 = [
-        { id: "c1_linea", name: "Interés en línea", weight: 0.20, checked: !!evaluatedSubitems["c1_linea"] },
-        { id: "c1_programa", name: "Programa de interés", weight: 0.20, checked: !!evaluatedSubitems["c1_programa"] },
-        { id: "c1_demo", name: "Datos demográficos (edad/ubicación/medio)", weight: 0.20, checked: !!evaluatedSubitems["c1_demo"] },
-        { id: "c1_ocup", name: "Ocupación/estudios previos", weight: 0.20, checked: !!evaluatedSubitems["c1_ocup"] },
-        { id: "c1_equiv", name: "Equivalencias", weight: 0.20, checked: !!evaluatedSubitems["c1_equiv"] }
-      ];
-      const scoreC1 = parseFloat(subC1.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-      // C2. GENERALIDADES (1.00 pts en total, ponderados como 0.34, 0.33, 0.33)
-      const subC2 = [
-        { id: "c2_num", name: "Numeralia (12+ años, 3 países, egresados)", weight: 0.34, checked: !!evaluatedSubitems["c2_num"] },
-        { id: "c2_mod", name: "Modelo Educativo", weight: 0.33, checked: !!evaluatedSubitems["c2_mod"] },
-        { id: "c2_esp", name: "Modalidad específica", weight: 0.33, checked: !!evaluatedSubitems["c2_esp"] }
-      ];
-      const scoreC2 = parseFloat(subC2.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-      // C3. OFERTA ACADÉMICA (1.00 pts en total, cada subítem pesa 0.20 pts)
-      const subC3 = [
-        { id: "c3_costos", name: "Costos", weight: 0.20, checked: !!evaluatedSubitems["c3_costos"] },
-        { id: "c3_comp", name: "Complemento de colegiatura", weight: 0.20, checked: !evaluatedSubitems.hasOwnProperty("c3_comp") ? true : !!evaluatedSubitems["c3_comp"] }, // Resiliencia
-        { id: "c3_jor", name: "Jornada", weight: 0.20, checked: !!evaluatedSubitems["c3_jor"] },
-        { id: "c3_beca", name: "Vigencia de beca", weight: 0.20, checked: !!evaluatedSubitems["c3_beca"] },
-        { id: "c3_ciclos", name: "Ciclos de inicio", weight: 0.20, checked: !!evaluatedSubitems["c3_ciclos"] }
-      ];
-      const scoreC3 = parseFloat(subC3.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-      // C4. ACUERDOS Y CIERRE (1.00 pts en total, cada subítem pesa 0.25 pts)
-      const subC4 = [
-        { id: "c4_res", name: "Resumen de la oferta", weight: 0.25, checked: !!evaluatedSubitems["c4_res"] },
-        { id: "c4_doc", name: "Envío de documentos", weight: 0.25, checked: !!evaluatedSubitems["c4_doc"] },
-        { id: "c4_pag", name: "Acuerdos de pago", weight: 0.25, checked: !!evaluatedSubitems["c4_pag"] },
-        { id: "c4_ref", name: "Solicitud de referidos", weight: 0.25, checked: !!evaluatedSubitems["c4_ref"] }
-      ];
-      const scoreC4 = parseFloat(subC4.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-      // C5. GESTIÓN Y REGISTRO (6.00 pts en total, cada subítem pesa 1.20 pts)
-      const subC5 = [
-        { id: "c5_int", name: "Hablar directamente con el interesado", weight: 1.20, checked: !evaluatedSubitems.hasOwnProperty("c5_int") ? true : !!evaluatedSubitems["c5_int"] },
-        { id: "c5_tip", name: "Tipificación positiva", weight: 1.20, checked: evaluatedSubitems["c5_tip"] !== false },
-        { id: "c5_pla", name: "Interacción dentro de plataformas UTEL", weight: 1.20, checked: evaluatedSubitems["c5_pla"] !== false },
-        { id: "c5_reg", name: "Registro de interacción", weight: 1.20, checked: evaluatedSubitems["c5_reg"] !== false },
-        { id: "c5_seg", name: "Seguimiento de acuerdos", weight: 1.20, checked: !!evaluatedSubitems["c5_seg"] }
-      ];
-      const scoreC5 = parseFloat(subC5.reduce((acc, s) => acc + (s.checked ? s.weight : 0), 0).toFixed(2));
-
-      const totalScore = parseFloat((scoreC1 + scoreC2 + scoreC3 + scoreC4 + scoreC5).toFixed(2));
-      const isCompliant = totalScore >= 7.0;
-
-      return {
-        totalScore,
-        isCompliant,
-        checkedItemsCount: 5,
-        modalidadDetectada: modalidad,
-        evaluacion_detallada: {
-          "CONOCE A TU CLIENTE": feedbackMap["CONOCE A TU CLIENTE"] || `${scoreC1.toFixed(2)} pts - Se indagarón los datos y necesidades de estudio.`,
-          "GENERALIDADES": feedbackMap["GENERALIDADES"] || `${scoreC2.toFixed(2)} pts - Se explicó el respaldo y beneficios de UTEL.`,
-          "OFERTA ACADÉMICA": feedbackMap["OFERTA ACADÉMICA"] || `${scoreC3.toFixed(2)} pts - Presentación detallada de colegiatura, becas e inscripción.`,
-          "ACUERDOS Y CIERRE": feedbackMap["ACUERDOS Y CIERRE"] || `${scoreC4.toFixed(2)} pts - Establecimiento de compromisos y envío de documentos.`,
-          "GESTIÓN Y REGISTRO": feedbackMap["GESTIÓN Y REGISTRO"] || `${scoreC5.toFixed(2)} pts - Cumplimiento del protocolo y tipificación del CRM.`
-        },
-        checklist: [
-          { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: scoreC1, status: scoreC1 >= 0.8 ? 'passed' : 'failed', feedback: feedbackMap["CONOCE A TU CLIENTE"] || "Indagación de perfil del prospecto.", subitems: subC1 },
-          { id: "C2", title: "GENERALIDADES", weight: 1.00, score: scoreC2, status: scoreC2 >= 0.8 ? 'passed' : 'failed', feedback: feedbackMap["GENERALIDADES"] || "Institucionalidad y modelo educativo.", subitems: subC2 },
-          { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: scoreC3, status: scoreC3 >= 0.8 ? 'passed' : 'failed', feedback: feedbackMap["OFERTA ACADÉMICA"] || "Información de costos y beneficios.", subitems: subC3 },
-          { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: scoreC4, status: scoreC4 >= 0.75 ? 'passed' : 'failed', feedback: feedbackMap["ACUERDOS Y CIERRE"] || "Cierre de compromisos.", subitems: subC4 },
-          { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: scoreC5, status: scoreC5 >= 4.0 ? 'passed' : 'failed', feedback: feedbackMap["GESTIÓN Y REGISTRO"] || "Cumplimiento de procesos UTEL.", subitems: subC5 }
-        ]
-      };
-    };
+    // Uses shared buildChecklist from src/shared/pce-rubric.ts
 
     let finalUtelResult = localUtelResult;
     let summaryText = `La llamada para '${originalName}' se auditó internamente.`;
@@ -1416,7 +1121,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
         "c4_pag": true,
         "c4_ref": false,
         "c5_int": true,
-        "c5_cor": true,
+        "c5_int": true,
         "c5_tip": true,
         "c5_pla": true,
         "c5_reg": true,
@@ -1470,7 +1175,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
           const modality = parsed.modalidad_detectada || "LÍNEA";
 
           // Cómputo matemático riguroso basado en el PDF y los subitems resultantes
-          finalUtelResult = buildCheckedChecklist(evaluatedSubitems, feedbackMap, modality);
+          finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
 
           summaryText = parsed.summary || summaryText;
           customerMood = parsed.customerMood || customerMood;
@@ -1510,7 +1215,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
             const modality = parsed.modalidad_detectada || "LÍNEA";
 
             // Cómputo matemático riguroso basado en el PDF y los subitems resultantes
-            finalUtelResult = buildCheckedChecklist(evaluatedSubitems, feedbackMap, modality);
+            finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
 
             summaryText = parsed.summary || summaryText;
             customerMood = parsed.customerMood || customerMood;
@@ -1604,6 +1309,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
 
     audioBuffers.set(uniqueId, file.buffer);
     localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
+    saveCallToSupabase(finalCallData);
 
     return res.json(finalCallData);
   } catch (error: any) {
@@ -1617,6 +1323,7 @@ app.delete("/api/llamadas/:id", (req, res) => {
   const callId = req.params.id;
   audioBuffers.delete(callId);
   localCallsMemory = localCallsMemory.filter(c => c.id !== callId);
+  deleteCallFromSupabase(callId);
   return res.json({ success: true });
 });
 
@@ -1738,6 +1445,212 @@ app.get("/api/drive-history", async (req, res) => {
   } catch (error: any) {
     console.error("Error al listar Drive:", error.response?.data || error.message);
     return res.status(500).json({ error: `Fallo al recuperar historial de Google Drive: ${error.response?.data?.error?.message || error.message}` });
+  }
+});
+
+// ── Notas API ────────────────────────────────────────────────────
+
+// POST /api/llamadas/:id/notas — Add a note to a transcription segment
+app.post("/api/llamadas/:id/notas", async (req, res) => {
+  const auditoriaId = req.params.id;
+  const { supervisorEmail, supervisorName, segmentStart, segmentEnd, text } = req.body;
+
+  if (!supervisorEmail || !text || segmentStart === undefined || segmentEnd === undefined) {
+    return res.status(400).json({ error: "supervisorEmail, text, segmentStart, and segmentEnd are required." });
+  }
+
+  const nota = {
+    id: `nota_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    auditoriaId,
+    supervisorEmail,
+    supervisorName: supervisorName || supervisorEmail.split("@")[0],
+    segmentStart,
+    segmentEnd,
+    text,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!localNotasMemory.has(auditoriaId)) {
+    localNotasMemory.set(auditoriaId, []);
+  }
+  localNotasMemory.get(auditoriaId)!.push(nota);
+
+  saveNotaToSupabase(nota);
+  return res.status(201).json(nota);
+});
+
+// GET /api/llamadas/:id/notas — List notes for a call
+app.get("/api/llamadas/:id/notas", async (req, res) => {
+  const auditoriaId = req.params.id;
+  const supabaseNotas = await loadNotasFromSupabase(auditoriaId);
+  const localNotas = localNotasMemory.get(auditoriaId) || [];
+  
+  const supabaseIds = new Set(supabaseNotas.map((n: any) => n.id));
+  const merged = [...supabaseNotas, ...localNotas.filter((n: any) => !supabaseIds.has(n.id))];
+  
+  return res.json(merged);
+});
+
+// DELETE /api/llamadas/:id/notas/:notaId
+app.delete("/api/llamadas/:id/notas/:notaId", async (req, res) => {
+  const { id: auditoriaId, notaId } = req.params;
+
+  if (localNotasMemory.has(auditoriaId)) {
+    const notas = localNotasMemory.get(auditoriaId)!;
+    localNotasMemory.set(auditoriaId, notas.filter((n: any) => n.id !== notaId));
+  }
+
+  await deleteNotaFromSupabase(notaId);
+  return res.json({ success: true });
+});
+
+// ── Objeciones API ───────────────────────────────────────────────
+
+// POST /api/llamadas/:id/objeciones — Add an objection to a transcription segment
+app.post("/api/llamadas/:id/objeciones", async (req, res) => {
+  const auditoriaId = req.params.id;
+  const { supervisorEmail, supervisorName, segmentStart, segmentEnd, tipoObjecion, severidad, text } = req.body;
+
+  if (!supervisorEmail || !text || segmentStart === undefined || segmentEnd === undefined || !tipoObjecion || !severidad) {
+    return res.status(400).json({ error: "supervisorEmail, text, segmentStart, segmentEnd, tipoObjecion, and severidad are required." });
+  }
+
+  const objecion = {
+    id: `obj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    auditoriaId,
+    supervisorEmail,
+    supervisorName: supervisorName || supervisorEmail.split("@")[0],
+    segmentStart,
+    segmentEnd,
+    tipoObjecion,
+    severidad,
+    text,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!localObjecionesMemory.has(auditoriaId)) {
+    localObjecionesMemory.set(auditoriaId, []);
+  }
+  localObjecionesMemory.get(auditoriaId)!.push(objecion);
+
+  saveObjecionToSupabase(objecion);
+  return res.status(201).json(objecion);
+});
+
+// GET /api/llamadas/:id/objeciones — List objections for a call
+app.get("/api/llamadas/:id/objeciones", async (req, res) => {
+  const auditoriaId = req.params.id;
+  const supabaseObjeciones = await loadObjecionesFromSupabase(auditoriaId);
+  const localObjeciones = localObjecionesMemory.get(auditoriaId) || [];
+  
+  const supabaseIds = new Set(supabaseObjeciones.map((o: any) => o.id));
+  const merged = [...supabaseObjeciones, ...localObjeciones.filter((o: any) => !supabaseIds.has(o.id))];
+  
+  return res.json(merged);
+});
+
+// DELETE /api/llamadas/:id/objeciones/:objecionId
+app.delete("/api/llamadas/:id/objeciones/:objecionId", async (req, res) => {
+  const { id: auditoriaId, objecionId } = req.params;
+
+  if (localObjecionesMemory.has(auditoriaId)) {
+    const objeciones = localObjecionesMemory.get(auditoriaId)!;
+    localObjecionesMemory.set(auditoriaId, objeciones.filter((o: any) => o.id !== objecionId));
+  }
+
+  await deleteObjecionFromSupabase(objecionId);
+  return res.json({ success: true });
+});
+
+// ── Supervisor History API ───────────────────────────────────────
+
+// GET /api/supervisores/:email/historial
+app.get("/api/supervisores/:email/historial", async (req, res) => {
+  const supervisorEmail = req.params.email;
+
+  if (!supabase) {
+    const historial = localCallsMemory
+      .filter((call: any) => {
+        const notasForCall = localNotasMemory.get(call.id) || [];
+        const objecionesForCall = localObjecionesMemory.get(call.id) || [];
+        return notasForCall.some((n: any) => n.supervisorEmail === supervisorEmail) ||
+               objecionesForCall.some((o: any) => o.supervisorEmail === supervisorEmail) ||
+               (call.metadata?.uploadedBy && call.metadata.uploadedBy.includes(supervisorEmail));
+      })
+      .map((call: any) => {
+        const notasForCall = (localNotasMemory.get(call.id) || []).filter((n: any) => n.supervisorEmail === supervisorEmail);
+        const objecionesForCall = (localObjecionesMemory.get(call.id) || []).filter((o: any) => o.supervisorEmail === supervisorEmail);
+        return {
+          ...call,
+          notasCount: notasForCall.length,
+          objecionesCount: objecionesForCall.length,
+        };
+      })
+      .sort((a: any, b: any) => new Date(b.metadata.uploadedAt).getTime() - new Date(a.metadata.uploadedAt).getTime());
+
+    return res.json({ supervisorEmail, totalAuditorias: historial.length, auditorias: historial });
+  }
+
+  try {
+    const [{ data: notasAuditorias }, { data: objecionesAuditorias }] = await Promise.all([
+      supabase.from("notas").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+      supabase.from("objeciones").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+    ]);
+
+    const auditoriaIds = new Set<string>();
+    (notasAuditorias || []).forEach((n: any) => auditoriaIds.add(n.auditoria_id));
+    (objecionesAuditorias || []).forEach((o: any) => auditoriaIds.add(o.auditoria_id));
+
+    if (auditoriaIds.size === 0) {
+      const { data: uploadedCalls } = await supabase
+        .from("auditorias")
+        .select("id")
+        .filter("metadata->>uploadedBy", "ilike", `%${supervisorEmail}%`)
+        .limit(50);
+      (uploadedCalls || []).forEach((c: any) => auditoriaIds.add(c.id));
+    }
+
+    if (auditoriaIds.size === 0) {
+      return res.json({ supervisorEmail, totalAuditorias: 0, auditorias: [] });
+    }
+
+    const ids = Array.from(auditoriaIds).slice(0, 50);
+    const { data: auditorias } = await supabase
+      .from("auditorias")
+      .select("*")
+      .in("id", ids)
+      .order("created_at", { ascending: false });
+
+    const { data: allNotas } = await supabase
+      .from("notas")
+      .select("auditoria_id")
+      .in("auditoria_id", ids)
+      .eq("supervisor_email", supervisorEmail);
+    const { data: allObjeciones } = await supabase
+      .from("objeciones")
+      .select("auditoria_id")
+      .in("auditoria_id", ids)
+      .eq("supervisor_email", supervisorEmail);
+
+    const notaCounts = new Map<string, number>();
+    const objecionCounts = new Map<string, number>();
+    (allNotas || []).forEach((n: any) => notaCounts.set(n.auditoria_id, (notaCounts.get(n.auditoria_id) || 0) + 1));
+    (allObjeciones || []).forEach((o: any) => objecionCounts.set(o.auditoria_id, (objecionCounts.get(o.auditoria_id) || 0) + 1));
+
+    const historial = (auditorias || []).map((a: any) => ({
+      id: a.id,
+      metadata: a.metadata,
+      score: a.score,
+      analysis: a.analysis,
+      transcription: a.transcription || [],
+      notasCount: notaCounts.get(a.id) || 0,
+      objecionesCount: objecionCounts.get(a.id) || 0,
+    }));
+
+    return res.json({ supervisorEmail, totalAuditorias: historial.length, auditorias: historial });
+  } catch (err: any) {
+    console.warn("[SUPABASE] Error fetching supervisor history:", err.message);
+    return res.json({ supervisorEmail, totalAuditorias: 0, auditorias: [] });
   }
 });
 
