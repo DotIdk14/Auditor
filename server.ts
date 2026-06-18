@@ -4,15 +4,84 @@ import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import axios from "axios";
 import dotenv from "dotenv";
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
+import { Whisper, WhisperFullParams, WhisperSamplingStrategy, decodeAudioAsync } from "@napi-rs/whisper";
+import fs from "fs";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
+
+// Inicializar Whisper local
+let whisperModel: Whisper | null = null;
+const whisperModelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
+try {
+  const modelBuf = fs.readFileSync(whisperModelPath);
+  whisperModel = new Whisper(modelBuf);
+  console.log(`[WHISPER] Modelo cargado: ${whisperModelPath}`);
+} catch (e: any) {
+  console.warn(`[WHISPER] No se pudo cargar modelo local: ${e.message}. Se usará modo simulado.`);
+}
+
+const supabaseUrl = process.env.SUPABASE_URL || "";
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const app = express();
 const PORT = 3000;
 
+// Confiar en proxies (Cloudflare Tunnel)
+app.set("trust proxy", 1);
+
+// Seguridad: cabeceras HTTP
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false
+}));
+
+// CORS: solo permitir el frontend en Vercel
+const ALLOWED_ORIGINS = [
+  "https://auditor-olive.vercel.app",
+  "https://auditor-idkboooi-s-projects.vercel.app",
+  "https://auditor-dotidk14-idkboooi-s-projects.vercel.app",
+  "https://unify-catering-purist.ngrok-free.dev",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+];
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
+// Rate limiting global
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Intenta de nuevo más tarde." }
+});
+app.use(globalLimiter);
+
+// Rate limit más estricto para login
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos de inicio de sesión." }
+});
+
 // Middleware para procesar cuerpos JSON
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // Configuración de Multer para recibir audios en memoria (límite de 50MB)
 const upload = multer({
@@ -136,47 +205,44 @@ interface TranscriptionUtterance {
   confidence: number;
 }
 
-// Fallback: Diarizador y segmentador cognitivo de texto con Gemini
+// Fallback: Diarizador y segmentador cognitivo de texto con Ollama
 async function generateAndSplitTextDiarization(consolidatedText: string): Promise<TranscriptionUtterance[]> {
-  const ai = getGeminiClient();
-  if (!ai) return [];
+  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL || "hermes3";
   
   try {
-    console.log("[GUARDRAILS_GEMINI] Ejecutando reparación de transcripción simplista con Gemini 3.5 Flash para separar oradores...");
-    const prompt = `
-    Eres un transcriptor experto. Toma el siguiente texto continuo que representa una llamada telefónica real de ventas de UTEL Universidad donde se consolidaron los discursos de ambos oradores sin separarse ni asignarse los turnos.
+    console.log(`[GUARDRAILS_OLLAMA] Separando oradores con Ollama (${ollamaModel})...`);
+    const prompt = `Eres un transcriptor experto. Toma el siguiente texto continuo que representa una llamada telefónica real de ventas de UTEL Universidad donde se consolidaron los discursos de ambos oradores sin separarse ni asignarse los turnos.
     
-    Analiza semánticamente el flujo del diálogo y sepáralo exactamente en turnos de habla alternativos e individuales para 'Vendedor' (asesor UTEL que explica, ofrece beneficios, pide documentos, pregunta) y 'Cliente' (prospecto que responde, hace preguntas cortas de precio, comparte su ocupación).
-    
-    Texto continuo a separar:
-    "${consolidatedText}"
-    
-    Responde ÚNICAMENTE con un objeto JSON (sin markdown, sin bloques de código, sin texto introductorio) con el siguiente formato exacto:
+Analiza semánticamente el flujo del diálogo y sepáralo exactamente en turnos de habla alternativos e individuales para 'Vendedor' (asesor UTEL que explica, ofrece beneficios, pide documentos, pregunta) y 'Cliente' (prospecto que responde, hace preguntas cortas de precio, comparte su ocupación).
+
+Texto continuo a separar:
+"${consolidatedText}"
+
+Responde ÚNICAMENTE con un objeto JSON (sin markdown, sin bloques de código, sin texto introductorio) con el siguiente formato exacto:
+{
+  "transcription": [
     {
-      "transcription": [
-        {
-          "speaker": "Vendedor" o "Cliente",
-          "text": "Frase exacta dicha por este orador en español",
-          "sentiment": "positive" o "negative" o "neutral",
-          "start": 0.0,
-          "end": 0.0
-        }
-      ]
+      "speaker": "Vendedor" o "Cliente",
+      "text": "Frase exacta dicha por este orador en español",
+      "sentiment": "positive" o "negative" o "neutral",
+      "start": 0.0,
+      "end": 0.0
     }
-    
-    Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima tiempos coherentes ("start" y "end") incrementales de forma secuencial comenzando en 0.0, asumiendo que un ritmo normal es de ~3 palabras por segundo.
-    `;
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
-    
-    const responseText = response.text || "";
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+  ]
+}
+
+Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima tiempos coherentes ("start" y "end") incrementales de forma secuencial comenzando en 0.0, asumiendo que un ritmo normal es de ~3 palabras por segundo.`;
+
+    const response = await axios.post(`${ollamaUrl}/api/generate`, {
+      model: ollamaModel,
+      prompt: prompt,
+      format: "json",
+      stream: false
+    }, { timeout: 30000 });
+
+    const responseString = response.data.response || "";
+    const cleanJson = responseString.replace(/```json|```/g, '').trim();
     const result = JSON.parse(cleanJson);
     return (result.transcription || []).map((t: any) => ({
       speaker: t.speaker === 'Vendedor' || t.speaker === 'Cliente' ? t.speaker : (String(t.speaker).toLowerCase().includes('client') ? 'Cliente' : 'Vendedor'),
@@ -187,7 +253,7 @@ async function generateAndSplitTextDiarization(consolidatedText: string): Promis
       confidence: 0.95
     }));
   } catch (err) {
-    console.error("Fallo al separar oradores con Gemini Text fallback:", err);
+    console.error("Fallo al separar oradores con Ollama:", err);
     return [];
   }
 }
@@ -270,126 +336,150 @@ async function applyTranscriptionGuardrails(transcription: any[]): Promise<Trans
   return cleaned;
 }
 
-// Función principal para generar análisis con Gemini (Auditoría PCE UTEL)
-async function generateGeminiAnalysis(audioBuffer: Buffer, format: string): Promise<any> {
-  const ai = getGeminiClient();
-  const fallbackId = `fallback_${Date.now()}`;
-  
-  if (!ai) {
-    return generateHighFidelitySimulatedCall("Archivo de Audio", audioBuffer.length, fallbackId).analysis;
+// Transcribir audio con Whisper local
+async function whisperTranscribe(audioBuffer: Buffer, fileName: string): Promise<{ segments: any[], duration: number }> {
+  if (!whisperModel) {
+    console.warn("[WHISPER] Modelo no disponible, usando simulación");
+    return { segments: [], duration: 0 };
   }
+  try {
+    const audioData = await decodeAudioAsync(audioBuffer, fileName);
+    const params = new WhisperFullParams(WhisperSamplingStrategy.Greedy);
+    params.language = "es";
+    params.printProgress = false;
+    params.printRealtime = false;
+    params.printSpecial = false;
+    params.printTimestamps = false;
+    params.noTimestamps = false;
+    params.singleSegment = false;
+    params.durationMs = 0;
+    params.nThreads = 4;
+
+    const output = whisperModel.full(params, audioData);
+    const segments: any[] = [];
+    let duration = 0;
+
+    if (output && Array.isArray(output)) {
+      for (const seg of output) {
+        segments.push({
+          start: seg.t0 / 100,
+          end: seg.t1 / 100,
+          text: (seg.text || "").trim(),
+          speaker: ""
+        });
+        if (seg.t1 / 100 > duration) duration = seg.t1 / 100;
+      }
+    }
+
+    console.log(`[WHISPER] Transcripción completada: ${segments.length} segmentos, ${duration}s`);
+    return { segments, duration };
+  } catch (err: any) {
+    console.error("[WHISPER] Error en transcripción:", err.message);
+    return { segments: [], duration: 0 };
+  }
+}
+
+// Función principal para generar análisis con Whisper + Ollama (Auditoría PCE UTEL)
+async function generateLocalAnalysis(audioBuffer: Buffer, format: string, fileName: string): Promise<any> {
+  const fallbackId = `fallback_${Date.now()}`;
 
   try {
-    // Convertir buffer a base64 para Gemini
-    const base64Audio = audioBuffer.toString('base64');
-    const mimeType = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+    // 1. Transcribir con Whisper
+    const { segments, duration } = await whisperTranscribe(audioBuffer, fileName);
+    
+    if (!segments.length) {
+      console.warn("[LOCAL] Whisper no produjo transcripción, usando simulación");
+      return generateHighFidelitySimulatedCall(fileName, audioBuffer.length, fallbackId).analysis;
+    }
+
+    // 2. Asignar speakers con heurística (el primer segmento largo es el vendedor)
+    const textoCompleto = segments.map(s => s.text).join(" ");
+    
+    // 3. Usar Ollama para diarización y análisis completo
+    const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+    const ollamaModel = process.env.OLLAMA_MODEL || "hermes3";
 
     const promptText = `
-    # ROL
-    Eres un Auditor Senior de Calidad Educativa de la UTEL Universidad y un experto en Neuroventas.
-    Escucha atentamente el audio de la llamada de ventas proporcionada y realiza lo siguiente con absoluta precisión técnica:
-    
-    1. Transcribe toda la llamada de principio a fin, dividiéndola en fragmentos extremadamente cortos y cronológicos (máximo 10-15 palabras por elemento).
-        ¡IMPORTANTE!: NUNCA liques o consolides discursos largos de los oradores en un solo bloque. Si el Vendedor o Cliente exponen discursos continuos prolongados, DEBES fraccionarlos secuencialmente en múltiples objetos con el mismo valor en 'speaker', asignando tiempos 'start' y 'end' correctos.
-    2. Identifica con total exactitud de 100% quién es el "Vendedor" (el representante comercial de UTEL que ofrece programas, explica costos, becas, revalidaciones) y quién es el "Cliente" (el prospecto que hace preguntas de inscripción, plantea dudas de dinero, habla de su tiempo libre o estudios previos). 
-       ¡ATENCIÓN CRÍTICA!: NUNCA confundas a los oradores. Si el prospecto es el primero en hablar (por ejemplo, diciendo "hola", "¿bueno?", "buenas tardes"), identifícalo estrictamente como "Cliente". El representante de UTEL que inicia o prosigue con el saludo y pitch de venta es el "Vendedor".
-    3. Evalúa detalladamente los 22 subítems de la Rúbrica oficial de Calidad Educativa PCE de UTEL Universidad.
+# ROL
+Eres un Auditor Senior de Calidad Educativa de la UTEL Universidad y un experto en Neuroventas.
 
-    # REGLAS DE AUDITORÍA PCE UTEL (22 PARÁMETROS):
-    Debes marcar cada uno de los siguientes 22 puntos como VERDADERO (true) o FALSO (false) según se identifiquen razonablemente o correspondan con la conversación en el audio de la llamada:
+Tienes la transcripción completa de una llamada de ventas. Los segmentos están en orden cronológico pero sin identificar quién habla.
 
-    C1. CONOCE A TU CLIENTE
-    - "c1_linea": ¿El cliente muestra interés en la opción en línea o el asesor aborda ese formato? (true/false)
-    - "c1_programa": ¿Se determina el programa de interés específico (Licenciatura, Maestría, etc.)? (true/false)
-    - "c1_demo": ¿Se registran datos demográficos clave como edad, ubicación o medio de contacto? (true/false)
-    - "c1_ocup": ¿Se indaga sobre la ocupación del cliente (si trabaja, horario) o estudios previos? (true/false)
-    - "c1_equiv": ¿El asesor pregunta sobre equivalencias, revalidación o estudios inconclusos? (true/false)
+TRANSCRIPCIÓN (segmentos con tiempos):
+${JSON.stringify(segments, null, 2)}
 
-    C2. GENERALIDADES
-    - "c2_num": ¿Se expone la numeralia oficial UTEL (más de 12 años, presencia en 3 países, miles de egresados)? (true/false)
-    - "c2_mod": ¿Se detalla y explica el modelo educativo flexible de UTEL? (true/false)
-    - "c2_esp": ¿Se vincula el modelo educativo específicamente con las necesidades expresadas por el prospecto? (true/false)
+Texto completo: "${textoCompleto}"
 
-    C3. OFERTA ACADÉMICA
-    - "c3_costos": ¿Se presentan formalmente costos y opciones de colegiatura? (true/false)
-    - "c3_comp": ¿Se explican los costos complementarios (cuota de inscripción, cargos de reinscripción periódicos)? (true/false)
-    - "c3_jor": ¿Se define la jornada de estudio con el cliente? (true/false)
-    - "c3_beca": ¿Se menciona la vigencia de la beca asignada? (true/false)
-    - "c3_ciclos": ¿Se mencionan los ciclos de inicio de clases próximos (lunes)? (true/false)
+REALIZA LO SIGUIENTE:
+1. Identifica quién es el "Vendedor" (representante UTEL) y quién el "Cliente" (prospecto) basado en el contenido.
+2. Asigna cada segmento al orador correcto.
+3. Evalúa los 22 subítems de la Rúbrica PCE UTEL.
 
-    C4. ACUERDOS Y CIERRE
-    - "c4_res": ¿Se realiza un resumen de la oferta comercial antes de cerrar? (true/false)
-    - "c4_doc": ¿Se solicita el envío de documentos o se explica el proceso? (true/false)
-    - "c4_pag": ¿Se establecen acuerdos claros de pago o fecha de compromiso? (true/false)
-    - "c4_ref": ¿El asesor solicita referidos al prospecto? (true/false)
+# REGLAS DE AUDITORÍA PCE UTEL:
+Marca cada punto como true/false:
 
-    C5. GESTIÓN Y REGISTRO
-    - "c5_int": ¿Se habla directamente con el interesado de la inscripción? (true/false)
-    - "c5_tip": ¿La interacción parece encaminada a una tipificación positiva en el CRM? (true/false)
-    - "c5_pla": ¿Se interactuó conforme a los valores de las plataformas UTEL? (true/false)
-    - "c5_reg": ¿El asesor parece estar registrando la interacción en tiempo real? (true/false)
-    - "c5_seg": ¿Se definieron pasos de seguimiento claros (seguimiento de acuerdos)? (true/false)
+C1. CONOCE A TU CLIENTE
+- "c1_linea": ¿El cliente muestra interés en la opción en línea?
+- "c1_programa": ¿Se determina el programa de interés específico?
+- "c1_demo": ¿Se registran datos demográficos clave?
+- "c1_ocup": ¿Se indaga sobre la ocupación del cliente?
+- "c1_equiv": ¿El asesor pregunta sobre equivalencias?
 
-    # FORMATO DE SALIDA (JSON ESTRICTO)
-    Responde ÚNICAMENTE con un objeto JSON (sin markdown) con la siguiente estructura:
-    {
-      "summary": "Breve resumen ejecutivo de la llamada (Sin mencionar que eres una IA)",
-      "customerMood": "receptivo | molesto | neutral | interesado | indiferente",
-      "salesOutcome": "venta_cerrada | interesado_seguimiento | no_interesado | agenda_demostracion",
-      "strengths": ["fortalezas encontradas"],
-      "weaknesses": ["áreas de oportunidad"],
-      "nextSteps": ["pasos a seguir en CRM"],
-      "evaluatedSubitems": { "c1_linea": true, "c1_programa": false, ... },
-      "feedbackMap": { "CONOCE A TU CLIENTE": "comentario...", "GENERALIDADES": "...", ... },
-      "emotionalAnalysis": {
-         "primaryEmotion": "emoción dominante",
-         "emotionalJourney": "descripción del cambio",
-         "purchaseAptitudeScore": 0-100,
-         "purchaseAptitudeLabel": "Muy Alto | Alto | Medio | Bajo",
-         "barriersToPurchase": [],
-         "buyingSignals": [],
-         "aptitudeReason": "justificación"
-      },
-      "transcription": [
-         {
-           "speaker": "Vendedor" | "Cliente",
-           "text": "Frase corta de 5-15 palabras exacta en español de lo que dijo este orador. Es obligatorio dividir párrafos grandes.",
-           "sentiment": "positive" | "negative" | "neutral",
-           "start": 0.0,
-           "end": 0.0
-         }
-      ],
-      "duration": 180
-    }
-    `;
+C2. GENERALIDADES
+- "c2_num": ¿Se expone la numeralia oficial UTEL?
+- "c2_mod": ¿Se detalla el modelo educativo flexible?
+- "c2_esp": ¿Se vincula el modelo con necesidades del prospecto?
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: [
-        {
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Audio
-          }
-        },
-        { text: promptText }
-      ]
-    });
+C3. OFERTA ACADÉMICA
+- "c3_costos": ¿Se presentan costos y opciones?
+- "c3_comp": ¿Se explican costos complementarios?
+- "c3_jor": ¿Se define la jornada de estudio?
+- "c3_beca": ¿Se menciona la beca?
+- "c3_ciclos": ¿Se mencionan ciclos de inicio?
 
-    const responseText = response.text || "";
-    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+C4. ACUERDOS Y CIERRE
+- "c4_res": ¿Se realiza resumen de oferta?
+- "c4_doc": ¿Se solicita envío de documentos?
+- "c4_pag": ¿Se acuerdan fechas de pago?
+- "c4_ref": ¿El asesor solicita referidos?
+
+C5. GESTIÓN Y REGISTRO
+- "c5_int": ¿Se habla directamente con el interesado?
+- "c5_tip": ¿Tipificación positiva en CRM?
+- "c5_pla": ¿Uso de plataformas UTEL?
+- "c5_reg": ¿Registro en tiempo real?
+- "c5_seg": ¿Pasos de seguimiento claros?
+
+Responde EXCLUSIVAMENTE con JSON:
+{
+  "transcription": [{ "speaker": "Vendedor"|"Cliente", "text": "...", "sentiment": "positive"|"negative"|"neutral", "start": 0.0, "end": 0.0, "confidence": 0.95 }],
+  "summary": "Resumen ejecutivo",
+  "customerMood": "receptivo|molesto|neutral|interesado|indiferente",
+  "salesOutcome": "venta_cerrada|interesado_seguimiento|no_interesado|agenda_demostracion",
+  "strengths": [],
+  "weaknesses": [],
+  "nextSteps": [],
+  "evaluatedSubitems": { "c1_linea": true, ... },
+  "feedbackMap": { "CONOCE A TU CLIENTE": "...", "GENERALIDADES": "...", "OFERTA ACADÉMICA": "...", "ACUERDOS Y CIERRE": "...", "GESTIÓN Y REGISTRO": "..." },
+  "emotionalAnalysis": { "primaryEmotion": "...", "emotionalJourney": "...", "purchaseAptitudeScore": 0-100, "purchaseAptitudeLabel": "Muy Alto|Alto|Medio|Bajo", "barriersToPurchase": [], "buyingSignals": [], "aptitudeReason": "..." },
+  "duration": ${duration}
+}`;
+
+    const response = await axios.post(`${ollamaUrl}/api/generate`, {
+      model: ollamaModel,
+      prompt: promptText,
+      format: "json",
+      stream: false
+    }, { timeout: 60000 });
+
+    const responseString = response.data.response || "";
+    const cleanJson = responseString.replace(/```json|```/g, '').trim();
     const analysis = JSON.parse(cleanJson);
 
-    // Complementar con la lógica UTEL de puntajes
     const evaluatedSubitems = analysis.evaluatedSubitems || {};
     const feedbackMap = analysis.feedbackMap || {};
-    
-    // Obtener modalidad de la transcripción (si estuviera disponible) - simplificado para este wrapper
-    const modality = 'LÍNEA'; 
-
+    const modality = 'LÍNEA';
     const builtChecklist = buildCheckedChecklistForScript(evaluatedSubitems, feedbackMap, modality);
-    
-    // Aplicar sanidad y guardrail de reversión/fusión de oradores sobre la transcripción devuelta
     const guardedTranscription = await applyTranscriptionGuardrails(analysis.transcription || []);
 
     return {
@@ -397,10 +487,9 @@ async function generateGeminiAnalysis(audioBuffer: Buffer, format: string): Prom
       transcription: guardedTranscription,
       utel: builtChecklist
     };
-
   } catch (err) {
-    console.error("Error en generateGeminiAnalysis:", err);
-    return generateHighFidelitySimulatedCall("Archivo de Audio", audioBuffer.length, fallbackId).analysis;
+    console.error("Error en generateLocalAnalysis:", err);
+    return generateHighFidelitySimulatedCall(fileName, audioBuffer.length, fallbackId).analysis;
   }
 }
 
@@ -825,14 +914,8 @@ app.post("/api/drive-import", async (req, res) => {
     // Determinar mimeType básico
     const ext = fileName.split('.').pop()?.toLowerCase() || 'mp3';
 
-    if (engine === 'ollama') {
-      console.log(`[DRIVE] Procesando con Ollama Local (${ollamaModel})...`);
-      // Simular transcripción para Ollama (ya que Ollama es LLM, no STT usualmente, pero aquí el flujo lo permite)
-      analysis = await generateGeminiAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3'); 
-    } else {
-      console.log(`[DRIVE] Procesando con Google AI Gemini...`);
-      analysis = await generateGeminiAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3');
-    }
+    console.log(`[DRIVE] Procesando con motor local Whisper + Ollama...`);
+    analysis = await generateLocalAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3', fileName);
 
     const newCall: any = {
       id: uniqueId,
@@ -867,42 +950,50 @@ app.post("/api/drive-import", async (req, res) => {
   }
 });
 
-// Función auxiliar para recuperar los correos electrónicos autorizados
-const getAllowedEmails = (): Set<string> => {
-  const emails = new Set<string>();
-  // Correos administradores por defecto
-  emails.add("ianjarquin1403@gmail.com");
-  emails.add("ian.jarquin@utel.edu.mx");
-  emails.add("admin@utel.edu.mx");
-
-  const envEmails = process.env.ALLOWED_EMAILS;
-  if (envEmails) {
-    envEmails.split(",").forEach(e => {
-      const trimmed = e.trim().toLowerCase();
-      if (trimmed) {
-        emails.add(trimmed);
-      }
-    });
-  }
-  return emails;
-};
-
 // API: Supervisor Login (Soporta Google OAuth y Contraseña tradicional)
-app.post("/api/login", (req, res) => {
+app.post("/api/login", loginLimiter, async (req, res) => {
   const { email, displayName, username, password } = req.body;
 
   // Opción 1: Autenticación con Google
   if (email) {
-    const allowed = getAllowedEmails();
     const searchEmail = email.trim().toLowerCase();
 
-    // Permitir si está en la lista blanca O si es un correo institucional de UTEL
-    if (allowed.has(searchEmail) || searchEmail.endsWith("@utel.edu.mx")) {
+    // Consultar roles en Supabase (CRM)
+    let isAuthorized = false;
+    let userName = displayName || email.split("@")[0];
+
+    if (supabase) {
+      try {
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("rol, nombre")
+          .eq("email", searchEmail)
+          .single();
+
+        if (profile && !error) {
+          isAuthorized = ["admin", "coordinador"].includes(profile.rol);
+          if (profile.nombre) userName = profile.nombre;
+          console.log(`[AUTH_SUPABASE] ${searchEmail} -> rol: ${profile.rol}, autorizado: ${isAuthorized}`);
+        } else {
+          console.log(`[AUTH_SUPABASE] ${searchEmail} no encontrado en CRM`);
+        }
+      } catch (err: any) {
+        console.error(`[AUTH_SUPABASE_ERROR] ${err.message}`);
+      }
+    }
+
+    // Fallback: administradores hardcodeados por si Supabase no está configurado
+    const fallbackEmails = new Set(["ianjarquin1403@gmail.com", "ian.jarquin@utel.edu.mx", "admin@utel.edu.mx"]);
+    if (!isAuthorized && supabase === null) {
+      isAuthorized = fallbackEmails.has(searchEmail);
+    }
+
+    if (isAuthorized) {
       console.log(`[AUTH_SUCCESS] Acceso concedido para: ${searchEmail}`);
       return res.json({
         success: true,
         token: "utel-supervisor-session-token",
-        username: displayName || email.split("@")[0]
+        username: userName
       });
     } else {
       console.warn(`[AUTH_DENIED] Acceso denegado para: ${email}.`);
@@ -1006,6 +1097,34 @@ app.get("/api/audio/:id", (req, res) => {
   }
 });
 
+// API: Transcripción standalone con Whisper local (usado por Vercel serverless como proxy al VPS)
+app.post("/api/whisper", async (req, res) => {
+  try {
+    const { audioBase64, audioUrl, fileName = "audio.mp3" } = req.body;
+
+    let audioBuffer: Buffer;
+    if (audioUrl) {
+      const resp = await axios.get(audioUrl, { responseType: "arraybuffer", timeout: 30000 });
+      audioBuffer = Buffer.from(resp.data);
+    } else if (audioBase64) {
+      audioBuffer = Buffer.from(audioBase64, "base64");
+    } else {
+      return res.status(400).json({ error: "audioBase64 or audioUrl is required" });
+    }
+
+    const { segments, duration } = await whisperTranscribe(audioBuffer, fileName);
+
+    if (!segments.length) {
+      return res.status(503).json({ error: "Whisper model not available or transcription produced no segments" });
+    }
+
+    return res.status(200).json({ segments, duration, engine: "whisper" });
+  } catch (error: any) {
+    console.error("[WHISPER-API] Error:", error.message);
+    return res.status(500).json({ error: `Whisper transcription failed: ${error.message}` });
+  }
+});
+
 // API: Subir archivo de audio y procesar directo con AssemblyAI + Google AI (Gemini)
 app.post("/api/upload", upload.single("audio"), async (req, res) => {
   try {
@@ -1014,277 +1133,127 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
       return res.status(400).json({ error: "No se proporcionó ningún archivo de audio." });
     }
 
-    const apiKey = process.env.ASSEMBLYAI_API_KEY;
     const originalName = file.originalname;
     const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    if (!apiKey) {
-      console.warn("Clave de API de AssemblyAI omitida o no encontrada. Iniciando motor directo de Google Gemini...");
-      const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-      try {
-        const analysis = await generateGeminiAnalysis(file.buffer, ext);
-        const finalCallData = {
-          id: uniqueId,
-          metadata: {
-            fileName: originalName,
-            url: `/api/audio/${uniqueId}`,
-            size: file.size,
-            duration: analysis.duration || 180,
-            uploadedAt: new Date().toISOString(),
-            uploadedBy: "auditor_sales_prod",
-            status: "completed"
-          },
-          score: {
-            global: Math.round((analysis.utel?.totalScore || 0) * 10),
-            greeting: 85,
-            needDiscovery: 80,
-            objectionHandling: 70,
-            closingSkills: 60,
-            empathy: 75
-          },
-          analysis: {
-            summary: analysis.summary || "Llamada procesada de forma multimodal.",
-            strengths: analysis.strengths || [],
-            weaknesses: analysis.weaknesses || [],
-            nextSteps: analysis.nextSteps || [],
-            customerMood: analysis.customerMood || "neutral",
-            salesOutcome: analysis.salesOutcome || "interesado_seguimiento",
-            utel: analysis.utel,
-            emotionalAnalysis: analysis.emotionalAnalysis
-          },
-          transcription: analysis.transcription || []
-        };
-        audioBuffers.set(uniqueId, file.buffer);
-        localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
-        return res.json(finalCallData);
-      } catch (geminiUploadErr: any) {
-        console.error("Fallo definitivo procesando de forma alternativa con Gemini en carga directa:", geminiUploadErr);
-        const fallbackCallData = generateHighFidelitySimulatedCall(originalName, file.size, uniqueId);
-        audioBuffers.set(uniqueId, file.buffer);
-        localCallsMemory = [fallbackCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
-        return res.json(fallbackCallData);
-      }
-    }
+    // Motor local: Whisper + Ollama (se usa siempre como principal)
+    console.log("[LOCAL_MODE] Usando Whisper (STT) + Ollama (análisis) como motor principal");
 
     console.log(`Iniciando procesamiento de audio: ${originalName} (ID: ${uniqueId})`);
 
     let finalCallData: any;
     try {
-      // 1. Subir Buffer a AssemblyAI
-      const uploadResponse = await axios.post(
-        "https://api.assemblyai.com/v2/upload",
-        file.buffer,
-      {
-        headers: {
-          "authorization": apiKey,
-          "content-type": "application/octet-stream"
-        }
-      }
-    );
-
-    const uploadUrl = uploadResponse.data.upload_url;
-
-    // 2. Transcripción
-    const transcriptResponse = await axios.post(
-      "https://api.assemblyai.com/v2/transcript",
-      {
-        audio_url: uploadUrl,
-        language_code: "es",
-        speaker_labels: true
-      },
-      {
-        headers: {
-          "authorization": apiKey,
-          "content-type": "application/json"
-        }
-      }
-    );
-
-    const transcriptId = transcriptResponse.data.id;
-    console.log(`Transcripción iniciada en AssemblyAI. ID: ${transcriptId}`);
-
-    // Guardar estado inicial como "processing"
-    const processingCallStub = {
-      id: uniqueId,
-      metadata: {
-        fileName: originalName,
-        url: `/api/audio/${uniqueId}`,
-        size: file.size,
-        duration: 0,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: "auditor_sales_prod",
-        status: "processing"
-      },
-      score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
-      analysis: {
-        summary: "Procesando transcripción y auditoría cognitiva...",
-        strengths: [], weaknesses: [], nextSteps: [],
-        customerMood: "neutral",
-        salesOutcome: "interesado_seguimiento"
-      },
-      transcription: []
-    };
-
-    localCallsMemory.unshift(processingCallStub);
-
-    // 3. Polling AssemblyAI (Simulado síncrono para esta demo simplificada)
-    let isCompleted = false;
-    let attempts = 0;
-    const maxAttempts = 60; 
-    let resultData: any = null;
-
-    while (!isCompleted && attempts < maxAttempts) {
-      attempts++;
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      const pollResponse = await axios.get(
-        `https://api.assemblyai.com/v2/transcript/${transcriptId}`,
-        { headers: { "authorization": apiKey } }
-      );
-
-      const status = pollResponse.data.status;
-      if (status === "completed") {
-        isCompleted = true;
-        resultData = pollResponse.data;
-      } else if (status === "failed") {
-        throw new Error(`AssemblyAI falló: ${pollResponse.data.error}`);
-      }
-    }
-
-    if (!isCompleted || !resultData) {
-      throw new Error("Agotado el tiempo de espera de transcripción.");
-    }
-
-    // 4. Mapear bocetos de diálogos con algoritmo inteligente y de alta fidelidad para detección de roles (Vendedor vs Cliente)
-    const rawUtterances = resultData.utterances || [];
-    let rawSpeakerSeller = "";
-
-    if (rawUtterances.length > 0) {
-      const uniqueSpeakers: string[] = Array.from(new Set(rawUtterances.map((u: any) => u.speaker))).filter(Boolean) as string[];
+      // 1. Transcribir con Whisper local
+      const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
+      const { segments: rawSegments, duration: audioDuration } = await whisperTranscribe(file.buffer, originalName);
       
-      if (uniqueSpeakers.length <= 1) {
-        rawSpeakerSeller = uniqueSpeakers[0] || "A";
-      } else {
-        // Inicializar puntajes para cada orador para determinar cuál es el Asesor/Vendedor de UTEL
-        const speakerScores: Record<string, number> = {};
-        uniqueSpeakers.forEach(sp => {
-          speakerScores[sp as string] = 0;
-        });
-
-        const sellerKeywords = [
-          "utel", "universidad", "asesor", "asesora", "ejecutivo", "ejecutiva", "bienvenido", "bienvenida",
-          "mi nombre es", "le llamo de", "te llamo de", "habla", "colegiatura", "mensualidad", "inscripción",
-          "beca", "descuento", "revalidar", "equivalencia", "plan de estudios", "modelo educativo",
-          "duración", "jornada", "egresados", "países", "documentación", "documentos", "correo",
-          "whatsapp", "tipificación", "seguimiento", "teléfono", "referido"
-        ];
-
-        const clientKeywords = [
-          "información", "me interesa", "interesado", "interesada", "cuánto cuesta", "costo", "precio",
-          "duda", "pregunta", "trabajo", "horario", "tiempo", "caro", "dinero", "estudiar", "becas"
-        ];
-
-        rawUtterances.forEach((u: any) => {
-          const textLower = (u.text || "").toLowerCase();
-          const sp = u.speaker;
-          if (speakerScores[sp] !== undefined) {
-            sellerKeywords.forEach(kw => {
-              if (textLower.includes(kw)) {
-                speakerScores[sp] += 2; // Alta relevancia para términos de Asesor comercial
-              }
-            });
-            clientKeywords.forEach(kw => {
-              if (textLower.includes(kw)) {
-                speakerScores[sp] -= 1; // Un cliente tiende a interrogar estas cosas
-              }
-            });
-          }
-        });
-
-        // Heurística de apertura de llamada: Dar ventaja al vendedor
-        const firstSpeaker = rawUtterances[0].speaker;
-        const secondSpeaker = uniqueSpeakers.find(s => s !== firstSpeaker);
-        
-        let firstSpeakerGreetingMatch = false;
-        const greetingKeywords = ["mi nombre es", "bienvenido a utel", "le llamo de utel", "te llamo de utel", "habla", "asesor"];
-        for (let i = 0; i < Math.min(2, rawUtterances.length); i++) {
-          if (rawUtterances[i].speaker === firstSpeaker) {
-            const textLower = (rawUtterances[i].text || "").toLowerCase();
-            if (greetingKeywords.some(kw => textLower.includes(kw))) {
-              firstSpeakerGreetingMatch = true;
-              break;
-            }
-          }
-        }
-
-        if (firstSpeakerGreetingMatch) {
-          speakerScores[firstSpeaker as string] += 10;
-        } else {
-          // Si el primer contacto es un "hola", "bueno", "aló" de menos de 15 caracteres, probablemente era el cliente respondiendo
-          const firstUtteranceText = (rawUtterances[0].text || "").trim().toLowerCase();
-          if (firstUtteranceText.length < 15 && (firstUtteranceText === "bueno" || firstUtteranceText === "hola" || firstUtteranceText === "bueno hola" || firstUtteranceText === "sí" || firstUtteranceText === "si")) {
-            if (secondSpeaker) {
-              speakerScores[secondSpeaker as string] += 5;
-            }
-          }
-        }
-
-        // Seleccionar al orador de mayor puntaje acumulado como Vendedor
-        let maxScore = -Infinity;
-        let bestSeller = uniqueSpeakers[0];
-        uniqueSpeakers.forEach(sp => {
-          if (speakerScores[sp as string] > maxScore) {
-            maxScore = speakerScores[sp as string];
-            bestSeller = sp;
-          }
-        });
-
-        rawSpeakerSeller = bestSeller;
-        console.log("[SPEAKER_RESOLUTION_UPLOAD]", {
-          speakerScores,
-          selectedSeller: rawSpeakerSeller,
-          firstSpeaker,
-          uniqueSpeakers
-        });
-      }
-    }
-
-    // Heurística de sentimientos
-    const posWords = ["bien", "excelente", "perfecto", "gracias", "interesa", "interesado", "gusta", "bueno", "súper", "claro", "sí"];
-    const negWords = ["no", "caro", "costoso", "tiempo", "complicado", "difícil", "duda", "pero", "mal"];
-
-    const cleanTranscription = rawUtterances.map((item: any) => {
-      const isSeller = item.speaker === rawSpeakerSeller;
-      const textLower = (item.text || "").toLowerCase();
-      
-      let computedSentiment = "neutral";
-      if (!isSeller) {
-        const hasPos = posWords.some(w => textLower.includes(w));
-        const hasNeg = negWords.some(w => textLower.includes(w));
-        if (hasPos && !hasNeg) {
-          computedSentiment = "positive";
-        } else if (hasNeg) {
-          computedSentiment = "negative";
-        }
-      }
-
-      return {
-        speaker: isSeller ? "Vendedor" : "Cliente",
-        start: parseFloat((item.start / 1000).toFixed(2)),
-        end: parseFloat((item.end / 1000).toFixed(2)),
-        text: item.text,
-        sentiment: computedSentiment,
-        confidence: item.confidence || 0.95
+      // Guardar estado inicial como "processing"
+      const processingCallStub = {
+        id: uniqueId,
+        metadata: {
+          fileName: originalName,
+          url: `/api/audio/${uniqueId}`,
+          size: file.size,
+          duration: 0,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: "auditor_sales_prod",
+          status: "processing"
+        },
+        score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
+        analysis: {
+          summary: "Procesando transcripción y auditoría cognitiva...",
+          strengths: [], weaknesses: [], nextSteps: [],
+          customerMood: "neutral",
+          salesOutcome: "interesado_seguimiento"
+        },
+        transcription: []
       };
-    });
 
-    const correctedTranscription = await applyTranscriptionGuardrails(cleanTranscription);
-    const localUtelResult = evaluateUtelHeuristic(correctedTranscription, originalName);
+      localCallsMemory.unshift(processingCallStub);
+
+      if (!rawSegments.length) {
+        throw new Error("Whisper no produjo transcripción.");
+      }
+
+      // 2. Asignar speakers con Ollama (diarización)
+      const ollamaUrlLocal = process.env.OLLAMA_URL || "http://localhost:11434";
+      const ollamaModelLocal = process.env.OLLAMA_MODEL || "hermes3";
+      const textoTranscrito = rawSegments.map(s => s.text).join(" ");
+
+      let speakerMapping: Record<number, string> = {};
+      try {
+        const diarPrompt = `Eres un transcriptor experto. Recibes una transcripción de llamada de ventas UTEL con segmentos sin identificar orador.
+
+Segmentos:
+${JSON.stringify(rawSegments.map((s, i) => ({ idx: i, text: s.text })), null, 2)}
+
+Texto completo: "${textoTranscrito}"
+
+Analiza el diálogo y determina para CADA segmento si quien habla es "Vendedor" (asesor UTEL) o "Cliente" (prospecto).
+
+Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
+
+        const diarResp = await axios.post(`${ollamaUrlLocal}/api/generate`, {
+          model: ollamaModelLocal,
+          prompt: diarPrompt,
+          format: "json",
+          stream: false
+        }, { timeout: 30000 });
+
+        const diarText = diarResp.data.response || "";
+        const diarClean = diarText.replace(/```json|```/g, '').trim();
+        const diarParsed = JSON.parse(diarClean);
+        if (diarParsed.speakers) {
+          speakerMapping = diarParsed.speakers;
+        }
+      } catch (diarErr: any) {
+        console.warn("[DIARIZATION] Falló diarización con Ollama, usando heurística:", diarErr.message);
+        // Heurística simple: el que habla primero y más palabras de venta es el Vendedor
+        const sellerKw = ["utel", "colegiatura", "beca", "inscripción", "asesor", "universidad"];
+        let sellerScore = 0;
+        rawSegments.forEach((s, i) => {
+          const t = s.text.toLowerCase();
+          const hits = sellerKw.filter(kw => t.includes(kw)).length;
+          if (i === 0 && hits > 0) sellerScore += 10;
+          if (hits > 1) sellerScore += hits;
+        });
+        const sellerIsFirst = sellerScore > 3;
+        rawSegments.forEach((_, i) => {
+          speakerMapping[i] = i === 0 ? (sellerIsFirst ? "Vendedor" : "Cliente") : (i % 2 === 0 ? "Vendedor" : "Cliente");
+        });
+      }
+
+      // 3. Construir transcripción con speakers
+      const posWords = ["bien", "excelente", "perfecto", "gracias", "interesa", "interesado", "gusta", "bueno", "súper", "claro", "sí"];
+      const negWords = ["no", "caro", "costoso", "tiempo", "complicado", "difícil", "duda", "pero", "mal"];
+
+      const cleanTranscription = rawSegments.map((seg, i) => {
+        const speaker = speakerMapping[i] || (i % 2 === 0 ? "Vendedor" : "Cliente");
+        const textLower = seg.text.toLowerCase();
+        let computedSentiment = "neutral";
+        if (speaker === "Cliente") {
+          const hasPos = posWords.some(w => textLower.includes(w));
+          const hasNeg = negWords.some(w => textLower.includes(w));
+          if (hasPos && !hasNeg) computedSentiment = "positive";
+          else if (hasNeg) computedSentiment = "negative";
+        }
+        return {
+          speaker,
+          start: seg.start || 0,
+          end: seg.end || 0,
+          text: seg.text,
+          sentiment: computedSentiment,
+          confidence: 0.95
+        };
+      });
+
+      const correctedTranscription = await applyTranscriptionGuardrails(cleanTranscription);
+      const localUtelResult = evaluateUtelHeuristic(correctedTranscription, originalName);
 
     // Obtener parámetros de motor seleccionados por el usuario
-    const selectedEngine = req.body.engine || "gemini";
+    const selectedEngine = req.body.engine || "ollama";
     const ollamaUrl = req.body.ollamaUrl || "http://localhost:11434";
-    const ollamaModelName = req.body.ollamaModel || "llama3";
+    const ollamaModelName = req.body.ollamaModel || "hermes3";
 
     // 5. INTELIGENCIA COGNITIVA Y ANÁLISIS EMOCIONAL (MATRIZ PCE UTEL OFICIAL DE LOS PDF)
     const buildCheckedChecklist = (
@@ -1566,7 +1535,7 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
           fileName: originalName,
           url: `/api/audio/${uniqueId}`,
           size: file.size,
-          duration: Math.round(resultData?.audio_duration || 180),
+          duration: Math.round(audioDuration || 180),
           uploadedAt: new Date().toISOString(),
           uploadedBy: "auditor_sales_prod",
           status: "completed"
@@ -1592,10 +1561,10 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
         transcription: correctedTranscription
       };
     } catch (apiErr: any) {
-      console.warn("Fallo en procesamiento de AssemblyAI, intentando procesar de forma alternativa con Google Gemini directo:", apiErr.message);
+      console.warn("Fallo en procesamiento con Whisper, intentando con análisis local directo:", apiErr.message);
       try {
         const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-        const analysis = await generateGeminiAnalysis(file.buffer, ext);
+        const analysis = await generateLocalAnalysis(file.buffer, ext, originalName);
         finalCallData = {
           id: uniqueId,
           metadata: {
