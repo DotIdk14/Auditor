@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import multer from "multer";
 import axios from "axios";
 import dotenv from "dotenv";
@@ -12,7 +11,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
-import { Worker } from "worker_threads";
+import { AssemblyAI } from "assemblyai";
 import { evaluateHeuristic, buildChecklist, Modalidad } from "./src/shared/pce-rubric.js";
 import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-calls.js";
 
@@ -448,64 +447,63 @@ async function applyTranscriptionGuardrails(transcription: any[]): Promise<Trans
   return cleaned;
 }
 
-// Transcribir audio con Whisper local en un worker thread para no bloquear el event loop
-async function whisperTranscribe(audioBuffer: Buffer, fileName: string): Promise<{ segments: any[], duration: number }> {
-  const modelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
-  return new Promise((resolve) => {
-    const worker = new Worker(path.join(process.cwd(), "whisper-worker.js"), { workerData: null });
-    const audioBuf = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength);
-    worker.postMessage({ audioBuffer: audioBuf, fileName, modelPath }, [audioBuf]);
-    const timeout = setTimeout(() => {
-      worker.terminate();
-      console.warn("[WHISPER] Worker timed out");
-      resolve({ segments: [], duration: 0 });
-    }, 60_000);
-    worker.on("message", (msg: any) => {
-      clearTimeout(timeout);
-      worker.terminate();
-      if (msg.error) {
-        console.error("[WHISPER] Error en worker:", msg.error);
-        resolve({ segments: [], duration: 0 });
-        return;
-      }
-      const segments: any[] = [];
-      let duration = 0;
-      if (msg.segments && Array.isArray(msg.segments)) {
-        for (const seg of msg.segments) {
-          segments.push({
-            start: seg.t0 / 100,
-            end: seg.t1 / 100,
-            text: (seg.text || "").trim(),
-            speaker: ""
-          });
-          if (seg.t1 / 100 > duration) duration = seg.t1 / 100;
-        }
-      }
-      console.log(`[WHISPER] Transcripción completada: ${segments.length} segmentos, ${duration}s`);
-      resolve({ segments, duration });
+// Transcribir audio con AssemblyAI (cloud STT con speaker diarization)
+async function assemblyAITranscribe(audioBuffer: Buffer, fileName: string): Promise<{ segments: any[], duration: number }> {
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  if (!apiKey) {
+    console.warn("[AAI] ASSEMBLYAI_API_KEY no configurada");
+    return { segments: [], duration: 0 };
+  }
+
+  try {
+    const client = new AssemblyAI({ apiKey });
+
+    console.log(`[AAI] Subiendo archivo ${fileName} (${(audioBuffer.length / 1024 / 1024).toFixed(1)} MB)...`);
+    const uploadUrl = await client.files.upload(audioBuffer);
+    console.log(`[AAI] Archivo subido: ${uploadUrl}`);
+
+    console.log(`[AAI] Enviando a transcripción con speaker_labels...`);
+    const transcript = await client.transcripts.transcribe({
+      audio: uploadUrl,
+      speaker_labels: true,
+      language_code: "es",
+      speech_models: ["universal-3-pro", "universal-2"],
     });
-    worker.on("error", (err: Error) => {
-      clearTimeout(timeout);
-      console.error("[WHISPER] Error en worker:", err.message);
-      resolve({ segments: [], duration: 0 });
-    });
-  });
+
+    if (transcript.status === 'error') {
+      throw new Error(transcript.error || 'Error en transcripción AssemblyAI');
+    }
+
+    const duration = transcript.audio_duration || 0;
+    const segments: any[] = (transcript.utterances || []).map((utt: any) => ({
+      start: utt.start / 1000,
+      end: utt.end / 1000,
+      text: (utt.text || "").trim(),
+      speaker: utt.speaker || "",
+    }));
+
+    console.log(`[AAI] Transcripción completada: ${segments.length} utterances, ${duration}s`);
+    return { segments, duration };
+  } catch (err: any) {
+    console.error("[AAI] Error en transcripción:", err.message);
+    return { segments: [], duration: 0 };
+  }
 }
 
-// Función principal para generar análisis con Whisper + Ollama (Auditoría PCE UTEL)
+// Función principal para generar análisis con AssemblyAI + Ollama (Auditoría PCE UTEL)
 async function generateLocalAnalysis(audioBuffer: Buffer, format: string, fileName: string): Promise<any> {
   const fallbackId = `fallback_${Date.now()}`;
 
   try {
-    // 1. Transcribir con Whisper
-    const { segments, duration } = await whisperTranscribe(audioBuffer, fileName);
-    
+    // 1. Transcribir con AssemblyAI
+    const { segments, duration } = await assemblyAITranscribe(audioBuffer, fileName);
+
     if (!segments.length) {
-      console.warn("[LOCAL] Whisper no produjo transcripción, usando simulación");
+      console.warn("[LOCAL] ⚠ AssemblyAI no produjo transcripción. Verifica ASSEMBLYAI_API_KEY. Usando simulación como fallback.");
       return generateHighFidelitySimulatedCall(fileName, audioBuffer.length, fallbackId).analysis;
     }
 
-    // 2. Asignar speakers con heurística (el primer segmento largo es el vendedor)
+    // 2. Asignar speakers con heurística (AssemblyAI ya incluye speaker_labels)
     const textoCompleto = segments.map(s => s.text).join(" ");
     
     // 3. Usar Ollama para diarización y análisis completo
@@ -642,7 +640,7 @@ app.post("/api/drive-import", async (req, res) => {
     // Determinar mimeType básico
     const ext = fileName.split('.').pop()?.toLowerCase() || 'mp3';
 
-    console.log(`[DRIVE] Procesando con motor local Whisper + Ollama...`);
+    console.log(`[DRIVE] Procesando con AssemblyAI + Ollama...`);
     analysis = await generateLocalAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3', fileName);
 
     const newCall: any = {
@@ -815,49 +813,59 @@ app.get("/api/llamadas", (req, res) => {
 });
 
 // API: Obtener archivo de audio real (Soporta HTTP Range Requests para saltar segundos sin reiniciar)
-app.get("/api/audio/:id", (req, res) => {
-  const buffer = audioBuffers.get(req.params.id);
-  if (!buffer) {
-    return res.status(404).json({ error: "Archivo de audio no encontrado en el servidor." });
+app.get("/api/audio/:id", async (req, res) => {
+  const callId = req.params.id;
+  const buffer = audioBuffers.get(callId);
+  if (buffer) {
+    return serveAudio(res, buffer, req.headers.range);
   }
 
-  const totalLength = buffer.length;
-  const range = req.headers.range;
-
-  if (range) {
-    const parts = range.replace(/bytes=/, "").split("-");
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
-
-    if (start >= totalLength || end >= totalLength || start < 0 || end < start) {
-      res.writeHead(416, {
-        "Content-Range": `bytes */${totalLength}`,
-        "Accept-Ranges": "bytes"
-      });
-      return res.end();
+  // Fallback: check call metadata for blob URL
+  const call = localCallsMemory.find(c => c.id === callId);
+  const blobUrl = call?.metadata?.blobUrl;
+  if (blobUrl) {
+    try {
+      const resp = await axios.get(blobUrl, { responseType: "arraybuffer", timeout: 15000 });
+      audioBuffers.set(callId, Buffer.from(resp.data));
+      return serveAudio(res, audioBuffers.get(callId)!, req.headers.range);
+    } catch {
+      // fall through to 404
     }
+  }
 
-    const chunk = buffer.subarray(start, end + 1);
-    res.writeHead(206, {
-      "Content-Range": `bytes ${start}-${end}/${totalLength}`,
-      "Accept-Ranges": "bytes",
-      "Content-Length": chunk.length,
-      "Content-Type": "audio/mpeg"
-    });
-    res.write(chunk);
-    res.end();
-  } else {
-    res.writeHead(200, {
+  return res.status(404).json({ error: "Archivo de audio no encontrado en el servidor." });
+
+  function serveAudio(r: any, buf: Buffer, range: string | undefined) {
+    const totalLength = buf.length;
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
+      if (start >= totalLength || end >= totalLength || start < 0 || end < start) {
+        r.writeHead(416, { "Content-Range": `bytes */${totalLength}`, "Accept-Ranges": "bytes" });
+        return r.end();
+      }
+      const chunk = buf.subarray(start, end + 1);
+      r.writeHead(206, {
+        "Content-Range": `bytes ${start}-${end}/${totalLength}`,
+        "Accept-Ranges": "bytes",
+        "Content-Length": chunk.length,
+        "Content-Type": "audio/mpeg",
+      });
+      r.write(chunk);
+      return r.end();
+    }
+    r.writeHead(200, {
       "Content-Length": totalLength,
       "Content-Type": "audio/mpeg",
-      "Accept-Ranges": "bytes"
+      "Accept-Ranges": "bytes",
     });
-    res.write(buffer);
-    res.end();
+    r.write(buf);
+    return r.end();
   }
 });
 
-// API: Transcripción standalone con Whisper local (usado por Vercel serverless como proxy al VPS)
+// API: Transcripción standalone con AssemblyAI
 app.post("/api/whisper", async (req, res) => {
   try {
     const { audioBase64, audioUrl, fileName = "audio.mp3" } = req.body;
@@ -872,16 +880,70 @@ app.post("/api/whisper", async (req, res) => {
       return res.status(400).json({ error: "audioBase64 or audioUrl is required" });
     }
 
-    const { segments, duration } = await whisperTranscribe(audioBuffer, fileName);
+    const { segments, duration } = await assemblyAITranscribe(audioBuffer, fileName);
 
     if (!segments.length) {
-      return res.status(503).json({ error: "Whisper model not available or transcription produced no segments" });
+      return res.status(503).json({ error: "AssemblyAI transcription produced no segments" });
     }
 
-    return res.status(200).json({ segments, duration, engine: "whisper" });
+    return res.status(200).json({ segments, duration, engine: "assemblyai" });
   } catch (error: any) {
     console.error("[WHISPER-API] Error:", error.message);
-    return res.status(500).json({ error: `Whisper transcription failed: ${error.message}` });
+    return res.status(500).json({ error: `AssemblyAI transcription failed: ${error.message}` });
+  }
+});
+
+// API: Procesar audio desde Vercel Blob (bypass 4.5MB limit)
+app.post("/api/process-blob", async (req, res) => {
+  const { blobUrl, fileName } = req.body;
+  if (!blobUrl) return res.status(400).json({ error: "blobUrl is required" });
+
+  const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  try {
+    const resp = await axios.get(blobUrl, { responseType: "arraybuffer", timeout: 30000 });
+    const audioBuffer = Buffer.from(resp.data);
+    const originalName = fileName || "audio.mp3";
+
+    audioBuffers.set(uniqueId, audioBuffer);
+
+    const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
+    const analysis = await generateLocalAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3', originalName);
+
+    const finalCallData = {
+      id: uniqueId,
+      metadata: {
+        fileName: originalName,
+        url: `/api/audio/${uniqueId}`,
+        blobUrl,
+        size: audioBuffer.length,
+        duration: analysis.duration || 180,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: "auditor_sales_prod",
+        status: "completed",
+      },
+      score: {
+        global: (analysis.utel?.totalScore || 0) * 10,
+        greeting: 85, needDiscovery: 80, objectionHandling: 70, closingSkills: 60, empathy: 75,
+      },
+      analysis: {
+        summary: analysis.summary || "Llamada auditada.",
+        strengths: analysis.strengths || [],
+        weaknesses: analysis.weaknesses || [],
+        nextSteps: analysis.nextSteps || [],
+        customerMood: analysis.customerMood || "neutral",
+        salesOutcome: analysis.salesOutcome || "interesado_seguimiento",
+        utel: analysis.utel,
+        emotionalAnalysis: analysis.emotionalAnalysis,
+      },
+      transcription: analysis.transcription || [],
+    };
+
+    localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
+    saveCallToSupabase(finalCallData);
+    return res.json(finalCallData);
+  } catch (err: any) {
+    console.error("[BLOB_ERROR]", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
@@ -896,16 +958,16 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
     const originalName = file.originalname;
     const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    // Motor local: Whisper + Ollama (se usa siempre como principal)
-    console.log("[LOCAL_MODE] Usando Whisper (STT) + Ollama (análisis) como motor principal");
+    // Motor: AssemblyAI + Ollama (se usa siempre como principal)
+    console.log("[LOCAL_MODE] Usando AssemblyAI (STT) + Ollama (análisis) como motor principal");
 
     console.log(`Iniciando procesamiento de audio: ${originalName} (ID: ${uniqueId})`);
 
     let finalCallData: any;
     try {
-      // 1. Transcribir con Whisper local
+      // 1. Transcribir con AssemblyAI
       const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-      const { segments: rawSegments, duration: audioDuration } = await whisperTranscribe(file.buffer, originalName);
+      const { segments: rawSegments, duration: audioDuration } = await assemblyAITranscribe(file.buffer, originalName);
       
       // Guardar estado inicial como "processing"
       const processingCallStub = {
@@ -932,7 +994,7 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
       localCallsMemory.unshift(processingCallStub);
 
       if (!rawSegments.length) {
-        throw new Error("Whisper no produjo transcripción.");
+        throw new Error("AssemblyAI no produjo transcripción.");
       }
 
       // 2. Asignar speakers con Ollama (diarización)
@@ -1246,7 +1308,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
         transcription: correctedTranscription
       };
     } catch (apiErr: any) {
-      console.warn("Fallo en procesamiento con Whisper, intentando con análisis local directo:", apiErr.message);
+      console.warn("Fallo en procesamiento con AssemblyAI, intentando con análisis local directo:", apiErr.message);
       try {
         const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
         const analysis = await generateLocalAnalysis(file.buffer, ext, originalName);
@@ -1667,9 +1729,23 @@ app.post("/api/set-supervisor-passwords", async (req, res) => {
   }
 });
 
+// ── Ollama proxy ──────────────────────────────────────────────
+// Proxy para que Vercel Express pueda llamar a Ollama en el VPS
+app.post("/api/generate", async (req, res) => {
+  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+  try {
+    const response = await axios.post(`${ollamaUrl}/api/generate`, req.body, { timeout: 60000 });
+    return res.status(200).json(response.data);
+  } catch (error: any) {
+    console.error("[OLLAMA_PROXY] Error:", error.message);
+    return res.status(500).json({ error: `Ollama error: ${error.response?.data?.error || error.message}` });
+  }
+});
+
 // Middleware de integración de Vite
 const startServer = async () => {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"

@@ -41,7 +41,7 @@ There are **no tests** and **no CI workflows** in this repo. Supabase migration 
 **Serverless functions:**
 - `api/index.ts` — exports the full Express app (23MB+). Handles `/api/upload`, `/api/login`, `/api/llamadas`, etc.
 - `api/ollama.ts` — thin proxy to `OLLAMA_URL` (ngrok-exposed Ollama on VPS)
-- `api/whisper.ts` — thin proxy to `APP_URL/api/whisper` (backend on VPS)
+- `api/whisper.ts` — calls AssemblyAI directly for standalone transcription. Requires `ASSEMBLYAI_API_KEY` env var.
 - Max duration for all: **60 seconds** (set in `vercel.json`)
 
 **Required Vercel/Server env vars:**
@@ -58,24 +58,22 @@ There are **no tests** and **no CI workflows** in this repo. Supabase migration 
 | `SUPABASE_ANON_KEY` | Supabase anon key |
 | `ASSEMBLYAI_API_KEY` | AssemblyAI API key |
 
-## Whisper (Audio Transcription)
+## AssemblyAI (Audio Transcription)
 
-`@napi-rs/whisper` is a Rust native addon. It only works on the VPS, NOT on Vercel serverless functions. The Whisper model file (`ggml-small.bin`, ~466MB) is not published to npm — it must be downloaded separately via the package's `download-ggml-model.mjs` script. Vercel whisper calls are proxied to the VPS (`APP_URL/api/whisper`), where the native module actually runs.
+AssemblyAI is a cloud Speech-to-Text API that handles audio transcription with built-in speaker diarization (`speaker_labels`), Spanish language support (`language_code: "es"`), and high accuracy via the `universal-3-pro` model.
 
-### Worker Thread (avoid event loop blocking)
-
-The synchronous `model.full()` call (the actual transcription) runs in a **worker thread** (`whisper-worker.js`), NOT the main thread. This prevents the event loop from being blocked during transcription, which was the root cause of CORS timeouts and unresponsive API while audio was processing.
+Vercel serverless functions call AssemblyAI directly — no VPS needed for transcription.
 
 **Flow:**
-1. `whisperTranscribe()` in `server.ts` spawns a `Worker` from `whisper-worker.js`
-2. The worker loads the `.bin` model file, decodes audio, and runs `model.full()` — all in a separate thread
-3. The result (`{ segments: [{ t0, t1, text }] }`) is posted back to the main thread via `worker.postMessage`
-4. The main thread converts segments to the app format (`start`, `end`, `text`, `speaker`) and calculates `duration`
-5. A 60-second timeout terminates the worker if it hangs
+1. `assemblyAITranscribe()` in `server.ts` uploads the audio buffer to AssemblyAI via the Node SDK
+2. AssemblyAI processes the audio and returns utterances with speaker labels ("A", "B", etc.)
+3. The function converts utterances to the app format (`start`, `end`, `text`, `speaker`) — timestamps come in milliseconds from AssemblyAI and are converted to seconds
+4. The diarization step in `/api/upload` then remaps AssemblyAI's speaker letters ("A"/"B") to semantic labels ("Vendedor"/"Cliente") using Ollama
 
-**Performance note:** Each transcription creates a new worker (and reloads the 466MB model). This is intentional — the priority is keeping the server responsive, not raw throughput. If latency becomes an issue, a long-lived worker pool could be introduced.
-
-**Dev gotcha:** The worker file must be plain `.js` (not `.ts`) because `Worker` constructor resolves it at runtime; `tsx` does not compile imports inside the worker.
+**Required env var:**
+| Variable | Purpose |
+|---|---|
+| `ASSEMBLYAI_API_KEY` | API key for AssemblyAI (create at https://www.assemblyai.com/dashboard/api-keys) |
 
 ## Environment Variables
 

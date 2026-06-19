@@ -15,6 +15,10 @@
       "destination": "/api/whisper.ts"
     },
     {
+      "source": "/api/upload-url",
+      "destination": "/api/upload-url.ts"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
     },

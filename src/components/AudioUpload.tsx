@@ -18,7 +18,7 @@ interface AudioUploadProps {
 
 export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [engine, setEngine] = useState<'gemini' | 'ollama'>('gemini');
+  const [engine, setEngine] = useState<'gemini' | 'ollama'>('ollama');
   const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
   const [ollamaModel, setOllamaModel] = useState('llama3');
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
@@ -279,16 +279,9 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
     if (!selectedFile) return;
 
     setUploadError(null);
-    // Animación de Progreso de Subida Real/Dinámica hacia AssemblyAI
     setUploadProgress(15);
 
     try {
-      const formData = new FormData();
-      formData.append('audio', selectedFile);
-      formData.append('engine', engine);
-      formData.append('ollamaUrl', ollamaUrl);
-      formData.append('ollamaModel', ollamaModel);
-
       // Simular progresión de carga y análisis mientras se completa la solicitud HTTP
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
@@ -298,11 +291,43 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
         });
       }, 2500);
 
-      const response = await fetch(`${API_URL}/api/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+      const makeRequest = async (): Promise<Response> => {
+        try {
+          // Try blob upload first (bypasses Vercel 4.5MB limit)
+          const urlResp = await fetch(`${API_URL}/api/upload-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: selectedFile.name }),
+          });
+          if (urlResp.ok) {
+            const { presignedUrl } = await urlResp.json();
+            const uploadResp = await fetch(presignedUrl, {
+              method: 'PUT',
+              body: selectedFile,
+              headers: { 'Content-Type': selectedFile.type || 'audio/mpeg' },
+            });
+            const uploadResult = await uploadResp.json();
+            const actualBlobUrl = uploadResult.url;
+            return await fetch(`${API_URL}/api/process-blob`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ blobUrl: actualBlobUrl, fileName: selectedFile.name }),
+            });
+          }
+        } catch { /* fall through to fallback */ }
+        // Fallback: direct upload (works locally / on VPS)
+        const formData = new FormData();
+        formData.append('audio', selectedFile);
+        formData.append('engine', engine);
+        formData.append('ollamaUrl', ollamaUrl);
+        formData.append('ollamaModel', ollamaModel);
+        return await fetch(`${API_URL}/api/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+      };
 
+      let response = await makeRequest();
       clearInterval(progressInterval);
 
       if (!response.ok) {
