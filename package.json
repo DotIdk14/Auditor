@@ -21,6 +21,7 @@
     "@vercel/node": "^5.8.17",
     "@vitejs/plugin-react": "^5.0.4",
     "axios": "^1.17.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",

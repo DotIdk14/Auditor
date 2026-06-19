@@ -58,9 +58,24 @@ There are **no tests** and **no CI workflows** in this repo. Supabase migration 
 | `SUPABASE_ANON_KEY` | Supabase anon key |
 | `ASSEMBLYAI_API_KEY` | AssemblyAI API key |
 
-## Native Module Warning
+## Whisper (Audio Transcription)
 
 `@napi-rs/whisper` is a Rust native addon. It only works on the VPS, NOT on Vercel serverless functions. The Whisper model file (`ggml-small.bin`, ~466MB) is not published to npm — it must be downloaded separately via the package's `download-ggml-model.mjs` script. Vercel whisper calls are proxied to the VPS (`APP_URL/api/whisper`), where the native module actually runs.
+
+### Worker Thread (avoid event loop blocking)
+
+The synchronous `model.full()` call (the actual transcription) runs in a **worker thread** (`whisper-worker.js`), NOT the main thread. This prevents the event loop from being blocked during transcription, which was the root cause of CORS timeouts and unresponsive API while audio was processing.
+
+**Flow:**
+1. `whisperTranscribe()` in `server.ts` spawns a `Worker` from `whisper-worker.js`
+2. The worker loads the `.bin` model file, decodes audio, and runs `model.full()` — all in a separate thread
+3. The result (`{ segments: [{ t0, t1, text }] }`) is posted back to the main thread via `worker.postMessage`
+4. The main thread converts segments to the app format (`start`, `end`, `text`, `speaker`) and calculates `duration`
+5. A 60-second timeout terminates the worker if it hangs
+
+**Performance note:** Each transcription creates a new worker (and reloads the 466MB model). This is intentional — the priority is keeping the server responsive, not raw throughput. If latency becomes an issue, a long-lived worker pool could be introduced.
+
+**Dev gotcha:** The worker file must be plain `.js` (not `.ts`) because `Worker` constructor resolves it at runtime; `tsx` does not compile imports inside the worker.
 
 ## Environment Variables
 

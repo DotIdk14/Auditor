@@ -8,43 +8,16 @@ import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import helmet from "helmet";
+import cors from "cors";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { WebSocket } from "ws";
+import { Worker } from "worker_threads";
 import { evaluateHeuristic, buildChecklist, Modalidad } from "./src/shared/pce-rubric.js";
 import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-calls.js";
 
 dotenv.config({ path: ".env.local" });
 
-// Whisper initialization is lazy — native addon may not be available in serverless environments
-let whisperModule: typeof import("@napi-rs/whisper") | null = null;
-let whisperModel: any = null;
-
-async function getWhisperModule() {
-  if (whisperModule) return whisperModule;
-  try {
-    whisperModule = await import("@napi-rs/whisper");
-    return whisperModule;
-  } catch {
-    return null;
-  }
-}
-
-async function initWhisperModel(): Promise<any> {
-  if (whisperModel) return whisperModel;
-  const mod = await getWhisperModule();
-  if (!mod) return null;
-  try {
-    const modelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
-    const modelBuf = fs.readFileSync(modelPath);
-    whisperModel = new mod.Whisper(modelBuf);
-    console.log(`[WHISPER] Modelo cargado: ${modelPath}`);
-    return whisperModel;
-  } catch (e: any) {
-    console.warn(`[WHISPER] No se pudo cargar modelo local: ${e.message}. Se usará modo simulado.`);
-    return null;
-  }
-}
 
 const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev-secret-change-in-production' : '');
 const JWT_EXPIRY = '24h';
@@ -251,7 +224,7 @@ if (supabase) {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Confiar en proxies (Cloudflare Tunnel)
 app.set("trust proxy", 1);
@@ -259,6 +232,7 @@ app.set("trust proxy", 1);
 // Seguridad: cabeceras HTTP
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "unsafe-none" },
   contentSecurityPolicy: false
 }));
 
@@ -271,17 +245,12 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173"
 ];
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
 
 // Rate limiting global
 const globalLimiter = rateLimit({
@@ -479,50 +448,48 @@ async function applyTranscriptionGuardrails(transcription: any[]): Promise<Trans
   return cleaned;
 }
 
-// Transcribir audio con Whisper local (lazy init for serverless compatibility)
+// Transcribir audio con Whisper local en un worker thread para no bloquear el event loop
 async function whisperTranscribe(audioBuffer: Buffer, fileName: string): Promise<{ segments: any[], duration: number }> {
-  const model = await initWhisperModel();
-  if (!model) {
-    console.warn("[WHISPER] Modelo no disponible, usando simulación");
-    return { segments: [], duration: 0 };
-  }
-  try {
-    const mod = await getWhisperModule();
-    if (!mod) return { segments: [], duration: 0 };
-    const audioData = await mod.decodeAudioAsync(audioBuffer, fileName);
-    const params = new mod.WhisperFullParams(mod.WhisperSamplingStrategy.Greedy);
-    params.language = "es";
-    params.printProgress = false;
-    params.printRealtime = false;
-    params.printSpecial = false;
-    params.printTimestamps = false;
-    params.noTimestamps = false;
-    params.singleSegment = false;
-    params.durationMs = 0;
-    params.nThreads = 4;
-
-    const output = model.full(params, audioData);
-    const segments: any[] = [];
-    let duration = 0;
-
-    if (output && Array.isArray(output)) {
-      for (const seg of output) {
-        segments.push({
-          start: seg.t0 / 100,
-          end: seg.t1 / 100,
-          text: (seg.text || "").trim(),
-          speaker: ""
-        });
-        if (seg.t1 / 100 > duration) duration = seg.t1 / 100;
+  const modelPath = process.env.WHISPER_MODEL_PATH || "./node_modules/@napi-rs/whisper/scripts/ggml-small.bin";
+  return new Promise((resolve) => {
+    const worker = new Worker(path.join(process.cwd(), "whisper-worker.js"), { workerData: null });
+    const audioBuf = audioBuffer.buffer.slice(audioBuffer.byteOffset, audioBuffer.byteOffset + audioBuffer.byteLength);
+    worker.postMessage({ audioBuffer: audioBuf, fileName, modelPath }, [audioBuf]);
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      console.warn("[WHISPER] Worker timed out");
+      resolve({ segments: [], duration: 0 });
+    }, 60_000);
+    worker.on("message", (msg: any) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      if (msg.error) {
+        console.error("[WHISPER] Error en worker:", msg.error);
+        resolve({ segments: [], duration: 0 });
+        return;
       }
-    }
-
-    console.log(`[WHISPER] Transcripción completada: ${segments.length} segmentos, ${duration}s`);
-    return { segments, duration };
-  } catch (err: any) {
-    console.error("[WHISPER] Error en transcripción:", err.message);
-    return { segments: [], duration: 0 };
-  }
+      const segments: any[] = [];
+      let duration = 0;
+      if (msg.segments && Array.isArray(msg.segments)) {
+        for (const seg of msg.segments) {
+          segments.push({
+            start: seg.t0 / 100,
+            end: seg.t1 / 100,
+            text: (seg.text || "").trim(),
+            speaker: ""
+          });
+          if (seg.t1 / 100 > duration) duration = seg.t1 / 100;
+        }
+      }
+      console.log(`[WHISPER] Transcripción completada: ${segments.length} segmentos, ${duration}s`);
+      resolve({ segments, duration });
+    });
+    worker.on("error", (err: Error) => {
+      clearTimeout(timeout);
+      console.error("[WHISPER] Error en worker:", err.message);
+      resolve({ segments: [], duration: 0 });
+    });
+  });
 }
 
 // Función principal para generar análisis con Whisper + Ollama (Auditoría PCE UTEL)

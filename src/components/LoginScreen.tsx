@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, ShieldAlert, BadgeCheck, Loader2, Mail, Eye, EyeOff } from 'lucide-react';
-import { googleSignIn, logoutGoogle, emailPasswordSignIn } from '../lib/firebase';
+import { Lock, ShieldAlert, BadgeCheck, Loader2, Mail, Eye, EyeOff, Send, Link as LinkIcon } from 'lucide-react';
+import { googleSignIn, logoutGoogle, emailPasswordSignIn, sendEmailSignInLink } from '../lib/firebase';
 import { API_URL } from '../config';
 
 interface LoginScreenProps {
@@ -15,6 +15,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [linkSent, setLinkSent] = useState<boolean>(false);
 
   const handleGoogleLogin = async () => {
     setIsSubmitting(true);
@@ -108,6 +109,23 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     }
   };
 
+  const handleEmailLinkLogin = async () => {
+    if (!email) {
+      setErrorMessage('Ingresa tu correo electrónico.');
+      return;
+    }
+    setIsSubmitting(true);
+    setErrorMessage('');
+    try {
+      await sendEmailSignInLink(email);
+      setLinkSent(true);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Error al enviar el vínculo.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-gray-200 font-sans flex items-center justify-center p-4 md:p-8 select-none relative overflow-hidden">
       
@@ -164,7 +182,19 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         {/* Opciones de Login */}
         <div className="space-y-4">
-          {!showEmailLogin ? (
+          {linkSent ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl p-5 text-center space-y-2">
+              <Send className="w-8 h-8 mx-auto text-emerald-400" />
+              <p className="text-sm font-bold">Vínculo enviado</p>
+              <p className="text-xs text-gray-400">Revisa tu correo <span className="text-white font-bold">{email}</span> y haz clic en el vínculo para iniciar sesión.</p>
+              <button
+                onClick={() => setLinkSent(false)}
+                className="text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
+              >
+                ← Volver
+              </button>
+            </div>
+          ) : !showEmailLogin ? (
             <>
               <button
                 onClick={handleGoogleLogin}
@@ -189,7 +219,15 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   </>
                 )}
               </button>
-              
+
+              <button
+                onClick={() => setShowEmailLogin(true)}
+                className="w-full bg-transparent hover:bg-zinc-800/50 text-gray-400 hover:text-white rounded-2xl py-3 px-4 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
+              >
+                <LinkIcon className="w-3 h-3" />
+                Vínculo por correo
+              </button>
+
               <button
                 onClick={() => setShowEmailLogin(true)}
                 className="w-full bg-transparent hover:bg-zinc-800/50 text-gray-400 hover:text-white rounded-2xl py-3 px-4 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
@@ -199,7 +237,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               </button>
             </>
           ) : (
-            <form onSubmit={handleEmailLogin} className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div>
                 <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
                   Correo Electrónico
@@ -218,52 +256,75 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Lock className="w-4 h-4" />
-                  </span>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    required
-                    className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors p-1"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
               <div className="flex flex-col gap-2 pt-2">
                 <button
-                  type="submit"
+                  onClick={handleEmailLinkLogin}
                   disabled={isSubmitting}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isSubmitting ? 'Iniciando...' : 'Iniciar Sesión'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Enviar vínculo por correo</span>
+                    </>
+                  )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowEmailLogin(false);
-                    setErrorMessage('');
-                  }}
-                  className="text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
-                >
-                  ← Regresar a Google Login
-                </button>
+
+                <form onSubmit={handleEmailLogin} className="border-t border-zinc-800 pt-4 mt-2 space-y-4">
+                  <p className="text-[10px] text-gray-500 text-center font-mono uppercase tracking-wider">
+                    O inicia con contraseña
+                  </p>
+                  <div>
+                    <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
+                      Contraseña
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
+                        <Lock className="w-4 h-4" />
+                      </span>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        required
+                        className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors p-1"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3 text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Iniciando...' : 'Iniciar Sesión'}
+                  </button>
+                </form>
               </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEmailLogin(false);
+                  setErrorMessage('');
+                }}
+                className="w-full text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
+              >
+                ← Regresar
+              </button>
+            </div>
           )}
         </div>
 

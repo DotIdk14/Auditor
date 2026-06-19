@@ -27,7 +27,7 @@ import AudioUpload from './components/AudioUpload';
 import AuditorDashboard from './components/AuditorDashboard';
 import LoginScreen from './components/LoginScreen';
 import { deleteAudioFromDB, clearAllAudiosFromDB } from './utils/audioCache';
-import { initAuth } from './lib/firebase';
+import { initAuth, completeEmailSignIn, isSignInWithEmailLink, auth } from './lib/firebase';
 import { API_URL } from './config';
 import { generateDemoCall } from './utils/demoData';
 
@@ -46,6 +46,36 @@ export default function App() {
 
   // Inicialización de autenticación para servicios (como Drive) y verificación de sesión
   useEffect(() => {
+    // Completar inicio de sesión por vínculo de correo si aplica
+    (async () => {
+      if (isSignInWithEmailLink(auth, window.location.href)) {
+        try {
+          const user = await completeEmailSignIn();
+          if (user && user.email) {
+            const res = await fetch(`${API_URL}/api/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email, displayName: user.displayName || user.email.split('@')[0] }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              localStorage.setItem('utel_supervisor_token', data.token);
+              localStorage.setItem('utel_supervisor_user', data.username);
+              setIsAuthenticated(true);
+              setSessionUser(data.username);
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }
+          setCheckingSession(false);
+          return;
+        } catch (err) {
+          console.error('Email link sign-in error:', err);
+          setCheckingSession(false);
+          return;
+        }
+      }
+    })();
+
     // Restaurar sesión de Google Drive si existe
     initAuth();
 
