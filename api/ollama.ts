@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         stream,
         options,
       },
-      { timeout: 60000 }
+      { timeout: 300000 }
     );
 
     return res.status(200).json(response.data);

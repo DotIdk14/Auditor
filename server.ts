@@ -350,7 +350,7 @@ Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima 
       prompt: prompt,
       format: "json",
       stream: false
-    }, { timeout: 30000 });
+    }, { timeout: 180000 });
 
     const responseString = response.data.response || "";
     const cleanJson = responseString.replace(/```json|```/g, '').trim();
@@ -581,7 +581,7 @@ Responde EXCLUSIVAMENTE con JSON:
       prompt: promptText,
       format: "json",
       stream: false
-    }, { timeout: 60000 });
+    }, { timeout: 300000 });
 
     const responseString = response.data.response || "";
     const cleanJson = responseString.replace(/```json|```/g, '').trim();
@@ -1020,7 +1020,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
           prompt: diarPrompt,
           format: "json",
           stream: false
-        }, { timeout: 30000 });
+        }, { timeout: 180000 });
 
         const diarText = diarResp.data.response || "";
         const diarClean = diarText.replace(/```json|```/g, '').trim();
@@ -1204,7 +1204,7 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
           format: "json",
           stream: false
         }, {
-          timeout: 28000
+          timeout: 180000
         });
 
         let responseString = ollamaResponse.data.response;
@@ -1734,7 +1734,7 @@ app.post("/api/set-supervisor-passwords", async (req, res) => {
 app.post("/api/generate", async (req, res) => {
   const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
   try {
-    const response = await axios.post(`${ollamaUrl}/api/generate`, req.body, { timeout: 60000 });
+    const response = await axios.post(`${ollamaUrl}/api/generate`, req.body, { timeout: 300000 });
     return res.status(200).json(response.data);
   } catch (error: any) {
     console.error("[OLLAMA_PROXY] Error:", error.message);
