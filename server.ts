@@ -472,25 +472,35 @@ async function assemblyAITranscribe(audioBuffer: Buffer, fileName: string): Prom
       audio: uploadUrl,
       speaker_labels: true,
       language_code: "es",
-      speech_models: ["universal_3_pro", "universal_2"],
     });
 
     if (transcript.status === 'error') {
       throw new Error(transcript.error || 'Error en transcripción AssemblyAI');
     }
 
-    if (!transcript.utterances || transcript.utterances.length === 0) {
-      console.warn("[AAI] Transcripción completada pero sin utterances. Verifica que el audio contenga voz.");
-      return { segments: [], duration: transcript.audio_duration || 0 };
-    }
-
     const duration = transcript.audio_duration || 0;
-    const segments: any[] = transcript.utterances.map((utt: any) => ({
-      start: utt.start / 1000,
-      end: utt.end / 1000,
-      text: (utt.text || "").trim(),
-      speaker: utt.speaker || "",
-    }));
+    let segments: any[] = [];
+
+    if (transcript.utterances && transcript.utterances.length > 0) {
+      segments = transcript.utterances.map((utt: any) => ({
+        start: utt.start / 1000,
+        end: utt.end / 1000,
+        text: (utt.text || "").trim(),
+        speaker: utt.speaker || "",
+      }));
+    } else if (transcript.text && transcript.text.trim()) {
+      // Fallback: usar texto completo si no hay utterances (sin speaker_labels)
+      console.warn("[AAI] Sin utterances, usando texto completo como segmento único.");
+      segments = [{
+        start: 0,
+        end: duration,
+        text: transcript.text.trim(),
+        speaker: "",
+      }];
+    } else {
+      console.warn("[AAI] Transcripción vacía. Verifica que el audio contenga voz.");
+      return { segments: [], duration };
+    }
 
     console.log(`[AAI] Transcripción completada: ${segments.length} utterances, ${duration}s`);
     return { segments, duration };

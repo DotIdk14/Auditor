@@ -33,7 +33,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       audio: uploadUrl,
       speaker_labels: true,
       language_code: 'es',
-      speech_models: ['universal-3-pro', 'universal-2'],
     });
 
     if (transcript.status === 'error') {
