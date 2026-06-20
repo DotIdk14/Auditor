@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileAudio, Check, AlertCircle, Play, Settings, RefreshCw, Layers, ShieldCheck, Database, Search, Folder, X, ChevronRight, ArrowLeft, Home, HardDrive } from 'lucide-react';
 import { SalesCall } from '../types';
 import { saveAudioToDB } from '../utils/audioCache';
-import { API_URL, VPS_URL } from '../config';
+import { API_URL } from '../config';
 import { generateDemoCall } from '../utils/demoData';
 
 declare global {
@@ -308,7 +308,7 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
             });
             const uploadResult = await uploadResp.json();
             const actualBlobUrl = uploadResult.url;
-            return await fetch(`${VPS_URL}/api/process-blob`, {
+            return await fetch(`${API_URL}/api/process-blob`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ blobUrl: actualBlobUrl, fileName: selectedFile.name }),

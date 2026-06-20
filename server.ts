@@ -17,6 +17,32 @@ import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-
 
 dotenv.config({ path: ".env.local" });
 
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+
+async function callOpenRouter(prompt: string, timeout = 60000): Promise<any> {
+  if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not configured');
+  try {
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+      model: OPENROUTER_MODEL,
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+    }, {
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://auditor-olive.vercel.app',
+        'Content-Type': 'application/json',
+      },
+      timeout,
+    });
+    const content = response.data.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from OpenRouter');
+    return JSON.parse(content);
+  } catch (err: any) {
+    console.error('[OPENROUTER] Error:', err.response?.data?.error?.message || err.message);
+    throw new Error(`OpenRouter: ${err.response?.data?.error?.message || err.message}`);
+  }
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'development' ? 'dev-secret-change-in-production' : '');
 const JWT_EXPIRY = '24h';
@@ -316,21 +342,18 @@ interface TranscriptionUtterance {
   confidence: number;
 }
 
-// Fallback: Diarizador y segmentador cognitivo de texto con Ollama
+// Fallback: Diarizador y segmentador cognitivo de texto con OpenRouter
 async function generateAndSplitTextDiarization(consolidatedText: string): Promise<TranscriptionUtterance[]> {
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "hermes3";
-  
   try {
-    console.log(`[GUARDRAILS_OLLAMA] Separando oradores con Ollama (${ollamaModel})...`);
+    console.log(`[GUARDRAILS_OR] Separando oradores con OpenRouter...`);
     const prompt = `Eres un transcriptor experto. Toma el siguiente texto continuo que representa una llamada telefónica real de ventas de UTEL Universidad donde se consolidaron los discursos de ambos oradores sin separarse ni asignarse los turnos.
-    
-Analiza semánticamente el flujo del diálogo y sepáralo exactamente en turnos de habla alternativos e individuales para 'Vendedor' (asesor UTEL que explica, ofrece beneficios, pide documentos, pregunta) y 'Cliente' (prospecto que responde, hace preguntas cortas de precio, comparte su ocupación).
+
+Analiza semánticamente el flujo del diálogo y sepáralo exactamente en turnos de habla alternativos e individuales para 'Vendedor' (asesor UTEL) y 'Cliente' (prospecto).
 
 Texto continuo a separar:
 "${consolidatedText}"
 
-Responde ÚNICAMENTE con un objeto JSON (sin markdown, sin bloques de código, sin texto introductorio) con el siguiente formato exacto:
+Responde con un objeto JSON con el siguiente formato:
 {
   "transcription": [
     {
@@ -343,18 +366,9 @@ Responde ÚNICAMENTE con un objeto JSON (sin markdown, sin bloques de código, s
   ]
 }
 
-Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima tiempos coherentes ("start" y "end") incrementales de forma secuencial comenzando en 0.0, asumiendo que un ritmo normal es de ~3 palabras por segundo.`;
+Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima tiempos coherentes ("start" y "end") incrementales comenzando en 0.0, asumiendo ~3 palabras por segundo.`;
 
-    const response = await axios.post(`${ollamaUrl}/api/generate`, {
-      model: ollamaModel,
-      prompt: prompt,
-      format: "json",
-      stream: false
-    }, { timeout: 180000 });
-
-    const responseString = response.data.response || "";
-    const cleanJson = responseString.replace(/```json|```/g, '').trim();
-    const result = JSON.parse(cleanJson);
+    const result = await callOpenRouter(prompt);
     return (result.transcription || []).map((t: any) => ({
       speaker: t.speaker === 'Vendedor' || t.speaker === 'Cliente' ? t.speaker : (String(t.speaker).toLowerCase().includes('client') ? 'Cliente' : 'Vendedor'),
       text: String(t.text || '').trim(),
@@ -364,7 +378,7 @@ Divide el texto en fragmentos pequeños (máximo 15 palabras por turno). Estima 
       confidence: 0.95
     }));
   } catch (err) {
-    console.error("Fallo al separar oradores con Ollama:", err);
+    console.error("Fallo al separar oradores con OpenRouter:", err);
     return [];
   }
 }
@@ -506,15 +520,10 @@ async function generateLocalAnalysis(audioBuffer: Buffer, format: string, fileNa
     // 2. Asignar speakers con heurística (AssemblyAI ya incluye speaker_labels)
     const textoCompleto = segments.map(s => s.text).join(" ");
     
-    // 3. Usar Ollama para diarización y análisis completo
-    const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-    const ollamaModel = process.env.OLLAMA_MODEL || "hermes3";
-
+    // 3. Análisis cognitivo con OpenRouter
     const promptText = `
 # ROL
 Eres un Auditor Senior de Calidad Educativa de la UTEL Universidad y un experto en Neuroventas.
-
-Tienes la transcripción completa de una llamada de ventas. Los segmentos están en orden cronológico pero sin identificar quién habla.
 
 TRANSCRIPCIÓN (segmentos con tiempos):
 ${JSON.stringify(segments, null, 2)}
@@ -524,68 +533,25 @@ Texto completo: "${textoCompleto}"
 REALIZA LO SIGUIENTE:
 1. Identifica quién es el "Vendedor" (representante UTEL) y quién el "Cliente" (prospecto) basado en el contenido.
 2. Asigna cada segmento al orador correcto.
-3. Evalúa los 22 subítems de la Rúbrica PCE UTEL.
+3. Evalúa los 22 subítems de la Rúbrica PCE UTEL (marca true/false cada uno).
+4. Analiza el estado emocional y la aptitud de compra del cliente.
 
-# REGLAS DE AUDITORÍA PCE UTEL:
-Marca cada punto como true/false:
-
-C1. CONOCE A TU CLIENTE
-- "c1_linea": ¿El cliente muestra interés en la opción en línea?
-- "c1_programa": ¿Se determina el programa de interés específico?
-- "c1_demo": ¿Se registran datos demográficos clave?
-- "c1_ocup": ¿Se indaga sobre la ocupación del cliente?
-- "c1_equiv": ¿El asesor pregunta sobre equivalencias?
-
-C2. GENERALIDADES
-- "c2_num": ¿Se expone la numeralia oficial UTEL?
-- "c2_mod": ¿Se detalla el modelo educativo flexible?
-- "c2_esp": ¿Se vincula el modelo con necesidades del prospecto?
-
-C3. OFERTA ACADÉMICA
-- "c3_costos": ¿Se presentan costos y opciones?
-- "c3_comp": ¿Se explican costos complementarios?
-- "c3_jor": ¿Se define la jornada de estudio?
-- "c3_beca": ¿Se menciona la beca?
-- "c3_ciclos": ¿Se mencionan ciclos de inicio?
-
-C4. ACUERDOS Y CIERRE
-- "c4_res": ¿Se realiza resumen de oferta?
-- "c4_doc": ¿Se solicita envío de documentos?
-- "c4_pag": ¿Se acuerdan fechas de pago?
-- "c4_ref": ¿El asesor solicita referidos?
-
-C5. GESTIÓN Y REGISTRO
-- "c5_int": ¿Se habla directamente con el interesado?
-- "c5_tip": ¿Tipificación positiva en CRM?
-- "c5_pla": ¿Uso de plataformas UTEL?
-- "c5_reg": ¿Registro en tiempo real?
-- "c5_seg": ¿Pasos de seguimiento claros?
-
-Responde EXCLUSIVAMENTE con JSON:
+Responde con JSON en este formato exacto:
 {
   "transcription": [{ "speaker": "Vendedor"|"Cliente", "text": "...", "sentiment": "positive"|"negative"|"neutral", "start": 0.0, "end": 0.0, "confidence": 0.95 }],
   "summary": "Resumen ejecutivo",
-  "customerMood": "receptivo|molesto|neutral|interesado|indiferente",
-  "salesOutcome": "venta_cerrada|interesado_seguimiento|no_interesado|agenda_demostracion",
+  "customerMood": "receptivo"|"molesto"|"neutral"|"interesado"|"indiferente",
+  "salesOutcome": "venta_cerrada"|"interesado_seguimiento"|"no_interesado"|"agenda_demostracion",
   "strengths": [],
   "weaknesses": [],
   "nextSteps": [],
-  "evaluatedSubitems": { "c1_linea": true, ... },
+  "evaluatedSubitems": { "c1_linea": true, "c1_programa": false, ... },
   "feedbackMap": { "CONOCE A TU CLIENTE": "...", "GENERALIDADES": "...", "OFERTA ACADÉMICA": "...", "ACUERDOS Y CIERRE": "...", "GESTIÓN Y REGISTRO": "..." },
-  "emotionalAnalysis": { "primaryEmotion": "...", "emotionalJourney": "...", "purchaseAptitudeScore": 0-100, "purchaseAptitudeLabel": "Muy Alto|Alto|Medio|Bajo", "barriersToPurchase": [], "buyingSignals": [], "aptitudeReason": "..." },
+  "emotionalAnalysis": { "primaryEmotion": "...", "emotionalJourney": "...", "purchaseAptitudeScore": 0-100, "purchaseAptitudeLabel": "Muy Alto"|"Alto"|"Medio"|"Bajo", "barriersToPurchase": [], "buyingSignals": [], "aptitudeReason": "..." },
   "duration": ${duration}
 }`;
 
-    const response = await axios.post(`${ollamaUrl}/api/generate`, {
-      model: ollamaModel,
-      prompt: promptText,
-      format: "json",
-      stream: false
-    }, { timeout: 300000 });
-
-    const responseString = response.data.response || "";
-    const cleanJson = responseString.replace(/```json|```/g, '').trim();
-    const analysis = JSON.parse(cleanJson);
+    const analysis = await callOpenRouter(promptText);
 
     const evaluatedSubitems = analysis.evaluatedSubitems || {};
     const feedbackMap = analysis.feedbackMap || {};
@@ -997,9 +963,7 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
         throw new Error("AssemblyAI no produjo transcripción.");
       }
 
-      // 2. Asignar speakers con Ollama (diarización)
-      const ollamaUrlLocal = process.env.OLLAMA_URL || "http://localhost:11434";
-      const ollamaModelLocal = process.env.OLLAMA_MODEL || "hermes3";
+      // 2. Asignar speakers con OpenRouter (diarización)
       const textoTranscrito = rawSegments.map(s => s.text).join(" ");
 
       let speakerMapping: Record<number, string> = {};
@@ -1013,24 +977,14 @@ Texto completo: "${textoTranscrito}"
 
 Analiza el diálogo y determina para CADA segmento si quien habla es "Vendedor" (asesor UTEL) o "Cliente" (prospecto).
 
-Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
+Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
 
-        const diarResp = await axios.post(`${ollamaUrlLocal}/api/generate`, {
-          model: ollamaModelLocal,
-          prompt: diarPrompt,
-          format: "json",
-          stream: false
-        }, { timeout: 180000 });
-
-        const diarText = diarResp.data.response || "";
-        const diarClean = diarText.replace(/```json|```/g, '').trim();
-        const diarParsed = JSON.parse(diarClean);
-        if (diarParsed.speakers) {
-          speakerMapping = diarParsed.speakers;
+        const diarResult = await callOpenRouter(diarPrompt);
+        if (diarResult?.speakers) {
+          speakerMapping = diarResult.speakers;
         }
       } catch (diarErr: any) {
-        console.warn("[DIARIZATION] Falló diarización con Ollama, usando heurística:", diarErr.message);
-        // Heurística simple: el que habla primero y más palabras de venta es el Vendedor
+        console.warn("[DIARIZATION] Falló diarización con OpenRouter, usando heurística:", diarErr.message);
         const sellerKw = ["utel", "colegiatura", "beca", "inscripción", "asesor", "universidad"];
         let sellerScore = 0;
         rawSegments.forEach((s, i) => {
@@ -1039,9 +993,8 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
           if (i === 0 && hits > 0) sellerScore += 10;
           if (hits > 1) sellerScore += hits;
         });
-        const sellerIsFirst = sellerScore > 3;
         rawSegments.forEach((_, i) => {
-          speakerMapping[i] = i === 0 ? (sellerIsFirst ? "Vendedor" : "Cliente") : (i % 2 === 0 ? "Vendedor" : "Cliente");
+          speakerMapping[i] = i === 0 ? (sellerScore > 3 ? "Vendedor" : "Cliente") : (i % 2 === 0 ? "Vendedor" : "Cliente");
         });
       }
 
@@ -1197,26 +1150,14 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
 
     if (selectedEngine === "ollama") {
       try {
-        console.log(`Llamando a Ollama Local [${ollamaUrl}] con modelo [${ollamaModelName}]...`);
-        const ollamaResponse = await axios.post(`${ollamaUrl}/api/generate`, {
-          model: ollamaModelName,
-          prompt: promptText,
-          format: "json",
-          stream: false
-        }, {
-          timeout: 180000
-        });
-
-        let responseString = ollamaResponse.data.response;
-        const cleanJsonStr = responseString.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(cleanJsonStr);
+        console.log(`[UPLOAD_OR] Analizando con OpenRouter...`);
+        const parsed = await callOpenRouter(promptText);
 
         if (parsed) {
-          const evaluatedSubitems = parsed.evaluated_subitems || {};
-          const feedbackMap = parsed.evaluacion_detallada || {};
+          const evaluatedSubitems = parsed.evaluated_subitems || parsed.evaluatedSubitems || {};
+          const feedbackMap = parsed.evaluacion_detallada || parsed.feedbackMap || {};
           const modality = parsed.modalidad_detectada || "LÍNEA";
 
-          // Cómputo matemático riguroso basado en el PDF y los subitems resultantes
           finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
 
           summaryText = parsed.summary || summaryText;
@@ -1228,11 +1169,11 @@ Responde SOLO JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... }
           if (parsed.emotionalAnalysis) {
             emotionalAnalysis = parsed.emotionalAnalysis;
           }
-          console.log("Auditoría con Ollama completada con éxito riguroso.");
+          console.log("[UPLOAD_OR] Análisis con OpenRouter completado.");
         }
       } catch (ollamaErr: any) {
-        console.error("Error intentando conectar con Ollama:", ollamaErr.message);
-        throw new Error(`Fallo de conexión con Ollama en ${ollamaUrl}. Asegúrate de tener Ollama activo localmente, CORS habilitado, y el modelo '${ollamaModelName}' descargado ('ollama pull ${ollamaModelName}').`);
+        console.error("[UPLOAD_OR] Error:", ollamaErr.message);
+        throw new Error(`Fallo de análisis cognitivo con OpenRouter: ${ollamaErr.message}`);
       }
     } else {
       // Usar Google Gemini por defecto
@@ -1726,19 +1667,6 @@ app.post("/api/set-supervisor-passwords", async (req, res) => {
   } catch (err: any) {
     console.error("[PASSWORDS] Error:", err.message);
     return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Ollama proxy ──────────────────────────────────────────────
-// Proxy para que Vercel Express pueda llamar a Ollama en el VPS
-app.post("/api/generate", async (req, res) => {
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-  try {
-    const response = await axios.post(`${ollamaUrl}/api/generate`, req.body, { timeout: 300000 });
-    return res.status(200).json(response.data);
-  } catch (error: any) {
-    console.error("[OLLAMA_PROXY] Error:", error.message);
-    return res.status(500).json({ error: `Ollama error: ${error.response?.data?.error || error.message}` });
   }
 });
 
