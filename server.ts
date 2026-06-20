@@ -721,6 +721,25 @@ app.post("/api/login", loginLimiter, async (req, res) => {
   // Opción 2: Autenticación con Contraseña Tradicional
   if (password) {
     const correctPassword = process.env.SUPERVISOR_PASSWORD;
+
+    // Si se proporcionó email, validar que esté autorizado
+    if (email) {
+      const searchEmail = email.trim().toLowerCase();
+      const allowedEmailsEnv = process.env.ALLOWED_EMAILS || "";
+      const allowedEmails = new Set(
+        allowedEmailsEnv.split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
+      );
+
+      if (!allowedEmails.has(searchEmail)) {
+        return res.status(403).json({ success: false, error: `El correo ${email} no tiene permisos de auditoría.` });
+      }
+
+      if (correctPassword && password === correctPassword) {
+        const token = signToken({ email: searchEmail, username: username || searchEmail.split('@')[0], role: "supervisor" });
+        return res.json({ success: true, token, username: username || searchEmail.split('@')[0] });
+      }
+    }
+
     if (!correctPassword) {
       const isDev = process.env.NODE_ENV === 'development';
       if (isDev) {

@@ -73,6 +73,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setErrorMessage('');
 
     try {
+      // Try Firebase Auth first
       const user = await emailPasswordSignIn(email, password);
 
       const response = await fetch(`${API_URL}/api/login`, {
@@ -85,24 +86,37 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       });
 
       const data = await response.json();
-
       if (response.ok && data.success) {
         onLoginSuccess(data.token, data.username);
       } else {
         setErrorMessage(data.error || 'Correo no autorizado.');
       }
-    } catch (err: any) {
-      console.error('Email login error:', err);
-      if (err.code === 'auth/user-not-found') {
-        setErrorMessage('No existe cuenta con este correo. Usa Google o contacta al administrador.');
-      } else if (err.code === 'auth/wrong-password') {
-        setErrorMessage('Contraseña incorrecta.');
-      } else if (err.code === 'auth/invalid-credential') {
-        setErrorMessage('Credenciales inválidas. Verifica tu correo y contraseña.');
-      } else if (err.code === 'auth/too-many-requests') {
+    } catch (firebaseErr: any) {
+      // If Firebase Auth fails, try backend directly with email + password
+      if (firebaseErr.code === 'auth/user-not-found' || firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
+        try {
+          const backendResp = await fetch(`${API_URL}/api/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: email,
+              username: email.split('@')[0],
+              password: password,
+            }),
+          });
+          const backendData = await backendResp.json();
+          if (backendResp.ok && backendData.success) {
+            onLoginSuccess(backendData.token, backendData.username);
+            return;
+          }
+          setErrorMessage(backendData.error || 'Credenciales inválidas. Verifica tu correo y contraseña.');
+        } catch {
+          setErrorMessage('Error de conexión con el servidor de autenticación.');
+        }
+      } else if (firebaseErr.code === 'auth/too-many-requests') {
         setErrorMessage('Demasiados intentos. Espera unos minutos.');
       } else {
-        setErrorMessage(err.message || 'Error al iniciar sesión.');
+        setErrorMessage(firebaseErr.message || 'Error al iniciar sesión.');
       }
     } finally {
       setIsSubmitting(false);
