@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
 
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -27,6 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {
         model: model || OPENROUTER_MODEL,
         messages: [{ role: 'user', content: prompt + jsonInstruction }],
+        response_format: { type: 'json_object' },
       },
       {
         headers: {

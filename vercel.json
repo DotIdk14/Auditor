@@ -7,7 +7,7 @@
   },
   "env": {
     "OPENROUTER_API_KEY": "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",
-    "OPENROUTER_MODEL": "google/gemini-2.0-flash-exp:free"
+    "OPENROUTER_MODEL": "openrouter/free"
   },
   "rewrites": [
     {

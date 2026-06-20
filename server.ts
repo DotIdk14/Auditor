@@ -16,7 +16,7 @@ import { generateHighFidelitySimulatedCall } from "./src/__fixtures__/simulated-
 
 dotenv.config({ path: ".env.local" });
 
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-exp:free';
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 async function callOpenRouter(prompt: string, timeout = 60000): Promise<any> {
@@ -26,6 +26,7 @@ async function callOpenRouter(prompt: string, timeout = 60000): Promise<any> {
     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
       model: OPENROUTER_MODEL,
       messages: [{ role: 'user', content: prompt + jsonInstruction }],
+      response_format: { type: 'json_object' },
     }, {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
