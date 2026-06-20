@@ -11,8 +11,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/ollama",
-      "destination": "/api/ollama.ts"
+      "source": "/api/openrouter",
+      "destination": "/api/openrouter.ts"
     },
     {
       "source": "/api/whisper",

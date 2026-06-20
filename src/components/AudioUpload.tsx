@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileAudio, Check, AlertCircle, Play, Settings, RefreshCw, Layers, ShieldCheck, Database, Search, Folder, X, ChevronRight, ArrowLeft, Home, HardDrive } from 'lucide-react';
+import { Upload, FileAudio, Check, AlertCircle, Play, RefreshCw, Database, Search, Folder, X, ChevronRight, ArrowLeft, Home, HardDrive } from 'lucide-react';
 import { SalesCall } from '../types';
 import { saveAudioToDB } from '../utils/audioCache';
 import { API_URL } from '../config';
@@ -18,9 +18,6 @@ interface AudioUploadProps {
 
 export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [engine, setEngine] = useState<'gemini' | 'ollama'>('ollama');
-  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434');
-  const [ollamaModel, setOllamaModel] = useState('llama3');
   const [isLoadingDemo, setIsLoadingDemo] = useState(false);
   
   const [isDragActive, setIsDragActive] = useState(false);
@@ -186,9 +183,6 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
           fileId,
           fileName,
           accessToken,
-          engine,
-          ollamaUrl,
-          ollamaModel
         })
       });
 
@@ -318,9 +312,6 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
         // Fallback: direct upload (works locally / on VPS)
         const formData = new FormData();
         formData.append('audio', selectedFile);
-        formData.append('engine', engine);
-        formData.append('ollamaUrl', ollamaUrl);
-        formData.append('ollamaModel', ollamaModel);
         return await fetch(`${API_URL}/api/upload`, {
           method: 'POST',
           body: formData,
@@ -497,83 +488,13 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
             </button>
           </div>
 
-          {/* Selector de Motor de IA */}
-          <div className="p-5 bg-[#161616] border border-zinc-800/80 rounded-xl space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-[#222222]">
-              <Settings className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Configuración del Motor de Auditoría</h3>
+          {/* Banner informativo del motor */}
+          <div className="p-3 bg-indigo-950/20 border border-indigo-500/20 rounded-xl flex items-center gap-3">
+            <RefreshCw className="w-4 h-4 text-indigo-400 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-indigo-300">Análisis por OpenRouter (IA Cloud)</p>
+              <p className="text-[10px] text-indigo-400/70">AssemblyAI transcribe el audio + OpenRouter realiza la auditoría PCE</p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {/* Opción Estándar */}
-              <div
-                onClick={() => setEngine('gemini')}
-                className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
-                  engine === 'gemini'
-                    ? 'border-indigo-500/80 bg-indigo-950/10 text-indigo-200'
-                    : 'border-zinc-800 bg-zinc-900/40 text-gray-400 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-indigo-400" /> Motor de Auditoría Estándar
-                  </span>
-                  {engine === 'gemini' && <div className="w-2 h-2 bg-indigo-400 rounded-full" />}
-                </div>
-                <p className="text-[11px] text-gray-500 leading-relaxed">
-                  Configuración optimizada para un análisis crítico, alta precisión y velocidad de respuesta.
-                </p>
-              </div>
-
-              {/* Opción Ollama */}
-              <div
-                onClick={() => setEngine('ollama')}
-                className={`p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between ${
-                  engine === 'ollama'
-                    ? 'border-emerald-500/80 bg-emerald-950/10 text-emerald-200'
-                    : 'border-zinc-800 bg-zinc-900/40 text-gray-400 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Servidor Local de Análisis
-                  </span>
-                  {engine === 'ollama' && <div className="w-2 h-2 bg-emerald-400 rounded-full" />}
-                </div>
-                <p className="text-[11px] text-gray-500 leading-relaxed">
-                  Realiza el procesamiento en un servidor de red local para mayor privacidad de datos.
-                </p>
-              </div>
-            </div>
-
-            {/* Campos de configuración adicionales para Ollama */}
-            {engine === 'ollama' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-zinc-900/70 border border-zinc-800 rounded-lg animate-fadeIn">
-                <div className="space-y-1">
-                  <label className="text-[11px] text-gray-400 block font-medium">Endpoint / Host de Ollama</label>
-                  <input
-                    type="text"
-                    value={ollamaUrl}
-                    onChange={(e) => setOllamaUrl(e.target.value)}
-                    className="w-full bg-[#1e1e1e] border border-zinc-800 text-xs rounded px-2.5 py-1.5 text-white font-mono focus:border-emerald-500/60 focus:outline-none"
-                    placeholder="http://localhost:11434"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] text-gray-400 block font-medium">Modelo Descargado (Servidor)</label>
-                  <input
-                    type="text"
-                    value={ollamaModel}
-                    onChange={(e) => setOllamaModel(e.target.value)}
-                    className="w-full bg-[#1e1e1e] border border-zinc-800 text-xs rounded px-2.5 py-1.5 text-white font-mono focus:border-emerald-500/60 focus:outline-none"
-                    placeholder="llama3"
-                  />
-                </div>
-                <div className="col-span-1 md:col-span-2 text-[10px] text-emerald-400 bg-emerald-950/15 border border-emerald-900/20 rounded p-2 mt-1">
-                  💡 <strong>Nota del Desarrollador:</strong> Asegúrate de levantar Ollama localmente (<code>ollama serve</code>) y habilitar los permisos de CORS de origen cruzado de manera que el servidor pueda conectarse. El modelo (ej. <code>llama3</code> o <code>mistral</code>) debe estar descargado (<code>ollama pull llama3</code>).
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Botón Iniciar Transcripción como solicitó */}

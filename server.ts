@@ -3,7 +3,6 @@ import path from "path";
 import multer from "multer";
 import axios from "axios";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import fs from "fs";
 import helmet from "helmet";
@@ -22,11 +21,11 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 async function callOpenRouter(prompt: string, timeout = 60000): Promise<any> {
   if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY not configured');
+  const jsonInstruction = '\n\nResponde SOLO con un objeto JSON válido. No incluyas markdown, bloques de código, ni texto adicional fuera del JSON.';
   try {
     const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
       model: OPENROUTER_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt + jsonInstruction }],
     }, {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -37,10 +36,12 @@ async function callOpenRouter(prompt: string, timeout = 60000): Promise<any> {
     });
     const content = response.data.choices?.[0]?.message?.content;
     if (!content) throw new Error('Empty response from OpenRouter');
-    return JSON.parse(content);
+    const cleaned = content.replace(/```(?:json)?\s*([\s\S]*?)```/g, '$1').trim();
+    return JSON.parse(cleaned);
   } catch (err: any) {
-    console.error('[OPENROUTER] Error:', err.response?.data?.error?.message || err.message);
-    throw new Error(`OpenRouter: ${err.response?.data?.error?.message || err.message}`);
+    const detail = err.response?.data?.error?.message || err.message;
+    console.error('[OPENROUTER] Error:', detail);
+    throw new Error(`OpenRouter: ${detail}`);
   }
 }
 
@@ -313,16 +314,6 @@ const audioBuffers = new Map<string, Buffer>();
 const localNotasMemory = new Map<string, any[]>();
 const localObjecionesMemory = new Map<string, any[]>();
 
-// Instancia segura de Gemini
-const getGeminiClient = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.log("GEMINI_API_KEY no detectada. Se usarán heurísticas locales avanzadas.");
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
 // Función heurística de evaluación UTEL — delega al módulo compartido PCE
 function evaluateUtelHeuristic(transcription: any[], fileName: string): any {
   const fullText = transcription.map((t: any) => t.text).join(" ").toLowerCase();
@@ -481,15 +472,20 @@ async function assemblyAITranscribe(audioBuffer: Buffer, fileName: string): Prom
       audio: uploadUrl,
       speaker_labels: true,
       language_code: "es",
-      speech_models: ["universal-3-pro", "universal-2"],
+      speech_models: ["universal_3_pro", "universal_2"],
     });
 
     if (transcript.status === 'error') {
       throw new Error(transcript.error || 'Error en transcripción AssemblyAI');
     }
 
+    if (!transcript.utterances || transcript.utterances.length === 0) {
+      console.warn("[AAI] Transcripción completada pero sin utterances. Verifica que el audio contenga voz.");
+      return { segments: [], duration: transcript.audio_duration || 0 };
+    }
+
     const duration = transcript.audio_duration || 0;
-    const segments: any[] = (transcript.utterances || []).map((utt: any) => ({
+    const segments: any[] = transcript.utterances.map((utt: any) => ({
       start: utt.start / 1000,
       end: utt.end / 1000,
       text: (utt.text || "").trim(),
@@ -499,8 +495,9 @@ async function assemblyAITranscribe(audioBuffer: Buffer, fileName: string): Prom
     console.log(`[AAI] Transcripción completada: ${segments.length} utterances, ${duration}s`);
     return { segments, duration };
   } catch (err: any) {
-    console.error("[AAI] Error en transcripción:", err.message);
-    return { segments: [], duration: 0 };
+    const detail = err.response?.data?.error?.message || err.message;
+    console.error("[AAI] Error en transcripción:", detail);
+    throw new Error(`AssemblyAI: ${detail}`);
   }
 }
 
@@ -575,7 +572,7 @@ console.log("Memoria de respaldo inicializada limpia para el Auditor Senior UTEL
 
 // API: Importar y auditar llamada desde Google Drive
 app.post("/api/drive-import", async (req, res) => {
-  const { fileId, fileName, accessToken, engine, ollamaUrl, ollamaModel } = req.body;
+  const { fileId, fileName, accessToken } = req.body;
 
   if (!fileId || !accessToken) {
     return res.status(400).json({ error: "File ID y Access Token son requeridos." });
@@ -924,8 +921,8 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
     const originalName = file.originalname;
     const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    // Motor: AssemblyAI + Ollama (se usa siempre como principal)
-    console.log("[LOCAL_MODE] Usando AssemblyAI (STT) + Ollama (análisis) como motor principal");
+    // Motor: AssemblyAI (STT) + OpenRouter (análisis cognitivo)
+    console.log("[LOCAL_MODE] Usando AssemblyAI (STT) + OpenRouter (análisis) como motor principal");
 
     console.log(`Iniciando procesamiento de audio: ${originalName} (ID: ${uniqueId})`);
 
@@ -1025,11 +1022,6 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
       const correctedTranscription = await applyTranscriptionGuardrails(cleanTranscription);
       const localUtelResult = evaluateUtelHeuristic(correctedTranscription, originalName);
 
-    // Obtener parámetros de motor seleccionados por el usuario
-    const selectedEngine = req.body.engine || "ollama";
-    const ollamaUrl = req.body.ollamaUrl || "http://localhost:11434";
-    const ollamaModelName = req.body.ollamaModel || "hermes3";
-
     // 5. INTELIGENCIA COGNITIVA Y ANÁLISIS EMOCIONAL (MATRIZ PCE UTEL OFICIAL DE LOS PDF)
     // Uses shared buildChecklist from src/shared/pce-rubric.ts
 
@@ -1116,7 +1108,6 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
         "c4_pag": true,
         "c4_ref": false,
         "c5_int": true,
-        "c5_int": true,
         "c5_tip": true,
         "c5_pla": true,
         "c5_reg": true,
@@ -1148,73 +1139,31 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
     }
     `;
 
-    if (selectedEngine === "ollama") {
-      try {
-        console.log(`[UPLOAD_OR] Analizando con OpenRouter...`);
-        const parsed = await callOpenRouter(promptText);
+    try {
+      console.log(`[UPLOAD_OR] Analizando con OpenRouter...`);
+      const parsed = await callOpenRouter(promptText);
 
-        if (parsed) {
-          const evaluatedSubitems = parsed.evaluated_subitems || parsed.evaluatedSubitems || {};
-          const feedbackMap = parsed.evaluacion_detallada || parsed.feedbackMap || {};
-          const modality = parsed.modalidad_detectada || "LÍNEA";
+      if (parsed) {
+        const evaluatedSubitems = parsed.evaluated_subitems || parsed.evaluatedSubitems || {};
+        const feedbackMap = parsed.evaluacion_detallada || parsed.feedbackMap || {};
+        const modality = parsed.modalidad_detectada || "LÍNEA";
 
-          finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
+        finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
 
-          summaryText = parsed.summary || summaryText;
-          customerMood = parsed.customerMood || customerMood;
-          salesOutcome = parsed.salesOutcome || salesOutcome;
-          strengths = parsed.strengths || strengths;
-          weaknesses = parsed.weaknesses || weaknesses;
-          nextSteps = parsed.nextSteps || nextSteps;
-          if (parsed.emotionalAnalysis) {
-            emotionalAnalysis = parsed.emotionalAnalysis;
-          }
-          console.log("[UPLOAD_OR] Análisis con OpenRouter completado.");
+        summaryText = parsed.summary || summaryText;
+        customerMood = parsed.customerMood || customerMood;
+        salesOutcome = parsed.salesOutcome || salesOutcome;
+        strengths = parsed.strengths || strengths;
+        weaknesses = parsed.weaknesses || weaknesses;
+        nextSteps = parsed.nextSteps || nextSteps;
+        if (parsed.emotionalAnalysis) {
+          emotionalAnalysis = parsed.emotionalAnalysis;
         }
-      } catch (ollamaErr: any) {
-        console.error("[UPLOAD_OR] Error:", ollamaErr.message);
-        throw new Error(`Fallo de análisis cognitivo con OpenRouter: ${ollamaErr.message}`);
+        console.log("[UPLOAD_OR] Análisis con OpenRouter completado.");
       }
-    } else {
-      // Usar Google Gemini por defecto
-      const ai = getGeminiClient();
-      if (ai) {
-        try {
-          console.log("Iniciando auditoría cognitiva con Gemini...");
-          const geminiResponse = await ai.models.generateContent({
-            model: "gemini-3.5-flash",
-            contents: promptText,
-            config: {
-              responseMimeType: "application/json"
-            }
-          });
-          
-          const responseText = geminiResponse.text;
-          const parsed = JSON.parse(responseText || "{}");
-          
-          if (parsed) {
-            const evaluatedSubitems = parsed.evaluated_subitems || {};
-            const feedbackMap = parsed.evaluacion_detallada || {};
-            const modality = parsed.modalidad_detectada || "LÍNEA";
-
-            // Cómputo matemático riguroso basado en el PDF y los subitems resultantes
-            finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
-
-            summaryText = parsed.summary || summaryText;
-            customerMood = parsed.customerMood || customerMood;
-            salesOutcome = parsed.salesOutcome || salesOutcome;
-            strengths = parsed.strengths || strengths;
-            weaknesses = parsed.weaknesses || weaknesses;
-            nextSteps = parsed.nextSteps || nextSteps;
-            if (parsed.emotionalAnalysis) {
-              emotionalAnalysis = parsed.emotionalAnalysis;
-            }
-            console.log("Auditoría cognitiva con Gemini completada con éxito riguroso.");
-          }
-        } catch (geminiErr) {
-          console.error("Error Gemini:", geminiErr);
-        }
-      }
+    } catch (orErr: any) {
+      console.error("[UPLOAD_OR] Error:", orErr.message);
+      throw new Error(`Fallo de análisis cognitivo con OpenRouter: ${orErr.message}`);
     }
 
       finalCallData = {

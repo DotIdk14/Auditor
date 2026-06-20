@@ -279,7 +279,6 @@ export default function App() {
           fileId,
           fileName,
           accessToken: driveToken,
-          engine: 'gemini'
         })
       });
 
