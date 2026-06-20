@@ -276,16 +276,7 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
     setUploadProgress(15);
 
     try {
-      // Simular progresión de carga y análisis mientras se completa la solicitud HTTP
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev === null) return null;
-          if (prev < 92) return prev + Math.floor(Math.random() * 6) + 2;
-          return prev;
-        });
-      }, 2500);
-
-      const makeRequest = async (): Promise<Response> => {
+      const makeRequest = async (): Promise<{ callId: string }> => {
         try {
           // Try blob upload first (bypasses Vercel 4.5MB limit)
           const urlResp = await fetch(`${API_URL}/api/upload-url`, {
@@ -302,46 +293,64 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
             });
             const uploadResult = await uploadResp.json();
             const actualBlobUrl = uploadResult.url;
-            return await fetch(`${API_URL}/api/process-blob`, {
+            const resp = await fetch(`${API_URL}/api/process-blob`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ blobUrl: actualBlobUrl, fileName: selectedFile.name }),
             });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Error en process-blob');
+            return { callId: data.callId };
           }
         } catch { /* fall through to fallback */ }
-        // Fallback: direct upload (works locally / on VPS)
+        // Fallback: direct upload
         const formData = new FormData();
         formData.append('audio', selectedFile);
-        return await fetch(`${API_URL}/api/upload`, {
+        const resp = await fetch(`${API_URL}/api/upload`, {
           method: 'POST',
           body: formData,
         });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Error en upload');
+        return { callId: data.callId };
       };
 
-      let response = await makeRequest();
-      clearInterval(progressInterval);
+      const { callId } = await makeRequest();
+      setUploadProgress(40);
 
-      if (!response.ok) {
-        let errorMessage = 'Ocurrió un error en el servidor al auditar el audio.';
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMessage = errorData.error;
-          }
-        } catch (e) {
-          errorMessage = `Error de servidor (${response.status} ${response.statusText || 'Error desconocido'})`;
+      // Poll for transcription completion
+      let pollCount = 0;
+      const maxPolls = 120; // 120 * 5s = 10min max
+      let completedCall: any = null;
+
+      while (pollCount < maxPolls) {
+        await new Promise(r => setTimeout(r, 5000));
+        pollCount++;
+
+        const statusResp = await fetch(`${API_URL}/api/transcript/${callId}`);
+        if (!statusResp.ok) {
+          if (pollCount > 5) throw new Error('Error al consultar estado de transcripción');
+          continue;
         }
-        throw new Error(errorMessage);
+
+        const statusData = await statusResp.json();
+
+        if (statusData.status === 'completed') {
+          completedCall = statusData.call;
+          break;
+        } else if (statusData.status === 'error') {
+          throw new Error(statusData.error || 'Error en transcripción');
+        }
+
+        // Update progress based on polling count
+        setUploadProgress(Math.min(40 + Math.floor(pollCount * 0.5), 85));
       }
 
-      let completedCall;
-      try {
-        completedCall = await response.json();
-      } catch (jsonErr) {
-        throw new Error('La respuesta del servidor de audición no tiene un formato de datos (JSON) válido.');
+      if (!completedCall) {
+        throw new Error('La transcripción está tomando más tiempo del esperado. Intenta de nuevo.');
       }
 
-      // Guardar el archivo de audio original en el IndexedDB local vinculado al ID de llamada final
+      // Save audio to IndexedDB
       try {
         await saveAudioToDB(completedCall.id, selectedFile);
       } catch (dbErr) {
@@ -349,7 +358,6 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
       }
 
       setUploadProgress(100);
-
       setTimeout(() => {
         onUploadSuccess(completedCall);
         setUploadProgress(null);
@@ -531,9 +539,9 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
             <p className="text-xs text-gray-300 font-medium flex items-center justify-center gap-2">
               <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
               {uploadProgress < 40 
-                ? 'Estableciendo conexión segura...' 
+                ? 'Subiendo archivo y enviando a transcripción...' 
                 : uploadProgress < 80 
-                ? 'Analizando diálogos y locutores...' 
+                ? 'Procesando audio en AssemblyAI (STT)...' 
                 : 'Ejecutando auditoría y análisis emocional...'}
             </p>
             <p className="text-[11px] text-gray-500">

@@ -315,6 +315,15 @@ const audioBuffers = new Map<string, Buffer>();
 const localNotasMemory = new Map<string, any[]>();
 const localObjecionesMemory = new Map<string, any[]>();
 
+// Pending async transcription jobs (AssemblyAI not yet ready)
+const pendingTranscripts = new Map<string, {
+  transcriptId: string;
+  audioBuffer: Buffer;
+  fileName: string;
+  callId: string;
+  timestamp: number;
+}>();
+
 // Función heurística de evaluación UTEL — delega al módulo compartido PCE
 function evaluateUtelHeuristic(transcription: any[], fileName: string): any {
   const fullText = transcription.map((t: any) => t.text).join(" ").toLowerCase();
@@ -867,61 +876,53 @@ app.post("/api/whisper", async (req, res) => {
   }
 });
 
-// API: Procesar audio desde Vercel Blob (bypass 4.5MB limit)
+// API: Procesar audio desde Vercel Blob (bypass 4.5MB limit) — async
 app.post("/api/process-blob", async (req, res) => {
   const { blobUrl, fileName } = req.body;
   if (!blobUrl) return res.status(400).json({ error: "blobUrl is required" });
 
-  const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  const callId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   try {
     const resp = await axios.get(blobUrl, { responseType: "arraybuffer", timeout: 30000 });
     const audioBuffer = Buffer.from(resp.data);
     const originalName = fileName || "audio.mp3";
 
-    audioBuffers.set(uniqueId, audioBuffer);
+    audioBuffers.set(callId, audioBuffer);
 
-    const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-    const analysis = await generateLocalAnalysis(audioBuffer, ext === 'wav' ? 'wav' : 'mp3', originalName);
-
-    const finalCallData = {
-      id: uniqueId,
+    const processingCallStub = {
+      id: callId,
       metadata: {
-        fileName: originalName,
-        url: `/api/audio/${uniqueId}`,
-        blobUrl,
-        size: audioBuffer.length,
-        duration: analysis.duration || 180,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: "auditor_sales_prod",
-        status: "completed",
+        fileName: originalName, url: `/api/audio/${callId}`, blobUrl,
+        size: audioBuffer.length, duration: 0,
+        uploadedAt: new Date().toISOString(), uploadedBy: "auditor_sales_prod", status: "processing"
       },
-      score: {
-        global: (analysis.utel?.totalScore || 0) * 10,
-        greeting: 85, needDiscovery: 80, objectionHandling: 70, closingSkills: 60, empathy: 75,
-      },
-      analysis: {
-        summary: analysis.summary || "Llamada auditada.",
-        strengths: analysis.strengths || [],
-        weaknesses: analysis.weaknesses || [],
-        nextSteps: analysis.nextSteps || [],
-        customerMood: analysis.customerMood || "neutral",
-        salesOutcome: analysis.salesOutcome || "interesado_seguimiento",
-        utel: analysis.utel,
-        emotionalAnalysis: analysis.emotionalAnalysis,
-      },
-      transcription: analysis.transcription || [],
+      score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
+      analysis: { summary: "Procesando transcripción y auditoría cognitiva...", strengths: [], weaknesses: [], nextSteps: [], customerMood: "neutral", salesOutcome: "interesado_seguimiento" },
+      transcription: []
     };
+    localCallsMemory.unshift(processingCallStub);
 
-    localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
-    saveCallToSupabase(finalCallData);
-    return res.json(finalCallData);
+    const apiKey = process.env.ASSEMBLYAI_API_KEY;
+    if (!apiKey) throw new Error("ASSEMBLYAI_API_KEY not configured");
+    const client = new AssemblyAI({ apiKey });
+    const uploadUrl = await client.files.upload(audioBuffer);
+    const transcript = await client.transcripts.submit({
+      audio: uploadUrl, speaker_labels: true, language_code: "es",
+    });
+
+    pendingTranscripts.set(callId, {
+      transcriptId: transcript.id, audioBuffer, fileName: originalName, callId, timestamp: Date.now(),
+    });
+
+    console.log(`[BLOB] Transcripción asíncrona iniciada: callId=${callId}, transcriptId=${transcript.id}`);
+    return res.json({ status: "processing", callId, transcriptId: transcript.id });
   } catch (err: any) {
     console.error("[BLOB_ERROR]", err.message);
     return res.status(500).json({ error: err.message });
   }
 });
 
-// API: Subir archivo de audio y procesar directo con AssemblyAI + Google AI (Gemini)
+// API: Subir archivo de audio — inicia transcripción asíncrona (evita timeout 504 de Vercel)
 app.post("/api/upload", upload.single("audio"), async (req, res) => {
   try {
     const file = req.file;
@@ -930,114 +931,147 @@ app.post("/api/upload", upload.single("audio"), async (req, res) => {
     }
 
     const originalName = file.originalname;
-    const uniqueId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const callId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    console.log(`[UPLOAD] Iniciando transcripción asíncrona: ${originalName} (ID: ${callId})`);
 
-    // Motor: AssemblyAI (STT) + OpenRouter (análisis cognitivo)
-    console.log("[LOCAL_MODE] Usando AssemblyAI (STT) + OpenRouter (análisis) como motor principal");
+    audioBuffers.set(callId, file.buffer);
 
-    console.log(`Iniciando procesamiento de audio: ${originalName} (ID: ${uniqueId})`);
+    const processingCallStub = {
+      id: callId,
+      metadata: {
+        fileName: originalName,
+        url: `/api/audio/${callId}`,
+        size: file.size,
+        duration: 0,
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: "auditor_sales_prod",
+        status: "processing"
+      },
+      score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
+      analysis: {
+        summary: "Procesando transcripción y auditoría cognitiva...",
+        strengths: [], weaknesses: [], nextSteps: [],
+        customerMood: "neutral",
+        salesOutcome: "interesado_seguimiento"
+      },
+      transcription: []
+    };
+    localCallsMemory.unshift(processingCallStub);
 
-    let finalCallData: any;
+    const apiKey = process.env.ASSEMBLYAI_API_KEY;
+    if (!apiKey) throw new Error("ASSEMBLYAI_API_KEY not configured");
+
+    const client = new AssemblyAI({ apiKey });
+    const uploadUrl = await client.files.upload(file.buffer);
+    const transcript = await client.transcripts.submit({
+      audio: uploadUrl,
+      speaker_labels: true,
+      language_code: "es",
+    });
+
+    pendingTranscripts.set(callId, {
+      transcriptId: transcript.id,
+      audioBuffer: file.buffer,
+      fileName: originalName,
+      callId,
+      timestamp: Date.now(),
+    });
+
+    console.log(`[UPLOAD] Transcripción asíncrona iniciada: callId=${callId}, transcriptId=${transcript.id}`);
+    return res.json({ status: "processing", callId, transcriptId: transcript.id });
+  } catch (error: any) {
+    console.error("[UPLOAD] Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Consultar estado de transcripción y obtener resultados cuando esté lista
+app.get("/api/transcript/:callId", async (req, res) => {
+  const { callId } = req.params;
+  const pending = pendingTranscripts.get(callId);
+
+  if (!pending) {
+    // Buscar en memoria local si ya está completada
+    const existing = localCallsMemory.find(c => c.id === callId);
+    if (existing) return res.json({ status: "completed", call: existing });
+    return res.status(404).json({ error: "Transcripción no encontrada" });
+  }
+
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "ASSEMBLYAI_API_KEY not configured" });
+
+  try {
+    const client = new AssemblyAI({ apiKey });
+    const transcript = await client.transcripts.get(pending.transcriptId);
+
+    if (transcript.status === "error") {
+      pendingTranscripts.delete(callId);
+      return res.json({ status: "error", error: transcript.error || "Error en transcripción" });
+    }
+
+    if (transcript.status !== "completed") {
+      return res.json({ status: transcript.status, progress: "transcribing" });
+    }
+
+    // Transcripción completada — proceder con diarización y análisis
+    console.log(`[TRANSCRIPT] Transcripción completada para ${callId}, procesando análisis...`);
+
+    const duration = transcript.audio_duration || 0;
+    let segments: any[] = [];
+    if (transcript.utterances && transcript.utterances.length > 0) {
+      segments = transcript.utterances.map((utt: any) => ({
+        start: utt.start / 1000, end: utt.end / 1000,
+        text: (utt.text || "").trim(), speaker: utt.speaker || "",
+      }));
+    } else if (transcript.text && transcript.text.trim()) {
+      segments = [{ start: 0, end: duration, text: transcript.text.trim(), speaker: "" }];
+    }
+
+    if (!segments.length) {
+      pendingTranscripts.delete(callId);
+      return res.json({ status: "error", error: "La transcripción no contiene texto" });
+    }
+
+    // Diarización con OpenRouter
+    const textoTranscrito = segments.map(s => s.text).join(" ");
+    let speakerMapping: Record<number, string> = {};
     try {
-      // 1. Transcribir con AssemblyAI
-      const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-      const { segments: rawSegments, duration: audioDuration } = await assemblyAITranscribe(file.buffer, originalName);
-      
-      // Guardar estado inicial como "processing"
-      const processingCallStub = {
-        id: uniqueId,
-        metadata: {
-          fileName: originalName,
-          url: `/api/audio/${uniqueId}`,
-          size: file.size,
-          duration: 0,
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: "auditor_sales_prod",
-          status: "processing"
-        },
-        score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
-        analysis: {
-          summary: "Procesando transcripción y auditoría cognitiva...",
-          strengths: [], weaknesses: [], nextSteps: [],
-          customerMood: "neutral",
-          salesOutcome: "interesado_seguimiento"
-        },
-        transcription: []
-      };
-
-      localCallsMemory.unshift(processingCallStub);
-
-      if (!rawSegments.length) {
-        throw new Error("AssemblyAI no produjo transcripción.");
-      }
-
-      // 2. Asignar speakers con OpenRouter (diarización)
-      const textoTranscrito = rawSegments.map(s => s.text).join(" ");
-
-      let speakerMapping: Record<number, string> = {};
-      try {
-        const diarPrompt = `Eres un transcriptor experto. Recibes una transcripción de llamada de ventas UTEL con segmentos sin identificar orador.
+      const diarResult = await callOpenRouter(`Eres un transcriptor experto. Recibes una transcripción de llamada de ventas UTEL con segmentos sin identificar orador.
 
 Segmentos:
-${JSON.stringify(rawSegments.map((s, i) => ({ idx: i, text: s.text })), null, 2)}
+${JSON.stringify(segments.map((s, i) => ({ idx: i, text: s.text })), null, 2)}
 
 Texto completo: "${textoTranscrito}"
 
 Analiza el diálogo y determina para CADA segmento si quien habla es "Vendedor" (asesor UTEL) o "Cliente" (prospecto).
 
-Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
+Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
+      if (diarResult?.speakers) speakerMapping = diarResult.speakers;
+    } catch {
+      segments.forEach((_, i) => { speakerMapping[i] = i % 2 === 0 ? "Vendedor" : "Cliente"; });
+    }
 
-        const diarResult = await callOpenRouter(diarPrompt);
-        if (diarResult?.speakers) {
-          speakerMapping = diarResult.speakers;
-        }
-      } catch (diarErr: any) {
-        console.warn("[DIARIZATION] Falló diarización con OpenRouter, usando heurística:", diarErr.message);
-        const sellerKw = ["utel", "colegiatura", "beca", "inscripción", "asesor", "universidad"];
-        let sellerScore = 0;
-        rawSegments.forEach((s, i) => {
-          const t = s.text.toLowerCase();
-          const hits = sellerKw.filter(kw => t.includes(kw)).length;
-          if (i === 0 && hits > 0) sellerScore += 10;
-          if (hits > 1) sellerScore += hits;
-        });
-        rawSegments.forEach((_, i) => {
-          speakerMapping[i] = i === 0 ? (sellerScore > 3 ? "Vendedor" : "Cliente") : (i % 2 === 0 ? "Vendedor" : "Cliente");
-        });
+    const posWords = ["bien", "excelente", "perfecto", "gracias", "interesa", "interesado", "gusta", "bueno", "súper", "claro", "sí"];
+    const negWords = ["no", "caro", "costoso", "tiempo", "complicado", "difícil", "duda", "pero", "mal"];
+
+    const cleanTranscription = segments.map((seg, i) => {
+      const speaker = speakerMapping[i] || (i % 2 === 0 ? "Vendedor" : "Cliente");
+      const textLower = seg.text.toLowerCase();
+      let sentiment = "neutral";
+      if (speaker === "Cliente") {
+        const hasPos = posWords.some(w => textLower.includes(w));
+        const hasNeg = negWords.some(w => textLower.includes(w));
+        if (hasPos && !hasNeg) sentiment = "positive";
+        else if (hasNeg) sentiment = "negative";
       }
+      return { speaker, start: seg.start || 0, end: seg.end || 0, text: seg.text, sentiment, confidence: 0.95 };
+    });
 
-      // 3. Construir transcripción con speakers
-      const posWords = ["bien", "excelente", "perfecto", "gracias", "interesa", "interesado", "gusta", "bueno", "súper", "claro", "sí"];
-      const negWords = ["no", "caro", "costoso", "tiempo", "complicado", "difícil", "duda", "pero", "mal"];
-
-      const cleanTranscription = rawSegments.map((seg, i) => {
-        const speaker = speakerMapping[i] || (i % 2 === 0 ? "Vendedor" : "Cliente");
-        const textLower = seg.text.toLowerCase();
-        let computedSentiment = "neutral";
-        if (speaker === "Cliente") {
-          const hasPos = posWords.some(w => textLower.includes(w));
-          const hasNeg = negWords.some(w => textLower.includes(w));
-          if (hasPos && !hasNeg) computedSentiment = "positive";
-          else if (hasNeg) computedSentiment = "negative";
-        }
-        return {
-          speaker,
-          start: seg.start || 0,
-          end: seg.end || 0,
-          text: seg.text,
-          sentiment: computedSentiment,
-          confidence: 0.95
-        };
-      });
-
-      const correctedTranscription = await applyTranscriptionGuardrails(cleanTranscription);
-      const localUtelResult = evaluateUtelHeuristic(correctedTranscription, originalName);
-
-    // 5. INTELIGENCIA COGNITIVA Y ANÁLISIS EMOCIONAL (MATRIZ PCE UTEL OFICIAL DE LOS PDF)
-    // Uses shared buildChecklist from src/shared/pce-rubric.ts
+    const correctedTranscription = await applyTranscriptionGuardrails(cleanTranscription);
+    const localUtelResult = evaluateUtelHeuristic(correctedTranscription, pending.fileName);
 
     let finalUtelResult = localUtelResult;
-    let summaryText = `La llamada para '${originalName}' se auditó internamente.`;
+    let summaryText = `La llamada para '${pending.fileName}' se auditó internamente.`;
     let customerMood: 'receptivo' | 'molesto' | 'neutral' | 'interesado' | 'indiferente' = 'neutral';
     let salesOutcome: 'venta_cerrada' | 'interesado_seguimiento' | 'no_interesado' | 'agenda_demostracion' = 'interesado_seguimiento';
     let strengths = ["Presentación clara"];
@@ -1045,7 +1079,6 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
     let nextSteps = ["Seguimiento CRM"];
     let emotionalAnalysis = localUtelResult.emotionalAnalysis;
 
-    // Prompt cognitivo robusto y blindado, basándose exactamente en los PDF de UTEL
     const promptText = `
     # ROL
     Eres un Auditor Senior de Calidad Educativa y un experto en Neuroventas. Analiza la transcripción de la llamada telefónica y califica el desempeño del vendedor de acuerdo con la Rúbrica de Auditoría PCE de UTEL Universidad. Además, evalúa detenidamente el estado emocional del cliente.
@@ -1087,177 +1120,72 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`;
 
     # ANÁLISIS DE LA PSICOLOGÍA DEL CLIENTE:
     Evalúa el estado emocional e intenciones de compra del cliente:
-    - "primaryEmotion": Emoción predominante observable (p. ej. "Interesado pero indeciso", "Molesto", "Escéptico", "Entusiasmado").
-    - "emotionalJourney": Viaje emocional de la conversación (cómo progresa de inicio a fin).
-    - "purchaseAptitudeScore": Puntuación numérica (0 a 100) del deseo potencial y aptitud de compra real.
-    - "purchaseAptitudeLabel": Basado en el puntaje: "Muy Alto" (90-100), "Alto" (70-89), "Medio" (40-69), "Bajo" (15-39), "Nulo" (0-14).
-    - "barriersToPurchase": Obstáculos o fricciones para inscribirse (como costos, falta de tiempo, desconfianza).
-    - "buyingSignals": Señales positivas observadas (preguntas por el inicio, por el examen, por los pagos).
-    - "aptitudeReason": Motivos del estado de compra, justificación de por qué está apto, y qué táctica comercial exacta debe implementar el asesor comercial en la siguiente interacción para cerrar la venta.
+    - "primaryEmotion": Emoción predominante observable.
+    - "emotionalJourney": Viaje emocional de la conversación.
+    - "purchaseAptitudeScore": Puntuación 0-100 del deseo de compra.
+    - "purchaseAptitudeLabel": "Muy Alto"|"Alto"|"Medio"|"Bajo"|"Nulo".
+    - "barriersToPurchase": Obstáculos detectados.
+    - "buyingSignals": Señales positivas observadas.
+    - "aptitudeReason": Táctica comercial recomendada.
 
     # TRANSCRIPCIÓN DEL AUDIO:
     ${JSON.stringify(correctedTranscription, null, 2)}
 
-    # FORMATO DE RESPUESTA EXCLUSIVO (JSON VÁLIDO SIN TEXTO NI MARKDOWN EXTRA):
+    # FORMATO DE RESPUESTA EXCLUSIVO (JSON VÁLIDO):
     {
-      "evaluated_subitems": {
-        "c1_linea": true,
-        "c1_programa": true,
-        "c1_demo": false,
-        "c1_ocup": true,
-        "c1_equiv": false,
-        "c2_num": true,
-        "c2_mod": true,
-        "c2_esp": false,
-        "c3_costos": true,
-        "c3_comp": true,
-        "c3_jor": false,
-        "c3_beca": true,
-        "c3_ciclos": false,
-        "c4_res": true,
-        "c4_doc": false,
-        "c4_pag": true,
-        "c4_ref": false,
-        "c5_int": true,
-        "c5_tip": true,
-        "c5_pla": true,
-        "c5_reg": true,
-        "c5_seg": true
-      },
-      "evaluacion_detallada": {
-        "CONOCE A TU CLIENTE": "Retroalimentación sobre la calidad comercial en este bloque...",
-        "GENERALIDADES": "Opinión de la transmisión del modelo educativo virtual...",
-        "OFERTA ACADÉMICA": "Evaluación del detalle comercial (costos, becas, jornada)...",
-        "ACUERDOS Y CIERRE": "Evaluación de los acuerdos, solicitud de documentos y referidos...",
-        "GESTIÓN Y REGISTRO": "Juicio sobre el envío de cotizaciones y programación de seguimiento..."
-      },
+      "evaluated_subitems": { "c1_linea": true, "c1_programa": true, ... },
+      "evaluacion_detallada": { "CONOCE A TU CLIENTE": "...", ... },
       "modalidad_detectada": "LÍNEA",
-      "summary": "Resumen cognitivo detallado del desempeño del asesor comercial en la llamada.",
-      "strengths": [ "Fortaleza 1", "Fortaleza 2", "Fortaleza 3" ],
-      "weaknesses": [ "Debilidad 1", "Debilidad 2" ],
-      "nextSteps": [ "Paso recomendado 1", "Paso recomendado 2" ],
+      "summary": "Resumen cognitivo...",
+      "strengths": [], "weaknesses": [], "nextSteps": [],
       "customerMood": "interesado",
       "salesOutcome": "interesado_seguimiento",
-      "emotionalAnalysis": {
-        "primaryEmotion": "Interesado",
-        "emotionalJourney": "Inició con dudas institucionales, se interesó por la beca especial y planteó ciertas objeciones en el pago.",
-        "purchaseAptitudeScore": 75,
-        "purchaseAptitudeLabel": "Alto",
-        "barriersToPurchase": [ "Falta de liquidez para inscripción", "Indecisión de carrera alternas" ],
-        "buyingSignals": [ "Preguntó cuándo abre inscripciones", "Dijo que quiere estudiar de noche" ],
-        "aptitudeReason": "El candidato tiene un excelente perfil para estudiar de noche pero le frena el pago inicial. Estrategia comercial recomendada: ofrecer planes de financiamiento o aplazamiento de cuota de inscripción para lograr el registro inmediato."
-      }
-    }
-    `;
+      "emotionalAnalysis": { ... }
+    }`;
 
     try {
-      console.log(`[UPLOAD_OR] Analizando con OpenRouter...`);
+      console.log(`[TRANSCRIPT] Analizando con OpenRouter para ${callId}...`);
       const parsed = await callOpenRouter(promptText);
-
       if (parsed) {
         const evaluatedSubitems = parsed.evaluated_subitems || parsed.evaluatedSubitems || {};
         const feedbackMap = parsed.evaluacion_detallada || parsed.feedbackMap || {};
         const modality = parsed.modalidad_detectada || "LÍNEA";
-
         finalUtelResult = buildChecklist(evaluatedSubitems, feedbackMap, modality as Modalidad);
-
         summaryText = parsed.summary || summaryText;
         customerMood = parsed.customerMood || customerMood;
         salesOutcome = parsed.salesOutcome || salesOutcome;
         strengths = parsed.strengths || strengths;
         weaknesses = parsed.weaknesses || weaknesses;
         nextSteps = parsed.nextSteps || nextSteps;
-        if (parsed.emotionalAnalysis) {
-          emotionalAnalysis = parsed.emotionalAnalysis;
-        }
-        console.log("[UPLOAD_OR] Análisis con OpenRouter completado.");
+        if (parsed.emotionalAnalysis) emotionalAnalysis = parsed.emotionalAnalysis;
       }
     } catch (orErr: any) {
-      console.error("[UPLOAD_OR] Error:", orErr.message);
-      throw new Error(`Fallo de análisis cognitivo con OpenRouter: ${orErr.message}`);
+      console.error("[TRANSCRIPT] Error en análisis OpenRouter:", orErr.message);
     }
 
-      finalCallData = {
-        id: uniqueId,
-        metadata: {
-          fileName: originalName,
-          url: `/api/audio/${uniqueId}`,
-          size: file.size,
-          duration: Math.round(audioDuration || 180),
-          uploadedAt: new Date().toISOString(),
-          uploadedBy: "auditor_sales_prod",
-          status: "completed"
-        },
-        score: {
-          global: Math.round(finalUtelResult.totalScore * 10),
-          greeting: 85,
-          needDiscovery: 80,
-          objectionHandling: 70,
-          closingSkills: 60,
-          empathy: 75
-        },
-        analysis: {
-          summary: summaryText,
-          strengths: strengths,
-          weaknesses: weaknesses,
-          nextSteps: nextSteps,
-          customerMood: customerMood,
-          salesOutcome: salesOutcome,
-          utel: finalUtelResult,
-          emotionalAnalysis: emotionalAnalysis
-        },
-        transcription: correctedTranscription
-      };
-    } catch (apiErr: any) {
-      console.warn("Fallo en procesamiento con AssemblyAI, intentando con análisis local directo:", apiErr.message);
-      try {
-        const ext = originalName.split('.').pop()?.toLowerCase() || 'mp3';
-        const analysis = await generateLocalAnalysis(file.buffer, ext, originalName);
-        finalCallData = {
-          id: uniqueId,
-          metadata: {
-            fileName: originalName,
-            url: `/api/audio/${uniqueId}`,
-            size: file.size,
-            duration: analysis.duration || 180,
-            uploadedAt: new Date().toISOString(),
-            uploadedBy: "auditor_sales_prod",
-            status: "completed"
-          },
-          score: {
-            global: Math.round((analysis.utel?.totalScore || 0) * 10),
-            greeting: 85,
-            needDiscovery: 80,
-            objectionHandling: 70,
-            closingSkills: 60,
-            empathy: 75
-          },
-          analysis: {
-            summary: analysis.summary || "Llamada auditada y analizada exitosamente.",
-            strengths: analysis.strengths || [],
-            weaknesses: analysis.weaknesses || [],
-            nextSteps: analysis.nextSteps || [],
-            customerMood: analysis.customerMood || "neutral",
-            salesOutcome: analysis.salesOutcome || "interesado_seguimiento",
-            utel: analysis.utel,
-            emotionalAnalysis: analysis.emotionalAnalysis
-          },
-          transcription: analysis.transcription || []
-        };
-      } catch (backupErr: any) {
-        console.error("Fallo definitivo en ambos procesadores, recurriendo a simulador cognitivo de alta fidelidad:", backupErr.message);
-        finalCallData = generateHighFidelitySimulatedCall(originalName, file.size, uniqueId);
-      }
-    }
+    const finalCallData = {
+      id: callId,
+      metadata: {
+        fileName: pending.fileName,
+        url: `/api/audio/${callId}`,
+        size: pending.audioBuffer.length,
+        duration: Math.round(duration || 180),
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: "auditor_sales_prod",
+        status: "completed"
+      },
+      score: { global: Math.round(finalUtelResult.totalScore * 10), greeting: 85, needDiscovery: 80, objectionHandling: 70, closingSkills: 60, empathy: 75 },
+      analysis: { summary: summaryText, strengths, weaknesses, nextSteps, customerMood, salesOutcome, utel: finalUtelResult, emotionalAnalysis },
+      transcription: correctedTranscription
+    };
 
-    audioBuffers.set(uniqueId, file.buffer);
-    localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== uniqueId)];
+    localCallsMemory = [finalCallData, ...localCallsMemory.filter(c => c.id !== callId)];
+    pendingTranscripts.delete(callId);
     saveCallToSupabase(finalCallData);
-
-    return res.json(finalCallData);
-  } catch (error: any) {
-    console.error("Fallo definitivo en la ruta de subida:", error);
-    return res.status(500).json({ error: error.message });
+    return res.json({ status: "completed", call: finalCallData });
+  } catch (err: any) {
+    console.error("[TRANSCRIPT] Error:", err.message);
+    return res.status(500).json({ status: "error", error: err.message });
   }
 });
 
