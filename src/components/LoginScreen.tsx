@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Lock, ShieldAlert, BadgeCheck, Loader2, Mail, Eye, EyeOff, Send, Link as LinkIcon } from 'lucide-react';
-import { googleSignIn, logoutGoogle, emailPasswordSignIn, sendEmailSignInLink } from '../lib/firebase';
+import { Lock, ShieldAlert, BadgeCheck, Loader2, Mail, Eye, EyeOff } from 'lucide-react';
+import { emailPasswordSignIn } from '../lib/firebase';
 import { API_URL } from '../config';
 
 interface LoginScreenProps {
@@ -10,57 +10,10 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [showEmailLogin, setShowEmailLogin] = useState<boolean>(false);
   
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [linkSent, setLinkSent] = useState<boolean>(false);
-
-  const handleGoogleLogin = async () => {
-    setIsSubmitting(true);
-    setErrorMessage('');
-
-    try {
-      const result = await googleSignIn();
-      if (!result) {
-        throw new Error('No se recibieron credenciales desde Google.');
-      }
-
-      const { user } = result;
-
-      // Comunicar con nuestro backend para validar autorización del correo electrónico
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: user.email,
-          displayName: user.displayName || user.email?.split('@')[0],
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        onLoginSuccess(data.token, data.username);
-      } else {
-        // Desconectar sesión si el backend deniega acceso para no atorar el cliente de Firebase
-        await logoutGoogle();
-        setErrorMessage(data.error || 'Correo electrónico no autorizado.');
-      }
-    } catch (err: any) {
-      console.error('Error durante autenticación Google:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setErrorMessage('La ventana de Google se cerró antes de completar el inicio de sesión.');
-      } else {
-        setErrorMessage(err.message || 'Fallo de autenticación con Google.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +26,6 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     setErrorMessage('');
 
     try {
-      // Try Firebase Auth first
       const user = await emailPasswordSignIn(email, password);
 
       const response = await fetch(`${API_URL}/api/login`, {
@@ -92,49 +44,26 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         setErrorMessage(data.error || 'Correo no autorizado.');
       }
     } catch (firebaseErr: any) {
-      // If Firebase Auth fails, try backend directly with email + password
-      if (firebaseErr.code === 'auth/user-not-found' || firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
-        try {
-          const backendResp = await fetch(`${API_URL}/api/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: email,
-              username: email.split('@')[0],
-              password: password,
-            }),
-          });
-          const backendData = await backendResp.json();
-          if (backendResp.ok && backendData.success) {
-            onLoginSuccess(backendData.token, backendData.username);
-            return;
-          }
-          setErrorMessage(backendData.error || 'Credenciales inválidas. Verifica tu correo y contraseña.');
-        } catch {
-          setErrorMessage('Error de conexión con el servidor de autenticación.');
+      // Fallback: backend directo si Firebase Auth falla
+      try {
+        const backendResp = await fetch(`${API_URL}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            username: email.split('@')[0],
+            password: password,
+          }),
+        });
+        const backendData = await backendResp.json();
+        if (backendResp.ok && backendData.success) {
+          onLoginSuccess(backendData.token, backendData.username);
+          return;
         }
-      } else if (firebaseErr.code === 'auth/too-many-requests') {
-        setErrorMessage('Demasiados intentos. Espera unos minutos.');
-      } else {
-        setErrorMessage(firebaseErr.message || 'Error al iniciar sesión.');
+        setErrorMessage(backendData.error || 'Credenciales inválidas.');
+      } catch {
+        setErrorMessage('Error de conexión con el servidor de autenticación.');
       }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleEmailLinkLogin = async () => {
-    if (!email) {
-      setErrorMessage('Ingresa tu correo electrónico.');
-      return;
-    }
-    setIsSubmitting(true);
-    setErrorMessage('');
-    try {
-      await sendEmailSignInLink(email);
-      setLinkSent(true);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al enviar el vínculo.');
     } finally {
       setIsSubmitting(false);
     }
@@ -167,15 +96,15 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           </div>
         </div>
 
-        {/* Warning notification about supervisor protection */}
+        {/* Admin login badge */}
         <div className="bg-[#181818] border border-zinc-800 rounded-2xl p-4 mb-6 text-xs text-gray-400 flex items-start gap-3">
-          <ShieldAlert className="w-5 h-5 text-[#00c8a5] shrink-0 mt-0.5" />
+          <ShieldAlert className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <span className="font-semibold text-[#00c8a5] flex items-center gap-1.5 font-mono text-[10px] tracking-wider uppercase">
-              Acceso Restringido <BadgeCheck className="w-3.5 h-3.5 inline text-[#00c8a5]" />
+            <span className="font-semibold text-indigo-400 flex items-center gap-1.5 font-mono text-[10px] tracking-wider uppercase">
+              Inicio de Sesión de Administrador <BadgeCheck className="w-3.5 h-3.5 inline text-indigo-400" />
             </span>
             <p className="leading-relaxed">
-              Este sistema contiene datos confidenciales. Se requiere acceder con una cuenta autorizada o código de acceso.
+              Ingresa con tu correo electrónico y contraseña autorizada para acceder al panel de auditoría.
             </p>
           </div>
         </div>
@@ -186,165 +115,73 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
               <span>{errorMessage}</span>
             </div>
-            {errorMessage.includes('autorizada') && (
-              <p className="text-[10px] text-gray-500 font-normal mt-1 border-t border-rose-500/10 pt-2">
-                Tip: Verifica que estés iniciando sesión con tu cuenta institucional (@utel.edu.mx), las cuales tienen acceso automático. Para otras cuentas, el administrador debe habilitar el permiso manualmente.
-              </p>
-            )}
           </div>
         )}
 
-        {/* Opciones de Login */}
-        <div className="space-y-4">
-          {linkSent ? (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl p-5 text-center space-y-2">
-              <Send className="w-8 h-8 mx-auto text-emerald-400" />
-              <p className="text-sm font-bold">Vínculo enviado</p>
-              <p className="text-xs text-gray-400">Revisa tu correo <span className="text-white font-bold">{email}</span> y haz clic en el vínculo para iniciar sesión.</p>
-              <button
-                onClick={() => setLinkSent(false)}
-                className="text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
-              >
-                ← Volver
-              </button>
+        <form onSubmit={handleEmailLogin} className="space-y-4">
+          <div>
+            <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
+              Correo Electrónico
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
+                <Mail className="w-4 h-4" />
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@correo.com"
+                className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+              />
             </div>
-          ) : !showEmailLogin ? (
-            <>
-              <button
-                onClick={handleGoogleLogin}
-                disabled={isSubmitting}
-                className="w-full bg-[#1c1c1e] hover:bg-[#2c2c2e] text-white border border-zinc-800 hover:border-zinc-700 rounded-2xl py-3 px-4 text-xs font-bold transition-all shadow-md cursor-pointer active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
-                id="google-login-button"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                    <span>Verificando...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-                    </svg>
-                    <span>Continuar con Google</span>
-                  </>
-                )}
-              </button>
+          </div>
 
-              <button
-                onClick={() => setShowEmailLogin(true)}
-                className="w-full bg-transparent hover:bg-zinc-800/50 text-gray-400 hover:text-white rounded-2xl py-3 px-4 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
-              >
-                <LinkIcon className="w-3 h-3" />
-                Vínculo por correo
-              </button>
-
-              <button
-                onClick={() => setShowEmailLogin(true)}
-                className="w-full bg-transparent hover:bg-zinc-800/50 text-gray-400 hover:text-white rounded-2xl py-3 px-4 text-[10px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2"
-              >
-                <Mail className="w-3 h-3" />
-                Correo y Contraseña
-              </button>
-            </>
-          ) : (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div>
-                <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
-                    <Mail className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="supervisor@crmidk.com"
-                    className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2">
-                <button
-                  onClick={handleEmailLinkLogin}
-                  disabled={isSubmitting}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Enviando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      <span>Enviar vínculo por correo</span>
-                    </>
-                  )}
-                </button>
-
-                <form onSubmit={handleEmailLogin} className="border-t border-zinc-800 pt-4 mt-2 space-y-4">
-                  <p className="text-[10px] text-gray-500 text-center font-mono uppercase tracking-wider">
-                    O inicia con contraseña
-                  </p>
-                  <div>
-                    <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
-                      Contraseña
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
-                        <Lock className="w-4 h-4" />
-                      </span>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        required
-                        className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors p-1"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl py-3 text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Iniciando...' : 'Iniciar Sesión'}
-                  </button>
-                </form>
-              </div>
-
+          <div>
+            <label className="text-[10px] text-gray-400 tracking-wider font-mono font-bold uppercase block mb-1.5 ml-1">
+              Contraseña
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">
+                <Lock className="w-4 h-4" />
+              </span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                className="w-full bg-[#181818] border border-zinc-800 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-200 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+              />
               <button
                 type="button"
-                onClick={() => {
-                  setShowEmailLogin(false);
-                  setErrorMessage('');
-                }}
-                className="w-full text-[10px] text-gray-500 hover:text-gray-300 py-2 transition-all font-bold uppercase tracking-widest"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors p-1"
               >
-                ← Regresar
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-          )}
-        </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 text-xs font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Verificando...</span>
+              </>
+            ) : (
+              <span>Iniciar Sesión</span>
+            )}
+          </button>
+        </form>
 
         <div className="mt-8 pt-5 border-t border-[#222222] text-center">
           <span className="text-[9.5px] text-zinc-600 font-mono">
-            Portal de Supervisor Protegido 2026
+            Portal de Administrador Protegido 2026
           </span>
         </div>
       </div>
