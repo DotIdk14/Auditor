@@ -11,11 +11,10 @@ export const PORT = parseInt(process.env.PORT || "3000", 10);
 export const JWT_SECRET = process.env.JWT_SECRET;
 export const JWT_EXPIRY = "24h";
 
-// ── AI Provider: OpenCode Go (OpenAI-compatible) ───────────────
-export const AI_PROVIDER = process.env.AI_PROVIDER || "opencodego";
-export const OPENCODE_API_KEY = process.env.OPENCODE_API_KEY || "";
-export const OPENCODE_MODEL = process.env.OPENCODE_MODEL || "deepseek-v4-flash";
-export const OPENCODE_BASE_URL = process.env.OPENCODE_BASE_URL || "https://api.opencode.go/v1";
+// ── AI Provider: Google Gemini ─────────────────────────────────
+export const AI_PROVIDER = process.env.AI_PROVIDER || "gemini";
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
