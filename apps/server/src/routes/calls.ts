@@ -3,6 +3,7 @@ import axios from "axios";
 import { z } from "zod";
 import {
   supabase,
+  supabaseAdmin,
   IS_DEMO_MODE,
   localCallsMemory,
   demoContactsList,
@@ -81,7 +82,7 @@ export default function (app: Express): void {
       } else if (supabase) {
         // Fallback: look up in Supabase (Vercel cold start / different instance)
         console.log(`[ASSIGN_CONTACT] Call ${id} not in memory, searching Supabase...`);
-        const { data: dbCall, error: dbErr } = await supabase
+        const { data: dbCall, error: dbErr } = await (supabaseAdmin || supabase)
           .from("auditorias")
           .select("*")
           .eq("id", id)
@@ -159,7 +160,7 @@ export default function (app: Express): void {
 
       // Verify the contact exists (if using existing contactId)
       if (input.contactId && supabase) {
-        const { data: contactExists } = await supabase
+        const { data: contactExists } = await (supabaseAdmin || supabase)
           .from("contacts")
           .select("id")
           .eq("id", finalContactId)
@@ -448,8 +449,8 @@ export default function (app: Express): void {
 
     try {
       const [{ data: notasAuditorias }, { data: objecionesAuditorias }] = await Promise.all([
-        supabase.from("notas").select("auditoria_id").eq("supervisor_email", supervisorEmail),
-        supabase.from("objeciones").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+        (supabaseAdmin || supabase).from("notas").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+        (supabaseAdmin || supabase).from("objeciones").select("auditoria_id").eq("supervisor_email", supervisorEmail),
       ]);
 
       const auditoriaIds = new Set<string>();
@@ -457,7 +458,7 @@ export default function (app: Express): void {
       (objecionesAuditorias || []).forEach((o: any) => auditoriaIds.add(o.auditoria_id));
 
       if (auditoriaIds.size === 0) {
-        const { data: uploadedCalls } = await supabase
+        const { data: uploadedCalls } = await (supabaseAdmin || supabase)
           .from("auditorias")
           .select("id")
           .filter("metadata->>uploadedBy", "ilike", `%${supervisorEmail}%`)
@@ -470,18 +471,18 @@ export default function (app: Express): void {
       }
 
       const ids = Array.from(auditoriaIds).slice(0, 50);
-      const { data: auditorias } = await supabase
+      const { data: auditorias } = await (supabaseAdmin || supabase)
         .from("auditorias")
         .select("*")
         .in("id", ids)
         .order("created_at", { ascending: false });
 
-      const { data: allNotas } = await supabase
+      const { data: allNotas } = await (supabaseAdmin || supabase)
         .from("notas")
         .select("auditoria_id")
         .in("auditoria_id", ids)
         .eq("supervisor_email", supervisorEmail);
-      const { data: allObjeciones } = await supabase
+      const { data: allObjeciones } = await (supabaseAdmin || supabase)
         .from("objeciones")
         .select("auditoria_id")
         .in("auditoria_id", ids)

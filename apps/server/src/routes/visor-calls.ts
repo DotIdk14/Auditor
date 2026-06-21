@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase, localCallsMemory } from "../config.js";
+import { supabase, supabaseAdmin, localCallsMemory } from "../config.js";
 
 export default function (app: Express): void {
   // GET /api/visor/calls - List calls with RBAC scope for Visor Kanban
@@ -136,7 +136,7 @@ export default function (app: Express): void {
       }
 
       // Get current record from DB
-      const { data: current, error: fetchErr } = await supabase
+      const { data: current, error: fetchErr } = await (supabaseAdmin || supabase)
         .from("auditorias")
         .select("id, metadata")
         .eq("id", id)
@@ -169,7 +169,7 @@ export default function (app: Express): void {
         status,
       };
 
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await (supabaseAdmin || supabase)
         .from("auditorias")
         .update({
           metadata: updatedMeta,

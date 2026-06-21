@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase, localCallsMemory } from "../config.js";
+import { supabase, supabaseAdmin, localCallsMemory } from "../config.js";
 import { generateDemoAuditFull } from "../services/demoSeeder.js";
 
 /**
@@ -110,7 +110,7 @@ export default function (app: Express): void {
       }
 
       // ── 4. Query Supabase with LEFT JOIN (contacts may be null) ──
-      const { data: audit, error } = await supabase
+      const { data: audit, error } = await (supabaseAdmin || supabase)
         .from("auditorias")
         .select(`
           id, contact_id, score, metadata, analysis, transcription, created_at,

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authenticateToken, requireRole, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import * as contactService from "../services/contactService.js";
-import { supabase, IS_DEMO_MODE, demoContactsList, localCallsMemory } from "../config.js";
+import { supabase, supabaseAdmin, IS_DEMO_MODE, demoContactsList, localCallsMemory } from "../config.js";
 import { generateDemoContacts, generateDemoCalls } from "../services/demoSeeder.js";
 
 // Seed demo contacts once
@@ -269,7 +269,7 @@ export default function (app: Express): void {
         return res.json(contactCalls);
       }
 
-      const { data: audits, error: auditsError } = await supabase
+      const { data: audits, error: auditsError } = await (supabaseAdmin || supabase)
         .from("auditorias")
         .select("id, contact_id, metadata, score, analysis, transcription, created_at")
         .eq("contact_id", req.params.id)
@@ -332,12 +332,12 @@ export default function (app: Express): void {
 
       // ── Supabase mode: query both auditorias and tasks ──
       const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
-        supabase
+        (supabaseAdmin || supabase)
           .from("auditorias")
           .select("id, contact_id, metadata, score, analysis, transcription, created_at")
           .eq("contact_id", contactId)
           .order("created_at", { ascending: false }),
-        supabase
+        (supabaseAdmin || supabase)
           .from("tasks")
           .select("id, contact_id, title, description, type, status, priority, due_date, completed_at, assigned_to, created_at, updated_at")
           .eq("contact_id", contactId)
