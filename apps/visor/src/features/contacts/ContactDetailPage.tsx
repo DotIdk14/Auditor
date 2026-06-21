@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
-import { useContact, useContactCalls } from '../../hooks/useContacts';
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity } from 'lucide-react';
+import { useContact, useContactCalls, useNotes, useCreateNote } from '../../hooks/useContacts';
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity, Send, Trash2 } from 'lucide-react';
 import type { Contact } from '@auditor/shared-types';
 
 export default function ContactDetailPage() {
@@ -13,6 +13,21 @@ export default function ContactDetailPage() {
 
   const { data: contact, isLoading: contactLoading } = useContact(id || '');
   const { data: contactCalls = [] } = useContactCalls(id || '');
+
+  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const { data: notes = [] } = useNotes(selectedCallId);
+  const createNote = useCreateNote();
+
+  const handleAddNote = async () => {
+    if (!selectedCallId || !noteText.trim()) return;
+    try {
+      await createNote.mutateAsync({ callId: selectedCallId, text: noteText.trim() });
+      setNoteText('');
+    } catch (err) {
+      console.error('[ADD_NOTE] Error:', err);
+    }
+  };
 
   if (contactLoading) {
     return (
@@ -158,9 +173,85 @@ export default function ContactDetailPage() {
         )}
 
         {activeTab === 'notes' && (
-          <div className="py-12 text-center">
-            <MessageSquare className="w-8 h-8 mx-auto text-stone-400 mb-2" />
-            <p className="text-xs text-stone-500">Sin notas registradas</p>
+          <div className="space-y-4">
+            {/* Note Form */}
+            <div className={`p-5 rounded-xl border ${
+              darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-white border-[#dfd9cc]'
+            }`}>
+              <h3 className={`text-[11px] font-bold mb-3 ${darkMode ? 'text-stone-300' : 'text-stone-700'}`}>
+                Nueva Nota
+              </h3>
+              <select
+                value={selectedCallId || ''}
+                onChange={(e) => setSelectedCallId(e.target.value || null)}
+                className={`w-full border rounded-xl py-2 px-3 text-xs mb-3 focus:outline-none transition-all ${
+                  darkMode
+                    ? 'bg-[#1c1a18] border-[#3e382f] text-stone-200 focus:border-[#d4a373]'
+                    : 'bg-[#fcfbf9] border-[#dfd9cc] text-stone-800 focus:border-[#d4a373]'
+                }`}
+              >
+                <option value="">Selecciona una auditoría...</option>
+                {contactCalls.map((call: any) => (
+                  <option key={call.id} value={call.id}>
+                    Auditoría - {new Date(call.created_at).toLocaleDateString()} {call.score ? `(${call.score}/10)` : ''}
+                  </option>
+                ))}
+              </select>
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Escribe tu nota aquí..."
+                rows={3}
+                className={`w-full border rounded-xl py-2 px-3 text-xs mb-3 focus:outline-none transition-all resize-none ${
+                  darkMode
+                    ? 'bg-[#1c1a18] border-[#3e382f] text-stone-200 placeholder-stone-500 focus:border-[#d4a373]'
+                    : 'bg-[#fcfbf9] border-[#dfd9cc] text-stone-800 placeholder-stone-400 focus:border-[#d4a373]'
+                }`}
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={createNote.isPending || !selectedCallId || !noteText.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#faedcd] border border-[#d4a373] text-[#b57b54] hover:bg-[#ffeec2] font-bold rounded-xl transition-all text-xs cursor-pointer disabled:opacity-50"
+              >
+                {createNote.isPending ? (
+                  <div className="w-4 h-4 border-2 border-[#b57b54]/30 border-t-[#b57b54] rounded-full animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                {createNote.isPending ? 'Guardando...' : 'Agregar Nota'}
+              </button>
+              {createNote.isError && (
+                <p className="text-[10px] text-rose-500 mt-2">Error al guardar la nota</p>
+              )}
+            </div>
+
+            {/* Notes List */}
+            {notes.length === 0 ? (
+              <div className="py-12 text-center">
+                <MessageSquare className="w-8 h-8 mx-auto text-stone-400 mb-2" />
+                <p className="text-xs text-stone-500">
+                  {selectedCallId ? 'Sin notas para esta auditoría' : 'Selecciona una auditoría para ver notas'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notes.map((note: any) => (
+                  <div key={note.id} className={`p-3 rounded-xl border ${
+                    darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <p className={`text-[11px] leading-relaxed ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
+                        {note.text}
+                      </p>
+                      <span className="text-[9px] text-stone-500 shrink-0 ml-2">
+                        {new Date(note.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-stone-500 mt-1">{note.supervisorName}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import type { UnifiedDashboard, SalesKPIs, QAKPIs } from '@auditor/shared-types'
 import { useAuthStore } from '../auth/authStore';
 
 export function useDashboard() {
+  const accessToken = useAuthStore(s => s.accessToken);
   const user = useAuthStore(s => s.user);
   const isAdmin = user?.role === 'admin' || user?.role === 'area_manager';
   
@@ -15,5 +16,6 @@ export function useDashboard() {
       }
       return apiClient.get<{ sales: SalesKPIs; qa: QAKPIs }>('/dashboard/my');
     },
+    enabled: !!accessToken,
   });
 }

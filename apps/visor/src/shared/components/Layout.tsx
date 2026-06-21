@@ -173,7 +173,7 @@ export default function Layout() {
         onTabChange={(tab) => {
           const routes: Record<string, string> = {
             inicio: '/',
-            auditor: '/auditor/default',
+            auditor: '/auditor',
             auditorias: '/contacts',
             recursos: '/resources',
           };

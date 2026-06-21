@@ -1,17 +1,41 @@
 import type { Express } from "express";
 import axios from "axios";
+import { z } from "zod";
 import {
   supabase,
+  IS_DEMO_MODE,
   localCallsMemory,
+  demoContactsList,
   audioBuffers,
   localNotasMemory,
   localObjecionesMemory,
   prependCall,
+  prependAndRemoveCall,
   removeCallById,
 } from "../config.js";
+import { authenticateToken, injectScope } from "../middleware/auth.js";
+import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { saveCallToSupabase, deleteCallFromSupabase } from "../services/supabase.js";
 import { generateLocalAnalysis } from "../services/analysis.js";
 import { generateHighFidelitySimulatedCall } from "../__fixtures__/simulated-calls.js";
+import { generateDemoCalls, generateDemoNotes } from "../services/demoSeeder.js";
+import * as contactService from "../services/contactService.js";
+
+// Seed demo data for calls/llamadas endpoint
+let callsDemoSeeded = false;
+function seedCallsDemo() {
+  if (!callsDemoSeeded && IS_DEMO_MODE && localCallsMemory.length === 0) {
+    const calls = generateDemoCalls();
+    localCallsMemory.push(...calls);
+    // Seed notes
+    const notes = generateDemoNotes();
+    for (const [callId, callNotes] of Object.entries(notes)) {
+      localNotasMemory.set(callId, callNotes);
+    }
+    callsDemoSeeded = true;
+    console.log(`[DEMO_CALLS] ${calls.length} llamadas demo cargadas`);
+  }
+}
 
 export default function (app: Express): void {
   // POST /api/cargar-demo — Load a demo/test call
@@ -23,12 +47,113 @@ export default function (app: Express): void {
       uniqueId,
     );
     prependCall(demoCall);
-    saveCallToSupabase(demoCall);
+    if (!IS_DEMO_MODE) {
+      saveCallToSupabase(demoCall);
+    }
     return res.json(demoCall);
+  });
+
+  // POST /api/llamadas/:id/assign-contact — Assign a contact to a pending call and save to DB
+  app.post("/api/llamadas/:id/assign-contact", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      // Validate input: either contactId (existing) OR fullName (new contact)
+      const schema = z.object({
+        contactId: z.string().optional(),
+        fullName: z.string().min(1).optional(),
+        phone: z.string().optional().nullable(),
+        email: z.string().email().optional().nullable(),
+      });
+      const input = schema.parse(req.body);
+
+      if (!input.contactId && !input.fullName) {
+        return res.status(400).json({ error: "Debes proporcionar un contactId o un fullName para crear un nuevo contacto." });
+      }
+
+      // Find the call in memory
+      const callIndex = localCallsMemory.findIndex((c: any) => c.id === id);
+      if (callIndex === -1) {
+        return res.status(404).json({ error: "Llamada no encontrada. Primero debes subir el audio." });
+      }
+
+      let finalContactId = input.contactId;
+
+      // If no contactId provided, create a new contact
+      if (!finalContactId) {
+        if (IS_DEMO_MODE) {
+          // Demo mode: create in-memory contact
+          const newContact = {
+            id: `demo-contact-${Date.now()}`,
+            full_name: input.fullName!,
+            phone: input.phone || null,
+            email: input.email || null,
+            company: null,
+            source: "manual",
+            status: "lead",
+            assigned_to: req.scope!.userId,
+            area_id: req.scope!.areaId || null,
+            team_id: req.scope!.teamId || null,
+            metadata: {},
+            last_activity_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          demoContactsList.unshift(newContact);
+          finalContactId = newContact.id;
+        } else {
+          // Real mode: create contact via contactService
+          const newContact = await contactService.createContact(
+            {
+              fullName: input.fullName!,
+              phone: input.phone || null,
+              email: input.email || null,
+              source: "manual",
+            },
+            req.scope!.userId,
+            req.scope!,
+          );
+          finalContactId = newContact.id;
+        }
+      }
+
+      // Update the call in memory with contact_id and new status
+      const call = { ...localCallsMemory[callIndex] };
+      call.contact_id = finalContactId;
+      call.status = 'por_auditar';
+      if (!call.metadata) call.metadata = {};
+      call.metadata.status = 'por_auditar';
+      call.metadata.contactId = finalContactId;
+
+      // Replace in localCallsMemory
+      prependAndRemoveCall(call, id);
+
+      // NOW save to Supabase with contact_id
+      await saveCallToSupabase(call);
+
+      console.log(`[ASSIGN_CONTACT] Call ${id} assigned to contact ${finalContactId} and saved to DB`);
+
+      return res.json({
+        success: true,
+        call: {
+          id: call.id,
+          contact_id: call.contact_id,
+          status: call.status,
+          metadata: call.metadata,
+        },
+      });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: err.issues });
+      }
+      console.error("[ASSIGN_CONTACT] Error:", err.message);
+      return res.status(500).json({ error: err.message });
+    }
   });
 
   // GET /api/llamadas — List all calls
   app.get("/api/llamadas", (req, res) => {
+    seedCallsDemo();
     return res.json(localCallsMemory);
   });
 
@@ -37,7 +162,9 @@ export default function (app: Express): void {
     const callId = req.params.id;
     audioBuffers.delete(callId);
     removeCallById(callId);
-    deleteCallFromSupabase(callId);
+    if (!IS_DEMO_MODE) {
+      deleteCallFromSupabase(callId);
+    }
     return res.json({ success: true });
   });
 

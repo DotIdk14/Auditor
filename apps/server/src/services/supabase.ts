@@ -33,6 +33,8 @@ export async function saveCallToSupabase(call: any): Promise<void> {
   try {
     const { error } = await supabase.from("auditorias").upsert({
       id: call.id,
+      contact_id: call.contact_id || call.metadata?.contactId || null,
+      status: call.status || call.metadata?.status || 'por_auditar',
       metadata: call.metadata,
       score: call.score,
       analysis: call.analysis,

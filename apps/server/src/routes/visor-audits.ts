@@ -1,7 +1,87 @@
 import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase } from "../config.js";
+import { supabase, localCallsMemory } from "../config.js";
+import { generateDemoAuditFull } from "../services/demoSeeder.js";
+
+/**
+ * Transform a local memory call record into AuditFullResponse format.
+ * Reused for both localCallsMemory lookups and Supabase queries.
+ */
+function toAuditFullResponse(audit: any): any {
+  const meta = typeof audit.metadata === "string" ? JSON.parse(audit.metadata) : (audit.metadata || {});
+  const analysis = typeof audit.analysis === "string" ? JSON.parse(audit.analysis) : (audit.analysis || {});
+  const transcription = typeof audit.transcription === "string" ? JSON.parse(audit.transcription) : (audit.transcription || []);
+
+  const contactName = audit.contactName || meta?.contactName || "Sin nombre";
+  const status = audit.status || meta?.status || "por_auditar";
+
+  return {
+    call: {
+      id: audit.id,
+      clientId: audit.contact_id || audit.clientId || "unknown",
+      title: `Llamada — ${contactName}`,
+      rawTitle: meta?.fileName || "unknown.wav",
+      shortName: contactName,
+      agent: analysis?.agentName || meta?.agentName || "Sin asignar",
+      category: meta?.category || "CALIDAD",
+      status,
+      score: typeof audit.score === "object" ? audit.score?.global ?? null : audit.score ?? null,
+      date: audit.created_at || audit.date,
+      avatar: contactName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2) || "??",
+    },
+    audit: {
+      callId: audit.id,
+      clientId: audit.contact_id || audit.clientId || "unknown",
+      fileName: meta?.fileName || "unknown.wav",
+      trackerId: `call_${Date.now()}`,
+      score: typeof audit.score === "object" ? audit.score?.global || 0 : audit.score || 0,
+      agentName: analysis?.agentName || meta?.agentName || "Sin asignar",
+      date: audit.created_at ? new Date(audit.created_at).toLocaleDateString("es-ES") : "—",
+      category: meta?.category || "CALIDAD",
+      description: analysis?.summary || "Sin descripción",
+      durationSec: meta?.duration || meta?.durationSec || 0,
+      rubric: analysis?.rubric || analysis?.checklist || [],
+      transcript: transcription?.utterances || transcription || [],
+      summary: analysis?.summary || "",
+      clientTemper: analysis?.emotionalAnalysis?.clientTemper || "Neutral",
+      commercialOutcome: analysis?.commercialOutcome || "Seguimiento",
+      coachingType: analysis?.coachingType || "ESTÁNDAR",
+      justification: analysis?.justification || {},
+      purchaseIntentPct: analysis?.purchaseIntentPct || 0,
+      purchaseIntentLabel: analysis?.purchaseIntentLabel || "",
+      clientSentimentScoreLabel: analysis?.emotionalAnalysis?.sentimentLabel || "",
+      cognitivePath: analysis?.cognitivePath || "",
+      transitionSummary: analysis?.transitionSummary || "",
+      purchaseSignals: analysis?.purchaseSignals || [],
+      objections: analysis?.objections || [],
+      coaching: analysis?.coaching || { strengths: [], improvements: [], nextSteps: [] },
+    },
+    transcription: transcription?.utterances || transcription || [],
+    rubric: analysis?.rubric || analysis?.checklist || [],
+    coaching: analysis?.coaching || { strengths: [], improvements: [], nextSteps: [] },
+    insights: {
+      summary: analysis?.coachingType || "",
+      clientPerception: {
+        temper: analysis?.emotionalAnalysis?.clientTemper || "Neutral",
+        commercialOutcome: analysis?.commercialOutcome || "Seguimiento",
+        purchaseIntentPct: analysis?.purchaseIntentPct || 0,
+        purchaseIntentLabel: analysis?.purchaseIntentLabel || "",
+        sentimentLabel: analysis?.emotionalAnalysis?.sentimentLabel || "",
+        cognitivePath: analysis?.cognitivePath || "",
+        transitionSummary: analysis?.transitionSummary || "",
+      },
+      coaching: {
+        type: analysis?.coachingType || "ESTÁNDAR",
+        justification: analysis?.justification || {},
+      },
+      purchaseSignals: analysis?.purchaseSignals || [],
+      objections: analysis?.objections || [],
+    },
+    annotations: [],
+    audioUrl: meta?.audioUrl || (meta?.url?.startsWith("/api") ? undefined : meta?.url) || null,
+  };
+}
 
 export default function (app: Express): void {
   // GET /api/visor/audits/:callId/full - Returns the complete audit data for the AuditorView
@@ -9,98 +89,55 @@ export default function (app: Express): void {
     try {
       const { callId } = req.params;
 
-      if (!supabase) {
-        return res.status(503).json({ error: "Base de datos no disponible" });
+      // ── 1. Demo mode: serve generated audit data for any demo-prefixed callId ──
+      if (callId && callId.startsWith("demo-")) {
+        const demoData = generateDemoAuditFull(callId);
+        if (demoData) {
+          return res.json(demoData);
+        }
+        return res.status(404).json({ error: "Auditoría demo no encontrada" });
       }
 
-      // Get the audit record
-      const { data: audit, error } = await supabase
-        .from("auditorias")
-        .select(`
-          id, contact_id, score, status, metadata, analysis, transcription, created_at,
-          contacts!inner(id, full_name, assigned_to)
-        `)
-        .eq("id", callId)
-        .single();
+      // ── 2. Check localCallsMemory FIRST (covers uploaded calls not yet in Supabase) ──
+      const localCall = localCallsMemory.find((c: any) => c.id === callId);
+      if (localCall) {
+        return res.json(toAuditFullResponse(localCall));
+      }
 
-      if (error || !audit) {
+      // ── 3. If Supabase is not configured and not found in memory, return 404 ──
+      if (!supabase) {
         return res.status(404).json({ error: "Auditoría no encontrada" });
       }
 
-      const contactRow = Array.isArray(audit.contacts) ? audit.contacts[0] || {} : audit.contacts || {};
-      const contact = contactRow as { id?: string; full_name?: string; assigned_to?: string };
-      const meta = typeof audit.metadata === "string" ? JSON.parse(audit.metadata) : (audit.metadata || {});
-      const analysis = typeof audit.analysis === "string" ? JSON.parse(audit.analysis) : (audit.analysis || {});
-      const transcription = typeof audit.transcription === "string" ? JSON.parse(audit.transcription) : (audit.transcription || []);
+      // ── 4. Query Supabase with LEFT JOIN (contacts may be null) ──
+      const { data: audit, error } = await supabase
+        .from("auditorias")
+        .select(`
+          id, contact_id, score, metadata, analysis, transcription, created_at,
+          contacts(id, full_name, assigned_to)
+        `)
+        .eq("id", callId)
+        .maybeSingle();
 
-      // Build the full response in Visor's expected format
-      const response = {
-        call: {
-          id: audit.id,
-          clientId: contact.id || audit.contact_id,
-          title: `Llamada — ${contact.full_name || "Sin nombre"}`,
-          rawTitle: meta?.fileName || "unknown.wav",
-          shortName: contact.full_name || "Desconocido",
-          agent: analysis?.agentName || meta?.agentName || "Sin asignar",
-          category: meta?.category || "CALIDAD",
-          status: audit.status || "por_auditar",
-          score: audit.score,
-          date: audit.created_at,
-          avatar: (contact.full_name || "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2),
-        },
-        audit: {
-          callId: audit.id,
-          clientId: contact.id || audit.contact_id,
-          fileName: meta?.fileName || "unknown.wav",
-          trackerId: `call_${Date.now()}`,
-          score: audit.score || 0,
-          agentName: analysis?.agentName || meta?.agentName || "Sin asignar",
-          date: new Date(audit.created_at).toLocaleDateString("es-ES"),
-          category: meta?.category || "CALIDAD",
-          description: analysis?.summary || "Sin descripción",
-          durationSec: meta?.durationSec || 0,
-          rubric: analysis?.rubric || analysis?.checklist || [],
-          transcript: transcription?.utterances || transcription || [],
-          summary: analysis?.summary || "",
-          clientTemper: analysis?.emotionalAnalysis?.clientTemper || "Neutral",
-          commercialOutcome: analysis?.commercialOutcome || "Seguimiento",
-          coachingType: analysis?.coachingType || "ESTÁNDAR",
-          justification: analysis?.justification || {},
-          purchaseIntentPct: analysis?.purchaseIntentPct || 0,
-          purchaseIntentLabel: analysis?.purchaseIntentLabel || "",
-          clientSentimentScoreLabel: analysis?.emotionalAnalysis?.sentimentLabel || "",
-          cognitivePath: analysis?.cognitivePath || "",
-          transitionSummary: analysis?.transitionSummary || "",
-          purchaseSignals: analysis?.purchaseSignals || [],
-          objections: analysis?.objections || [],
-          coaching: analysis?.coaching || { strengths: [], improvements: [], nextSteps: [] },
-        },
-        transcription: transcription?.utterances || transcription || [],
-        rubric: analysis?.rubric || analysis?.checklist || [],
-        coaching: analysis?.coaching || { strengths: [], improvements: [], nextSteps: [] },
-        insights: {
-          summary: analysis?.coachingType || "",
-          clientPerception: {
-            temper: analysis?.emotionalAnalysis?.clientTemper || "Neutral",
-            commercialOutcome: analysis?.commercialOutcome || "Seguimiento",
-            purchaseIntentPct: analysis?.purchaseIntentPct || 0,
-            purchaseIntentLabel: analysis?.purchaseIntentLabel || "",
-            sentimentLabel: analysis?.emotionalAnalysis?.sentimentLabel || "",
-            cognitivePath: analysis?.cognitivePath || "",
-            transitionSummary: analysis?.transitionSummary || "",
-          },
-          coaching: {
-            type: analysis?.coachingType || "ESTÁNDAR",
-            justification: analysis?.justification || {},
-          },
-          purchaseSignals: analysis?.purchaseSignals || [],
-          objections: analysis?.objections || [],
-        },
-        annotations: [],
-        audioUrl: meta?.audioUrl || null,
-      };
+      if (error) {
+        console.error("[VISOR_AUDITS] Supabase error:", error.message);
+        return res.status(500).json({ error: error.message });
+      }
 
-      res.json(response);
+      if (!audit) {
+        return res.status(404).json({ error: "Auditoría no encontrada" });
+      }
+
+      // Attach contact name for the transformer (cast to any for flexibility)
+      const auditAny = audit as any;
+      const contactRow = Array.isArray(auditAny.contacts) ? auditAny.contacts[0] : auditAny.contacts;
+      const contact = contactRow as { id?: string; full_name?: string; assigned_to?: string } | null;
+      auditAny.contactName = contact?.full_name || "Sin nombre";
+      if (contact?.id) auditAny.contact_id = auditAny.contact_id || contact.id;
+      if (!auditAny.metadata) auditAny.metadata = {};
+      if (typeof auditAny.metadata === "string") auditAny.metadata = JSON.parse(auditAny.metadata);
+
+      return res.json(toAuditFullResponse(auditAny));
     } catch (err: any) {
       console.error("[VISOR_AUDITS] Error:", err.message);
       res.status(500).json({ error: err.message });

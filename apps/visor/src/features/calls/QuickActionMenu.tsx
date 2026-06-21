@@ -6,19 +6,21 @@ interface Props {
   onNewAudit: () => void;
   onNewCall: () => void;
   onAddContact: () => void;
+  onAddNote: () => void;
   onOpenMetrics: () => void;
+  onOpenResources: () => void;
 }
 
-export default function QuickActionMenu({ isAgent, darkMode, onNewAudit, onNewCall, onAddContact, onOpenMetrics }: Props) {
+export default function QuickActionMenu({ isAgent, darkMode, onNewAudit, onNewCall, onAddContact, onAddNote, onOpenMetrics, onOpenResources }: Props) {
   const cardClass = `w-20 h-20 sm:w-24 sm:h-24 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 border-[3px] border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d] sm:shadow-[6px_6px_0px_#2d2d2d] hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[8px_8px_0px_#2d2d2d] group ${
     darkMode ? 'bg-[#1c1a18] text-stone-300 border-[#4a4036] shadow-[4px_4px_0px_#151311] hover:shadow-[8px_8px_0px_#151311] hover:text-white' : 'bg-white text-stone-700 hover:text-white'
   }`;
 
   const agentActions = [
     { icon: UserPlus, label: 'Contacto', onClick: onAddContact, hoverBg: 'hover:bg-rose-500', roundTL: true },
-    { icon: StickyNote, label: 'Nota', onClick: () => {}, hoverBg: 'hover:bg-blue-500', roundTR: true },
+    { icon: StickyNote, label: 'Nota', onClick: onAddNote, hoverBg: 'hover:bg-blue-500', roundTR: true },
     { icon: PhoneCall, label: 'Llamada', onClick: onNewCall, hoverBg: 'hover:bg-amber-500', roundBL: true },
-    { icon: FolderHeart, label: 'Recursos', onClick: () => {}, hoverBg: 'hover:bg-emerald-500', roundBR: true },
+    { icon: FolderHeart, label: 'Recursos', onClick: onOpenResources, hoverBg: 'hover:bg-emerald-500', roundBR: true },
   ];
 
   const managerActions = [

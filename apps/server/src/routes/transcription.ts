@@ -224,6 +224,8 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
 
       const finalCallData = {
         id: callId,
+        contact_id: null,
+        status: 'pending_contact',
         metadata: {
           fileName: pending.fileName,
           url: `/api/audio/${callId}`,
@@ -231,7 +233,7 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
           duration: Math.round(duration || 180),
           uploadedAt: new Date().toISOString(),
           uploadedBy: "auditor_sales_prod",
-          status: "completed",
+          status: "pending_contact",
         },
         score: {
           global: Math.round(finalUtelResult.totalScore * 10),
@@ -256,7 +258,8 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
 
       prependAndRemoveCall(finalCallData, callId);
       pendingTranscripts.delete(callId);
-      saveCallToSupabase(finalCallData);
+      // NO guardamos en Supabase aún — esperamos a que se asigne un contacto
+      // saveCallToSupabase(finalCallData);
       return res.json({ status: "completed", call: finalCallData });
     } catch (err: any) {
       console.error("[TRANSCRIPT] Error:", err.message);

@@ -3,7 +3,25 @@ import { z } from "zod";
 import { authenticateToken, requireRole, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import * as contactService from "../services/contactService.js";
-import { supabase } from "../config.js";
+import { supabase, IS_DEMO_MODE, demoContactsList, localCallsMemory } from "../config.js";
+import { generateDemoContacts, generateDemoCalls } from "../services/demoSeeder.js";
+
+// Seed demo contacts once
+let demoContactsSeeded = false;
+function ensureDemoContacts() {
+  if (!demoContactsSeeded && IS_DEMO_MODE) {
+    const contacts = generateDemoContacts();
+    demoContactsList.length = 0;
+    demoContactsList.push(...contacts);
+    // Also seed calls if not already done
+    if (localCallsMemory.length === 0) {
+      const calls = generateDemoCalls();
+      localCallsMemory.push(...calls);
+    }
+    demoContactsSeeded = true;
+    console.log(`[DEMO_CONTACTS] ${contacts.length} contactos demo cargados`);
+  }
+}
 
 const createContactSchema = z.object({
   fullName: z.string().min(1, "El nombre es obligatorio").max(200),
@@ -47,6 +65,28 @@ export default function (app: Express): void {
   // GET /api/contacts — List contacts with filters and pagination
   app.get("/api/contacts", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
+      if (IS_DEMO_MODE) {
+        ensureDemoContacts();
+        const filters = contactFiltersSchema.parse(req.query);
+        let filtered = [...demoContactsList];
+        if (filters.search) {
+          const q = filters.search.toLowerCase();
+          filtered = filtered.filter(c =>
+            c.full_name.toLowerCase().includes(q) ||
+            (c.email && c.email.toLowerCase().includes(q)) ||
+            (c.company && c.company.toLowerCase().includes(q))
+          );
+        }
+        if (filters.status) {
+          filtered = filtered.filter(c => c.status === filters.status);
+        }
+        const page = filters.page || 1;
+        const pageSize = filters.pageSize || 25;
+        const total = filtered.length;
+        const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+        return res.json({ data: paginated, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+      }
+
       const filters = contactFiltersSchema.parse(req.query);
       const result = await contactService.listContacts(filters, req.scope!);
       res.json(result);
@@ -62,6 +102,13 @@ export default function (app: Express): void {
   // GET /api/contacts/:id — Get single contact
   app.get("/api/contacts/:id", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
+      if (IS_DEMO_MODE) {
+        ensureDemoContacts();
+        const contact = demoContactsList.find(c => c.id === req.params.id);
+        if (!contact) return res.status(404).json({ error: "Contacto no encontrado" });
+        return res.json(contact);
+      }
+
       const contact = await contactService.getContact(req.params.id, req.scope!);
       if (!contact) {
         return res.status(404).json({ error: "Contacto no encontrado" });
@@ -73,10 +120,35 @@ export default function (app: Express): void {
     }
   });
 
-  // POST /api/contacts — Create contact
+  // POST /api/contacts — Create contact (in demo mode, store in memory)
   app.post("/api/contacts", authenticateToken, injectScope, requireRole("admin", "area_manager", "coordinator", "supervisor", "agent"), async (req: AuthenticatedRequest, res) => {
     try {
       const input = createContactSchema.parse(req.body);
+
+      if (IS_DEMO_MODE) {
+        ensureDemoContacts();
+        const newContact = {
+          id: `demo-contact-${Date.now()}`,
+          full_name: input.fullName,
+          phone: input.phone || null,
+          email: input.email || null,
+          company: input.company || null,
+          source: input.source || "manual",
+          status: input.status || "lead",
+          assigned_to: req.scope!.userId,
+          assignedToName: req.user?.displayName || "Usuario Demo",
+          area_id: req.scope!.areaId || null,
+          team_id: req.scope!.teamId || null,
+          stageName: null,
+          metadata: {},
+          last_activity_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        demoContactsList.unshift(newContact);
+        return res.status(201).json(newContact);
+      }
+
       const contact = await contactService.createContact(input, req.scope!.userId, req.scope!);
       res.status(201).json(contact);
     } catch (err: any) {
@@ -88,10 +160,20 @@ export default function (app: Express): void {
     }
   });
 
-  // PATCH /api/contacts/:id — Update contact
+  // PATCH /api/contacts/:id — Update contact (in demo mode, update in memory)
   app.patch("/api/contacts/:id", authenticateToken, injectScope, requireRole("admin", "area_manager", "coordinator", "supervisor", "agent"), async (req: AuthenticatedRequest, res) => {
     try {
       const input = updateContactSchema.parse(req.body);
+
+      if (IS_DEMO_MODE) {
+        ensureDemoContacts();
+        const idx = demoContactsList.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: "Contacto no encontrado" });
+        const updated = { ...demoContactsList[idx], ...input, updated_at: new Date().toISOString() };
+        demoContactsList[idx] = updated;
+        return res.json(updated);
+      }
+
       const contact = await contactService.updateContact(req.params.id, input, req.scope!);
       if (!contact) {
         return res.status(404).json({ error: "Contacto no encontrado" });
@@ -141,7 +223,23 @@ export default function (app: Express): void {
   // GET /api/contacts/:id/calls — Get calls linked to a contact (from auditorias)
   app.get("/api/contacts/:id/calls", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
-      if (!supabase) return res.json([]);
+      if (IS_DEMO_MODE || !supabase) {
+        ensureDemoContacts();
+        // Return demo calls that are linked to this contact
+        const contact = demoContactsList.find(c => c.id === req.params.id);
+        if (!contact) return res.json([]);
+        const contactCalls = localCallsMemory
+          .filter((c: any) => c.clientId === req.params.id)
+          .map((c: any) => ({
+            id: c.id,
+            metadata: { fileName: c.rawTitle, agentName: c.agent, category: c.category },
+            score: { total: c.score || 0 },
+            analysis: {},
+            transcription: [],
+            created_at: c.date,
+          }));
+        return res.json(contactCalls);
+      }
 
       const { data: audits, error: auditsError } = await supabase
         .from("auditorias")

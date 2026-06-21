@@ -77,6 +77,8 @@ export default function (app: Express): void {
 
       const processingCallStub = {
         id: callId,
+        contact_id: null,
+        status: 'pending_contact',
         metadata: {
           fileName: originalName,
           url: `/api/audio/${callId}`,
@@ -84,7 +86,7 @@ export default function (app: Express): void {
           duration: 0,
           uploadedAt: new Date().toISOString(),
           uploadedBy: "auditor_sales_prod",
-          status: "processing",
+          status: "pending_contact",
         },
         score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
         analysis: {
@@ -139,6 +141,8 @@ export default function (app: Express): void {
 
       const processingCallStub = {
         id: callId,
+        contact_id: null,
+        status: 'pending_contact',
         metadata: {
           fileName: originalName,
           url: `/api/audio/${callId}`,
@@ -147,7 +151,7 @@ export default function (app: Express): void {
           duration: 0,
           uploadedAt: new Date().toISOString(),
           uploadedBy: "auditor_sales_prod",
-          status: "processing",
+          status: "pending_contact",
         },
         score: { global: 0, greeting: 0, needDiscovery: 0, objectionHandling: 0, closingSkills: 0, empathy: 0 },
         analysis: {

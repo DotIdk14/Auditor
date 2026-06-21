@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { api } from '../lib/api';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { publicApi } from '../lib/api';
 import type { JWTPayload, UserRole } from '@auditor/shared-types';
 
 // Map Visor's legacy deviceId concept to email for compatibility
@@ -9,7 +10,6 @@ interface AuthState {
   user: (JWTPayload & { permissions?: string[]; hierarchy?: { areaId: string | null; teamId: string | null } }) | null;
   accessToken: string | null;
   loading: boolean;
-  hydrated: boolean;
   error: string | null;
 
   login: (email: string, displayName?: string) => Promise<void>;
@@ -50,29 +50,31 @@ function getRoleLabel(role: string): string {
   return labels[role] || role;
 }
 
-export const useAuthStore = create<AuthState>()((set, get) => ({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
   user: null,
   accessToken: null,
   loading: false,
-  hydrated: false,
   error: null,
 
   login: async (email, displayName) => {
     set({ loading: true, error: null });
     try {
-      const res: any = await api.post('/login', {
+      const res: any = await publicApi.post('/login', {
         email: email.trim().toLowerCase(),
         displayName: displayName || email.split('@')[0],
       });
 
-      const token = res.token;
+      const body = res.data;
+      const token = body.token;
       const user: JWTPayload = {
-        sub: res.sub || email,
+        sub: body.sub || email,
         email: email.trim().toLowerCase(),
-        displayName: res.username || displayName || email.split('@')[0],
-        role: res.role || 'agent',
-        areaId: res.areaId || null,
-        teamId: res.teamId || null,
+        displayName: body.username || displayName || email.split('@')[0],
+        role: body.role || 'agent',
+        areaId: body.areaId || null,
+        teamId: body.teamId || null,
       };
 
       set({
@@ -83,7 +85,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         },
         accessToken: token,
         loading: false,
-        hydrated: true,
       });
 
       // Store device ID for compatibility
@@ -98,25 +99,31 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   loginWithPassword: async (username, password) => {
     set({ loading: true, error: null });
     try {
-      const res: any = await api.post('/login', {
+      const res: any = await publicApi.post('/login', {
         username,
         password,
         email: username,
       });
 
-      const token = res.token;
+      const body = res.data;
+      const token = body.token;
+      const user: JWTPayload = {
+        sub: body.sub || username,
+        email: username,
+        displayName: body.username || username,
+        role: body.role || 'supervisor',
+        areaId: body.areaId || null,
+        teamId: body.teamId || null,
+      };
+
       set({
         user: {
-          sub: username,
-          email: username,
-          displayName: res.username || username,
-          role: res.role || 'supervisor',
-          hierarchy: { areaId: null, teamId: null },
+          ...user,
+          hierarchy: { areaId: user.areaId || null, teamId: user.teamId || null },
           permissions: [],
         },
         accessToken: token,
         loading: false,
-        hydrated: true,
       });
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Credenciales inválidas';
@@ -126,20 +133,42 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   logout: () => {
-    set({ user: null, accessToken: null, hydrated: true, error: null });
+    set({ user: null, accessToken: null, error: null });
     localStorage.removeItem(DEVICE_ID_KEY);
   },
 
   refresh: async () => {
+    const currentToken = get().accessToken;
+    if (!currentToken) return;
+
     try {
-      const res: any = await api.post('/verify-session', {
-        token: get().accessToken,
-      });
-      if (res.success && res.user) {
+      const { data } = await publicApi.post<{
+        success: boolean;
+        token: string;
+        user: {
+          sub: string;
+          email: string;
+          displayName: string;
+          role: string;
+          areaId?: string | null;
+          teamId?: string | null;
+        };
+      }>('/refresh-token', { token: currentToken });
+
+      if (data.success && data.token) {
         set({
+          accessToken: data.token,
           user: {
-            ...res.user,
-            hierarchy: { areaId: res.user.areaId || null, teamId: res.user.teamId || null },
+            sub: data.user.sub,
+            email: data.user.email,
+            displayName: data.user.displayName,
+            role: data.user.role as any,
+            areaId: data.user.areaId ?? null,
+            teamId: data.user.teamId ?? null,
+            hierarchy: {
+              areaId: data.user.areaId ?? null,
+              teamId: data.user.teamId ?? null,
+            },
             permissions: [],
           },
         });
@@ -151,26 +180,26 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   checkSession: async () => {
     const token = get().accessToken;
+    const currentUser = get().user;
     if (!token) {
-      set({ hydrated: true });
       return;
     }
     try {
-      const res: any = await api.post('/verify-session', { token });
+      const res: any = await publicApi.post('/verify-session', { token });
       if (res.success && res.user) {
         set({
           user: {
             ...res.user,
+            role: res.user.role || currentUser?.role || 'agent',
             hierarchy: { areaId: res.user.areaId || null, teamId: res.user.teamId || null },
             permissions: [],
           },
-          hydrated: true,
         });
       } else {
-        set({ user: null, accessToken: null, hydrated: true });
+        set({ user: currentUser });
       }
     } catch {
-      set({ user: null, accessToken: null, hydrated: true });
+      // No desloguear - preservar estado actual
     }
   },
 
@@ -216,8 +245,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   visorRole: () => {
     const { user } = get();
-    if (!user) return 'agente';
-    return mapAuditorRoleToVisor(user.role);
+    if (!user) {
+      console.warn('[VISOR_ROLE] user es null, defaulting a agente');
+      return 'agente';
+    }
+    const mapped = mapAuditorRoleToVisor(user.role);
+    console.log(`[VISOR_ROLE] role=${user.role} mapped=${mapped}`);
+    return mapped;
   },
 
   roleLabel: () => {
@@ -225,4 +259,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (!user) return 'Invitado';
     return getRoleLabel(mapAuditorRoleToVisor(user.role));
   },
-}));
+}),
+{
+  name: 'visor-auth',
+  storage: createJSONStorage(() => sessionStorage),
+  // Solo persistimos accessToken y user (no loading, error)
+  partialize: (state) => ({
+    accessToken: state.accessToken,
+    user: state.user,
+  }),
+},
+));

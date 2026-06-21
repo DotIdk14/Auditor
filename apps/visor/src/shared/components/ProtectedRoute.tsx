@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../auth/authStore';
 
@@ -6,8 +7,20 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children }: Props) {
-  const { user, hydrated } = useAuthStore();
+  const accessToken = useAuthStore(s => s.accessToken);
+  const user = useAuthStore(s => s.user);
   const location = useLocation();
+
+  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setHydrated(true);
+      return;
+    }
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+    return unsub;
+  }, []);
 
   if (!hydrated) {
     return (
@@ -17,7 +30,8 @@ export default function ProtectedRoute({ children }: Props) {
     );
   }
 
-  if (!user) {
+  // Verificar tanto user como accessToken para evitar estados parciales
+  if (!user || !accessToken) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

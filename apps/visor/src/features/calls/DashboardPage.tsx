@@ -4,6 +4,9 @@ import { useOutletContext } from 'react-router-dom';
 import { useCalls, useMoveCall } from '../../hooks/useCalls';
 import { useAuthStore } from '../../auth/authStore';
 import QuickActionMenu from './QuickActionMenu';
+import AddContactModal from './AddContactModal';
+import AddCallModal from './AddCallModal';
+import AddNoteModal from './AddNoteModal';
 import { motion } from 'motion/react';
 import { 
   Plus, MoreVertical, CheckCircle2, ArrowUpRight, Search,
@@ -23,6 +26,7 @@ export default function DashboardPage() {
   const [activeCardMenuId, setActiveCardMenuId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isContactAddOpen, setIsContactAddOpen] = useState(false);
+  const [isNoteAddOpen, setIsNoteAddOpen] = useState(false);
 
   const { data: calls = [], isLoading, error } = useCalls({ search: searchQuery || undefined });
   const moveCall = useMoveCall();
@@ -60,7 +64,9 @@ export default function DashboardPage() {
           onNewAudit={() => handleAuditSelect('default')}
           onNewCall={() => setIsAddOpen(true)}
           onAddContact={() => setIsContactAddOpen(true)}
+          onAddNote={() => setIsNoteAddOpen(true)}
           onOpenMetrics={() => {}}
+          onOpenResources={() => navigate('/resources')}
         />
 
         {/* Kanban */}
@@ -132,6 +138,11 @@ export default function DashboardPage() {
           <div className="w-8 h-8 border-2 border-[#b57b54]/30 border-t-[#b57b54] rounded-full animate-spin" />
         </div>
       )}
+
+      {/* Modals */}
+      {isAddOpen && <AddCallModal darkMode={darkMode} onClose={() => setIsAddOpen(false)} />}
+      {isContactAddOpen && <AddContactModal darkMode={darkMode} onClose={() => setIsContactAddOpen(false)} />}
+      {isNoteAddOpen && <AddNoteModal darkMode={darkMode} onClose={() => setIsNoteAddOpen(false)} />}
     </div>
   );
 }

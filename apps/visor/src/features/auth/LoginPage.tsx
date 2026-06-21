@@ -40,56 +40,64 @@ export default function LoginPage() {
     }
 
     try {
-      // Try email/password mode if it looks like an email
-      if (username.includes('@')) {
+      if (password) {
+        await loginWithPassword(username, password);
+      } else if (username.includes('@')) {
         await login(username, username.split('@')[0]);
       } else {
         await loginWithPassword(username, password);
       }
-      navigate('/');
+
+      // Leer el estado actualizado del store para verificar consistencia
+      const { accessToken } = useAuthStore.getState();
+      if (!accessToken) {
+        console.error('[LOGIN] Token ausente después de login exitoso');
+        return;
+      }
+
+      // Pequeña pausa para permitir que persist escriba a sessionStorage
+      // antes de navegar, evitando race condition con ProtectedRoute
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      navigate('/', { replace: true });
     } catch (err: any) {
       setLocalError(err.message || 'Error de autenticación');
     }
   };
 
   return (
-    <div className="min-h-screen w-screen flex items-center justify-center p-4 relative overflow-hidden font-sans bg-[#FAF7F2] dark:bg-[#141210] text-stone-800 dark:text-[#ebe5da] transition-colors duration-300">
-      {/* Background warm cloud bubbles */}
-      <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full blur-[140px] pointer-events-none bg-orange-100/40 dark:bg-amber-950/10" />
-      <div className="absolute bottom-[-10%] right-[-1%] w-[60%] h-[60%] rounded-full blur-[120px] pointer-events-none bg-purple-100/30 dark:bg-stone-900/40" />
-      <div className="absolute top-[30%] right-[30%] w-[300px] h-[300px] rounded-full blur-[100px] pointer-events-none bg-amber-100/30 dark:bg-amber-900/10" />
-
-      <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-12 gap-8 items-center relative z-10">
+    <main className="min-h-screen w-screen flex items-center justify-center p-4 relative overflow-hidden font-sans bg-[#11100e] text-[#ebe5da] transition-colors duration-300">
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-12 items-center relative z-10">
         
         {/* Left Side: Branding */}
-        <div className="col-span-1 md:col-span-6 space-y-6 text-left pr-0 md:pr-6">
+        <div className="col-span-1 md:col-span-7 space-y-6 text-left pr-0 md:pr-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-md border bg-[#ffcbaf] dark:bg-stone-800 border-[#e3dec3] dark:border-stone-700 text-orange-950 dark:text-[#d4a373]">
-              <Coffee className="w-5 h-5" />
+            <div className="inline-flex items-center justify-center bg-[#2a2520] border border-[#3e382f] rounded-lg px-3 py-1.5 gap-2 text-stone-200">
+              <Coffee className="w-4 h-4 text-[#d4a373]" />
+              <span className="font-bold tracking-wide text-sm flex items-center">
+                VISOR <span className="bg-[#d4a373] text-[#4a3219] px-1.5 py-0.5 rounded text-[10px] font-bold ml-2">v2.4 🍵</span>
+              </span>
             </div>
-            <span className="font-display font-bold text-2xl tracking-wide flex items-center gap-1.5 text-stone-900 dark:text-[#f4f1eb]">
-              VISOR <span className="text-[10px] bg-[#d4a373] text-white px-2 py-0.5 rounded font-mono">v2.4 🍵</span>
-            </span>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-3xl md:text-4xl font-bold font-display leading-tight tracking-tight text-stone-900 dark:text-white">
-              Análisis de Canales de Voz Cozy Studio ✨
+          <div className="space-y-2 mt-4">
+            <h2 className="text-4xl md:text-5xl font-bold leading-tight tracking-tight text-white">
+              Verifica la calidad de tu equipo
             </h2>
-            <p className="text-stone-600 text-sm leading-relaxed max-w-md">
-              Un rincón tranquilo para auditar llamadas, dialogar con el equipo, revisar matrices de calidad y calibrar grabaciones en un entorno tipo Notion.
+            <p className="text-stone-400 text-base">
+              Just vibe
             </p>
           </div>
 
           {/* Quick Access */}
-          <div className="space-y-3 pt-4">
-            <div className="flex items-center gap-1.5 text-[#b57b54] text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-4 h-4 text-orange-400" />
+          <div className="space-y-4 pt-8">
+            <div className="flex items-center gap-2 text-[#d4a373] text-xs font-bold uppercase tracking-wider">
+              <Sparkles className="w-4 h-4" />
               <span>Acceso Rápido de Prueba (Demo Notebook)</span>
             </div>
-            <p className="text-[11px] text-stone-500">Haz clic en cualquiera de estos perfiles para inicializar tu espacio de trabajo:</p>
+            <p className="text-sm text-stone-400">Haz clic en cualquiera de estos perfiles para inicializar tu espacio de trabajo:</p>
             
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               {demoProfiles.map((p) => {
                 const isSelected = username === p.username;
                 return (
@@ -97,18 +105,18 @@ export default function LoginPage() {
                     key={p.username}
                     type="button"
                     onClick={() => handleQuickSelect(p)}
-                    className={`p-2.5 rounded-xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
+                    className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
                       isSelected
-                        ? 'bg-[#fffdf8] dark:bg-stone-800 border-[#d4a373] shadow-md ring-1 ring-[#d4a373]'
-                        : 'bg-white dark:bg-[#1c1a18] border-[#dfd9cc] dark:border-[#3e382f] hover:bg-[#FAF6F0] dark:hover:bg-[#24211e] hover:border-stone-400 shadow-xs'
+                        ? 'bg-[#1c1a18] border-[#d4a373] shadow-[0_0_10px_rgba(212,163,115,0.1)]'
+                        : 'bg-[#151311] border-[#2a2622] hover:border-[#3e382f]'
                     }`}>
                     <div className="flex justify-between items-center mb-1">
-                      <span className={`text-[11px] font-bold ${isSelected ? 'text-[#b57b54]' : 'text-stone-800 dark:text-stone-200'}`}>
+                      <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-stone-200'}`}>
                         {p.label}
                       </span>
-                      <span className="w-2 h-2 rounded-full bg-[#fbcfe8]" />
+                      <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-pink-400' : 'bg-pink-300'}`} />
                     </div>
-                    <p className="text-[9px] text-stone-500 line-clamp-1 group-hover:text-stone-700 transition-colors">{p.desc}</p>
+                    <p className="text-xs text-stone-400 line-clamp-1">{p.desc}</p>
                   </button>
                 );
               })}
@@ -117,85 +125,78 @@ export default function LoginPage() {
         </div>
 
         {/* Right Side: Login Card */}
-        <div className="col-span-1 md:col-span-6">
+        <div className="col-span-1 md:col-span-5">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="p-8 rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.3)] backdrop-blur-md relative overflow-hidden border bg-white/95 dark:bg-[#1c1a18]/95 border-[#dfd9cc] dark:border-[#3e382f]"
+            className="p-8 rounded-[2rem] bg-[#1c1a18] border border-[#2a2622] shadow-2xl relative overflow-hidden"
           >
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#faedcd] dark:bg-stone-700" />
-
-            <div className="mb-6 text-left">
-              <h3 className="text-xl font-bold font-display flex items-center gap-1.5 text-stone-900 dark:text-stone-100">
-                Ingreso al Portal 🌸
+            <div className="mb-8 text-left">
+              <h3 className="text-2xl font-bold text-white mb-2">
+                Ingresa
               </h3>
-              <p className="text-stone-500 text-xs mt-1">Completa tus credenciales para empezar tu sesión</p>
+              <p className="text-stone-400 text-sm">Completa tus credenciales para empezar tu sesión</p>
             </div>
 
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
+            <form onSubmit={handleLoginSubmit} className="space-y-5 text-left">
               {(localError || error) && (
-                <div className="p-3 bg-amber-50 border border-[#dfd9cc] rounded-xl text-[#b57b54] text-xs leading-relaxed flex gap-2">
-                  <Shield className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-xs flex gap-2">
+                  <Shield className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{localError || error}</span>
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold flex items-center gap-1 text-stone-600 dark:text-stone-400">
-                  <User className="w-3.5 h-3.5 text-stone-500" />
+              <div className="space-y-2">
+                <label htmlFor="login-username" className="text-sm font-semibold flex items-center gap-2 text-stone-300">
+                  <User className="w-4 h-4" />
                   <span>Nombre de usuario o email</span>
                 </label>
                 <input
+                  id="login-username"
+                  name="username"
                   type="text"
                   placeholder="ej. admin@visor.com, sofia"
                   value={username}
                   onChange={(e) => { setUsername(e.target.value); setLocalError(null); }}
-                  className="w-full border focus:ring-1 rounded-xl py-2.5 px-3.5 text-xs focus:outline-none transition-all bg-[#fcfbf9] dark:bg-[#24211e] border-[#dfd9cc] dark:border-[#3e382f] focus:border-[#d4a373] focus:ring-[#d4a373] text-stone-800 dark:text-stone-200 placeholder-stone-400 dark:placeholder-stone-600"
+                  className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold flex items-center gap-1 text-stone-600 dark:text-stone-400">
-                  <Key className="w-3.5 h-3.5 text-stone-500" />
+              <div className="space-y-2">
+                <label htmlFor="login-password" className="text-sm font-semibold flex items-center gap-2 text-stone-300">
+                  <Key className="w-4 h-4" />
                   <span>Contraseña</span>
                 </label>
                 <input
+                  id="login-password"
+                  name="password"
                   type="password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setLocalError(null); }}
-                  className="w-full border focus:ring-1 rounded-xl py-2.5 px-3.5 text-xs focus:outline-none transition-all bg-[#fcfbf9] dark:bg-[#24211e] border-[#dfd9cc] dark:border-[#3e382f] focus:border-[#d4a373] focus:ring-[#d4a373] text-stone-800 dark:text-stone-200 placeholder-stone-400 dark:placeholder-stone-600"
+                  className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-[#faedcd] border border-[#d4a373] text-[#b57b54] hover:bg-[#ffeec2] font-bold rounded-xl shadow-xs transition-all text-xs flex items-center justify-center gap-2 cursor-pointer mt-4"
+                className="w-full py-4 bg-[#faedcd] hover:bg-[#fff3d6] text-[#4a3219] font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 mt-8 cursor-pointer"
               >
                 {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-[#b57b54]/30 border-t-[#b57b54] rounded-full animate-spin" />
-                    <span>Cargando tu estudio...</span>
-                  </>
+                  <div className="w-5 h-5 border-2 border-[#4a3219]/30 border-t-[#4a3219] rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Entrar de Forma Segura ☕</span>
+                    <span>Inicia Sesion</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
             </form>
-
-            <div className="mt-6 border-t border-stone-100 pt-4 text-center">
-              <span className="text-[10px] text-stone-500 flex items-center justify-center gap-1">
-                Hecho con amor y calidez <Heart className="w-3 h-3 text-red-400 fill-red-400" /> para grabaciones asertivas.
-              </span>
-            </div>
           </motion.div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

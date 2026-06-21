@@ -1,2 +1,2 @@
 // Renamed to api/openrouter.ts
-export { default } from './openrouter';
+export { default } from './openrouter.js';

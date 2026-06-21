@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Outlet, Link } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -12,6 +13,8 @@ import {
   MessageSquare,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { dashboardApi } from '../lib/api'
+import type { UnifiedDashboard, CallItem } from '@auditor/shared-types'
 
 const navOverview = [
   { icon: LayoutDashboard, label: 'Inicio', to: '/' },
@@ -25,14 +28,41 @@ const navSettings = [
   { icon: Settings, label: 'Ajustes', to: '/settings' },
 ]
 
-const friends = [
-  { name: 'Bagas Mahpie', role: 'Coordinador' },
-  { name: 'Sir Dandy', role: 'Agente' },
-  { name: 'Jhon Tosan', role: 'Agente' },
-]
+interface TeamMember {
+  name: string;
+  role: string;
+  agentId: string;
+}
 
 export function DashboardLayout() {
-  const { logout } = useAuth()
+  const { logout, session } = useAuth()
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+
+  useEffect(() => {
+    // Fetch team data from API (via auditsByAgent or activityByAgent)
+    dashboardApi.getUnified()
+      .then(data => {
+        const members: TeamMember[] = [];
+        // From auditsByAgent
+        for (const agent of data.qa.auditsByAgent) {
+          members.push({ name: agent.agentName, role: 'Agente', agentId: agent.agentId });
+        }
+        // From activityByAgent
+        for (const agent of data.sales.activityByAgent) {
+          if (!members.some(m => m.agentId === agent.agentId)) {
+            members.push({ name: agent.agentName, role: 'Agente', agentId: agent.agentId });
+          }
+        }
+        setTeamMembers(members.slice(0, 5));
+      })
+      .catch(() => {
+        // Fallback to empty list
+        setTeamMembers([]);
+      });
+  }, []);
+
+  const userName = session?.user || 'Usuario';
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -67,17 +97,21 @@ export function DashboardLayout() {
             Equipo
           </p>
           <div className="space-y-3">
-            {friends.map((friend) => (
-              <div key={friend.name} className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                  {friend.name.charAt(0)}
+            {teamMembers.length > 0 ? (
+              teamMembers.map((member) => (
+                <div key={member.agentId} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                    {member.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground truncate max-w-[140px]">{member.name}</p>
+                    <p className="text-xs text-muted-foreground">{member.role}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">{friend.name}</p>
-                  <p className="text-xs text-muted-foreground">{friend.role}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground px-1">Sin datos de equipo</p>
+            )}
           </div>
         </div>
 
@@ -130,9 +164,9 @@ export function DashboardLayout() {
             </button>
             <div className="flex items-center gap-3 pl-2 border-l border-border">
               <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                U
+                {userInitial}
               </div>
-              <span className="text-sm font-semibold text-foreground">Usuario</span>
+              <span className="text-sm font-semibold text-foreground">{userName}</span>
             </div>
           </div>
         </header>

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase } from "../config.js";
+import { supabase, localCallsMemory } from "../config.js";
 
 export default function (app: Express): void {
   // GET /api/visor/calls - List calls with RBAC scope for Visor Kanban
@@ -14,9 +14,29 @@ export default function (app: Express): void {
       const { status, search, page = "1", limit = "50" } = req.query;
       const scope = req.scope!;
 
-      if (!supabase) {
-        // Return empty for demo mode
-        return res.json([]);
+      // ── Serve from localCallsMemory (demo data seeded on startup) ──
+      // This works whether Supabase is configured or not.
+      // If Supabase has real data it gets loaded over the demo seed.
+      if (!supabase || localCallsMemory.length > 0) {
+        let filtered = [...localCallsMemory];
+
+        if (scope.role === "agent") {
+          filtered = filtered.filter((c: any) => c.agentId === scope.userId);
+        }
+
+        if (status && typeof status === "string") {
+          filtered = filtered.filter((c: any) => c.status === status);
+        }
+
+        if (search && typeof search === "string") {
+          const q = search.toLowerCase();
+          filtered = filtered.filter((c: any) =>
+            c.agent?.toLowerCase().includes(q) ||
+            c.title?.toLowerCase().includes(q)
+          );
+        }
+
+        return res.json(filtered);
       }
 
       let query = supabase
@@ -91,7 +111,25 @@ export default function (app: Express): void {
 
       const { id } = req.params;
 
-      if (!supabase) {
+      // ── Demo/local mode: update in memory ──
+      // Works for demo call IDs (starts with "demo-") or when Supabase is not available
+      if (!supabase || id.startsWith("demo-")) {
+        const idx = localCallsMemory.findIndex((c: any) => c.id === id);
+        if (idx !== -1) {
+          const currentStatus = localCallsMemory[idx].status;
+          const validTransitions: Record<string, string[]> = {
+            por_auditar: ["en_revision", "completada"],
+            en_revision: ["por_auditar", "completada"],
+            completada: ["en_revision"],
+          };
+          if (!validTransitions[currentStatus]?.includes(status)) {
+            return res.status(400).json({
+              error: `Transición inválida: ${currentStatus} → ${status}`,
+              validTransitions: validTransitions[currentStatus],
+            });
+          }
+          localCallsMemory[idx] = { ...localCallsMemory[idx], status, score: status === "completada" ? Math.round((60 + Math.random() * 35) * 10) / 10 : localCallsMemory[idx].score };
+        }
         return res.json({ success: true });
       }
 

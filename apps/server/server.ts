@@ -4,9 +4,10 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { supabase, PORT, setLocalCallsMemory } from "./src/config.js";
+import { supabase, PORT, IS_DEMO_MODE, setLocalCallsMemory, demoContactsList, localCallsMemory, localNotasMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
+import { seedAllDemoData } from "./src/services/demoSeeder.js";
 
 import mountAuthRoutes from "./src/routes/auth.js";
 import mountCallsRoutes from "./src/routes/calls.js";
@@ -85,8 +86,23 @@ mountVisorResourcesRoutes(app);
 // Global error handler (last middleware)
 app.use(errorHandler);
 
-// ── Startup: load persisted calls from Supabase ──────────────────
+// ── Startup: seed demo data or load from Supabase ────────────────
 console.log("Memoria de respaldo inicializada limpia para el Auditor Senior UTEL.");
+
+// ── Always seed demo data as fallback ──
+// This ensures demo calls/contacts are available for viewing even when
+// Supabase is configured but has no data. Supabase data will override later.
+{
+  const demo = seedAllDemoData();
+  localCallsMemory.length = 0;
+  localCallsMemory.push(...demo.calls);
+  demoContactsList.length = 0;
+  demoContactsList.push(...demo.contacts);
+  for (const [callId, notes] of Object.entries(demo.notes)) {
+    localNotasMemory.set(callId, notes);
+  }
+  console.log(`[DEMO] Seed completado: ${demo.calls.length} calls, ${demo.contacts.length} contactos, ${Object.keys(demo.notes).length} sets de notas`);
+}
 
 if (supabase) {
   loadCallsFromSupabase().then((calls) => {
@@ -115,24 +131,30 @@ if (supabase) {
 
 // ── Vite / static integration ────────────────────────────────────
 const startServer = async () => {
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
+  // Listen FIRST so the server is available immediately
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor en puerto ${PORT}`);
   });
+
+  // Then try to attach Vite middleware (dev mode) or static files (prod)
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+  } catch (err: any) {
+    console.log(`[VITE] Middleware no disponible (opcional): ${err.message}`);
+  }
 };
 
 if (!process.env.VERCEL) {
