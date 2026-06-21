@@ -4,7 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { supabase, PORT, IS_DEMO_MODE, setLocalCallsMemory, demoContactsList, localCallsMemory, localNotasMemory } from "./src/config.js";
+import { supabase, PORT, IS_DEMO_MODE, JWT_SECRET, setLocalCallsMemory, demoContactsList, localCallsMemory, localNotasMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 import { seedAllDemoData } from "./src/services/demoSeeder.js";
@@ -68,6 +68,25 @@ app.use(globalLimiter);
 // Body parser
 app.use(express.json({ limit: "10mb" }));
 
+// ── Startup validation ────────────────────────────────────────────
+if (!JWT_SECRET) {
+  console.warn("⚠️  JWT_SECRET no configurado. La autenticación JWT fallará.");
+  console.warn("   Genera uno con: openssl rand -hex 64");
+  console.warn("   Configúralo en Vercel: Settings > Environment Variables > JWT_SECRET");
+}
+
+// ── Health-check endpoint ─────────────────────────────────────────
+app.get("/api/health", (_req, res) => {
+  const routeCount = app._router?.stack?.filter((layer: any) => layer.route).length || 0;
+  res.json({
+    status: "ok",
+    mode: IS_DEMO_MODE ? "demo" : "supabase",
+    jwt: !!JWT_SECRET,
+    routes: routeCount,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ── Mount all route modules ──────────────────────────────────────
 mountAuthRoutes(app);
 mountCallsRoutes(app);
@@ -82,6 +101,27 @@ mountDashboardRoutes(app);
 mountVisorCallsRoutes(app);
 mountVisorAuditsRoutes(app);
 mountVisorResourcesRoutes(app);
+
+// ── 404 handler (after all routes, before error handler) ─────────
+app.use((req, res, _next) => {
+  res.status(404).json({
+    error: "Ruta no encontrada",
+    path: req.originalUrl,
+    method: req.method,
+    availableEndpoints: [
+      "/api/health",
+      "/api/login",
+      "/api/llamadas",
+      "/api/llamadas/:id/assign-contact",
+      "/api/contacts",
+      "/api/contacts/:id/activity",
+      "/api/contacts/:id/calls",
+      "/api/tasks",
+      "/api/visor/calls",
+      "/api/whisper",
+    ],
+  });
+});
 
 // Global error handler (last middleware)
 app.use(errorHandler);

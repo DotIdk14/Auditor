@@ -28,6 +28,32 @@ export function useContactCalls(id: string) {
   });
 }
 
+export function useContactActivity(id: string) {
+  return useQuery<{ contactId: string; items: ActivityItem[]; total: number }>({
+    queryKey: ['contact-activity', id],
+    queryFn: () => apiClient.get(`/contacts/${id}/activity`),
+    enabled: !!id,
+  });
+}
+
+export interface ActivityItem {
+  id: string;
+  type: 'audit' | 'task';
+  title: string;
+  description?: string;
+  created_at: string;
+  // audit-specific
+  score?: number | null;
+  status?: string;
+  callId?: string;
+  // task-specific
+  taskType?: string;
+  due_date?: string;
+  completed_at?: string;
+  priority?: string;
+  assigned_to?: string;
+}
+
 export function useCreateContact() {
   const qc = useQueryClient();
   return useMutation({

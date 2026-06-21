@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
-import { useContact, useContactCalls, useNotes, useCreateNote } from '../../hooks/useContacts';
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity, Send, Trash2 } from 'lucide-react';
+import { useContact, useContactCalls, useContactActivity, useNotes, useCreateNote } from '../../hooks/useContacts';
+import type { ActivityItem } from '../../hooks/useContacts';
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity, Send, Trash2, PhoneCall, MailPlus, Users, FileCheck, Building } from 'lucide-react';
 import type { Contact } from '@auditor/shared-types';
 
 export default function ContactDetailPage() {
@@ -13,6 +14,8 @@ export default function ContactDetailPage() {
 
   const { data: contact, isLoading: contactLoading } = useContact(id || '');
   const { data: contactCalls = [] } = useContactCalls(id || '');
+  const { data: activityData } = useContactActivity(id || '');
+  const activityItems: ActivityItem[] = activityData?.items || [];
 
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
@@ -141,26 +144,117 @@ export default function ContactDetailPage() {
       <div className="space-y-3">
         {activeTab === 'activity' && (
           <>
-            {contactCalls.length === 0 ? (
+            {activityItems.length === 0 ? (
               <div className="py-12 text-center">
                 <Activity className="w-8 h-8 mx-auto text-stone-400 mb-2" />
                 <p className="text-xs text-stone-500">Sin actividad registrada</p>
               </div>
             ) : (
-              contactCalls.map((call: any) => (
-                <div key={call.id} className={`p-4 rounded-xl border ${
-                  darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'
-                }`}>
-                  <div className="flex justify-between items-center">
-                    <span className={`text-[11px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
-                      Auditoría - {new Date(call.created_at).toLocaleDateString()}
-                    </span>
-                    {call.score && (
-                      <span className="text-[11px] font-bold text-emerald-500">{call.score}/10</span>
-                    )}
+              <div className="relative pl-6 border-l-2 space-y-4"
+                style={{ borderColor: darkMode ? '#3e382f' : '#dfd9cc' }}>
+                {activityItems.map((item: ActivityItem) => (
+                  <div key={item.id} className="relative">
+                    {/* Timeline dot */}
+                    <div className={`absolute -left-[25px] top-1 w-3 h-3 rounded-full border-2 ${
+                      item.type === 'audit'
+                        ? darkMode ? 'bg-emerald-900 border-emerald-500' : 'bg-emerald-100 border-emerald-500'
+                        : darkMode ? 'bg-indigo-900 border-indigo-500' : 'bg-indigo-100 border-indigo-500'
+                    }`} />
+
+                    <div className={`p-4 rounded-xl border transition-all hover:shadow-sm ${
+                      darkMode ? 'bg-[#1c1a18] border-[#3e382f] hover:bg-[#24211e]' : 'bg-white border-[#dfd9cc] hover:bg-stone-50'
+                    }`}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {/* Icono según tipo */}
+                        {item.type === 'audit' ? (
+                          <FileCheck className={`w-3.5 h-3.5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                        ) : item.taskType === 'call' ? (
+                          <PhoneCall className={`w-3.5 h-3.5 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                        ) : item.taskType === 'email' ? (
+                          <MailPlus className={`w-3.5 h-3.5 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                        ) : item.taskType === 'meeting' ? (
+                          <Users className={`w-3.5 h-3.5 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                        ) : item.taskType === 'demo' ? (
+                          <Building className={`w-3.5 h-3.5 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                        ) : (
+                          <Activity className={`w-3.5 h-3.5 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                        )}
+
+                        {/* Tipo badge */}
+                        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                          item.type === 'audit'
+                            ? 'bg-emerald-900/30 text-emerald-400'
+                            : 'bg-indigo-900/30 text-indigo-400'
+                        }`}>
+                          {item.type === 'audit' ? 'Auditoría' : item.taskType || 'Tarea'}
+                        </span>
+
+                        {/* Score para auditorías */}
+                        {item.type === 'audit' && item.score != null && (
+                          <span className={`text-[10px] font-bold ml-auto ${
+                            item.score >= 80 ? 'text-emerald-500' : item.score >= 60 ? 'text-amber-500' : 'text-rose-500'
+                          }`}>
+                            {typeof item.score === 'number' ? item.score.toFixed(1) : item.score}/10
+                          </span>
+                        )}
+
+                        {/* Status para tareas */}
+                        {item.type === 'task' && (
+                          <span className={`text-[9px] font-bold uppercase ml-auto px-1.5 py-0.5 rounded ${
+                            item.status === 'completed'
+                              ? 'bg-emerald-900/30 text-emerald-400'
+                              : item.status === 'in_progress'
+                              ? 'bg-amber-900/30 text-amber-400'
+                              : item.status === 'cancelled'
+                              ? 'bg-rose-900/30 text-rose-400'
+                              : 'bg-blue-900/30 text-blue-400'
+                          }`}>
+                            {item.status === 'pending' ? 'Pendiente'
+                              : item.status === 'in_progress' ? 'En progreso'
+                              : item.status === 'completed' ? 'Completada'
+                              : item.status === 'cancelled' ? 'Cancelada'
+                              : item.status}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Título */}
+                      <span className={`text-[11px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
+                        {item.title}
+                      </span>
+
+                      {/* Descripción (solo tareas) */}
+                      {item.type === 'task' && item.description && (
+                        <p className={`text-[10px] mt-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                          {item.description}
+                        </p>
+                      )}
+
+                      {/* Fecha */}
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Clock className={`w-3 h-3 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`} />
+                        <span className={`text-[9px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+                          {new Date(item.created_at).toLocaleString('es-ES', {
+                            day: 'numeric', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </span>
+                        {item.type === 'task' && item.priority && (
+                          <span className={`text-[8px] font-bold uppercase ml-2 px-1 rounded ${
+                            item.priority === 'high' || item.priority === 'urgent'
+                              ? 'bg-rose-900/30 text-rose-400'
+                              : item.priority === 'low'
+                              ? 'bg-stone-900/30 text-stone-400'
+                              : 'bg-amber-900/30 text-amber-400'
+                          }`}>
+                            {item.priority}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </>
         )}

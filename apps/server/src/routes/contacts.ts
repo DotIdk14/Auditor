@@ -256,21 +256,22 @@ export default function (app: Express): void {
         const contact = demoContactsList.find(c => c.id === req.params.id);
         if (!contact) return res.json([]);
         const contactCalls = localCallsMemory
-          .filter((c: any) => c.clientId === req.params.id)
+          .filter((c: any) => c.contact_id === req.params.id || c.clientId === req.params.id)
           .map((c: any) => ({
             id: c.id,
-            metadata: { fileName: c.rawTitle, agentName: c.agent, category: c.category },
+            contact_id: c.contact_id || c.clientId || null,
+            metadata: { fileName: c.rawTitle || c.metadata?.fileName, agentName: c.agent, category: c.category, status: c.status || c.metadata?.status },
             score: { total: c.score || 0 },
-            analysis: {},
-            transcription: [],
-            created_at: c.date,
+            analysis: c.analysis || {},
+            transcription: c.transcription || [],
+            created_at: c.date || c.metadata?.uploadedAt,
           }));
         return res.json(contactCalls);
       }
 
       const { data: audits, error: auditsError } = await supabase
         .from("auditorias")
-        .select("id, metadata, score, analysis, transcription, created_at")
+        .select("id, contact_id, status, metadata, score, analysis, transcription, created_at")
         .eq("contact_id", req.params.id)
         .order("created_at", { ascending: false });
 
@@ -278,6 +279,108 @@ export default function (app: Express): void {
       res.json(audits || []);
     } catch (err: any) {
       console.error("[CONTACTS] Error getting calls:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/contacts/:id/activity — Unified activity timeline (auditorías + tareas/interacciones)
+  app.get("/api/contacts/:id/activity", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
+    try {
+      const contactId = req.params.id;
+
+      // ── Demo mode: combine local memory ──
+      if (IS_DEMO_MODE || !supabase) {
+        ensureDemoContacts();
+        const contact = demoContactsList.find(c => c.id === contactId);
+        if (!contact) return res.json({ contactId, items: [] });
+
+        // Auditorías vinculadas
+        const audits = localCallsMemory
+          .filter((c: any) => c.contact_id === contactId || c.clientId === contactId)
+          .map((c: any) => ({
+            id: c.id,
+            type: "audit" as const,
+            title: c.metadata?.fileName || c.rawTitle || "Auditoría",
+            description: c.agent ? `Agente: ${c.agent}` : "",
+            created_at: c.date || c.metadata?.uploadedAt || c.created_at,
+            score: c.score || c.metadata?.score || null,
+            status: c.status || c.metadata?.status || "completada",
+            callId: c.id,
+          }));
+
+        // Tareas de demo (en memoria — tasks no tienen persistencia en modo demo)
+        // Buscamos en localCallsMemory tareas simuladas tipo "call" vinculadas
+        const tasksFromMemory = localCallsMemory
+          .filter((c: any) => c.metadata?.taskContactId === contactId || c.taskContactId === contactId)
+          .map((c: any) => ({
+            id: `task-${c.id}`,
+            type: "task" as const,
+            title: c.metadata?.taskTitle || "Llamada agendada",
+            taskType: c.metadata?.taskType || "call",
+            description: c.metadata?.taskDescription || "",
+            created_at: c.metadata?.taskDueDate || c.metadata?.uploadedAt || c.created_at,
+            status: c.metadata?.taskStatus || "pending",
+            priority: c.metadata?.taskPriority || "medium",
+          }));
+
+        // Combinar y ordenar por fecha
+        const items = [...audits, ...tasksFromMemory]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        return res.json({ contactId, items, total: items.length });
+      }
+
+      // ── Supabase mode: query both auditorias and tasks ──
+      const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
+        supabase
+          .from("auditorias")
+          .select("id, contact_id, status, metadata, score, analysis, transcription, created_at")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("tasks")
+          .select("id, contact_id, title, description, type, status, priority, due_date, completed_at, assigned_to, created_at, updated_at")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false }),
+      ]);
+
+      if (auditsError) console.warn("[ACTIVITY] Error fetching audits:", auditsError.message);
+      if (tasksError) console.warn("[ACTIVITY] Error fetching tasks:", tasksError.message);
+
+      // Mapear auditorías
+      const auditItems = (audits || []).map((a: any) => ({
+        id: a.id,
+        type: "audit" as const,
+        title: a.metadata?.fileName || "Auditoría",
+        description: a.metadata?.agentName ? `Agente: ${a.metadata.agentName}` : "",
+        created_at: a.created_at,
+        score: a.score != null ? (typeof a.score === "object" ? (a.score as any).global ?? null : a.score) : null,
+        status: a.status || a.metadata?.status || "completada",
+        callId: a.id,
+      }));
+
+      // Mapear tareas
+      const taskItems = (tasks || []).map((t: any) => ({
+        id: t.id,
+        type: "task" as const,
+        title: t.title,
+        taskType: t.type || "follow_up",
+        description: t.description || "",
+        created_at: t.created_at,
+        due_date: t.due_date,
+        completed_at: t.completed_at,
+        status: t.status,
+        priority: t.priority,
+        assigned_to: t.assigned_to,
+      }));
+
+      // Combinar y ordenar por fecha descendente
+      const items = [...auditItems, ...taskItems]
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      res.json({ contactId, items, total: items.length });
+    } catch (err: any) {
+      console.error("[CONTACTS] Error getting activity:", err.message);
       res.status(500).json({ error: err.message });
     }
   });

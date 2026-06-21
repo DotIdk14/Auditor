@@ -17,6 +17,8 @@ export async function loadCallsFromSupabase(): Promise<any[]> {
     console.log(`[SUPABASE] Loaded ${data.length} calls from database.`);
     return (data || []).map((row: any) => ({
       id: row.id,
+      contact_id: row.contact_id || null,
+      status: row.status || null,
       metadata: row.metadata,
       score: row.score,
       analysis: row.analysis,

@@ -138,6 +138,18 @@ export async function createTask(
     .single();
 
   if (error) throw new Error(`Error al crear tarea: ${error.message}`);
+
+  // Update contact's last_activity_at so it appears at the top of the list
+  try {
+    await supabase
+      .from("contacts")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", input.contactId);
+  } catch (updateErr: any) {
+    // Non-critical: log but don't fail the task creation
+    console.warn("[TASKS] Could not update contact last_activity_at:", updateErr.message);
+  }
+
   return mapRow(data);
 }
 
