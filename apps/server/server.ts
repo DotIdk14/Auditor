@@ -116,7 +116,6 @@ if (supabase) {
 // ── Vite / static integration ────────────────────────────────────
 const startServer = async () => {
   if (process.env.NODE_ENV !== "production") {
-    // @ts-expect-error - vite is not a dep but import is guarded by VERCEL env check
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
