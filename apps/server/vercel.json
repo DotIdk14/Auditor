@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "rootDirectory": "apps/server",
+  "buildCommand": "echo 'Build handled by Vercel serverless'",
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 60

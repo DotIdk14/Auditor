@@ -27,7 +27,8 @@ export default function (app: Express): void {
         return res.status(404).json({ error: "Auditoría no encontrada" });
       }
 
-      const contact = audit.contacts || {};
+      const contactRow = Array.isArray(audit.contacts) ? audit.contacts[0] || {} : audit.contacts || {};
+      const contact = contactRow as { id?: string; full_name?: string; assigned_to?: string };
       const meta = typeof audit.metadata === "string" ? JSON.parse(audit.metadata) : (audit.metadata || {});
       const analysis = typeof audit.analysis === "string" ? JSON.parse(audit.analysis) : (audit.analysis || {});
       const transcription = typeof audit.transcription === "string" ? JSON.parse(audit.transcription) : (audit.transcription || []);

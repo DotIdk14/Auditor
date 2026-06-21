@@ -65,7 +65,7 @@ export default function (app: Express): void {
           } else {
             // Fallback: check old 'rol' column if 'role' doesn't exist
             try {
-              const { data: oldProfile } = await supabase
+              const { data: oldProfile } = await supabase!
                 .from("profiles")
                 .select("id, nombre, rol")
                 .eq("email", searchEmail)

@@ -1,6 +1,7 @@
 {
   "version": 2,
   "framework": "vite",
+  "installCommand": "cd ../.. && npm ci --prefer-offline --no-audit --no-fund",
   "rewrites": [
     {
       "source": "/(.*)",
