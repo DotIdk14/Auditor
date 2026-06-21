@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "OPENROUTER_MODEL": "openrouter/free"
+  },
+  "rewrites": [
+    {
+      "source": "/api/openrouter",
+      "destination": "/api/openrouter.ts"
+    },
+    {
+      "source": "/api/whisper",
+      "destination": "/api/whisper.ts"
+    },
+    {
+      "source": "/api/upload-url",
+      "destination": "/api/upload-url.ts"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
