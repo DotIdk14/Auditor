@@ -65,7 +65,13 @@ export default function (app: Express): void {
   // GET /api/contacts — List contacts with filters and pagination
   app.get("/api/contacts", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
-      if (IS_DEMO_MODE) {
+      const userId = req.scope!.userId;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+      if (IS_DEMO_MODE || !isUuid) {
+        if (!IS_DEMO_MODE) {
+          console.log(`[CONTACTS] userId no es UUID (${userId}), sirviendo contactos desde memoria`);
+        }
         ensureDemoContacts();
         const filters = contactFiltersSchema.parse(req.query);
         let filtered = [...demoContactsList];
@@ -102,7 +108,9 @@ export default function (app: Express): void {
   // GET /api/contacts/:id — Get single contact
   app.get("/api/contacts/:id", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
-      if (IS_DEMO_MODE) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.scope!.userId);
+
+      if (IS_DEMO_MODE || !isUuid) {
         ensureDemoContacts();
         const contact = demoContactsList.find(c => c.id === req.params.id);
         if (!contact) return res.status(404).json({ error: "Contacto no encontrado" });
@@ -172,8 +180,9 @@ export default function (app: Express): void {
   app.patch("/api/contacts/:id", authenticateToken, injectScope, requireRole("admin", "area_manager", "coordinator", "supervisor", "agent"), async (req: AuthenticatedRequest, res) => {
     try {
       const input = updateContactSchema.parse(req.body);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.scope!.userId);
 
-      if (IS_DEMO_MODE) {
+      if (IS_DEMO_MODE || !isUuid) {
         ensureDemoContacts();
         const idx = demoContactsList.findIndex(c => c.id === req.params.id);
         if (idx === -1) return res.status(404).json({ error: "Contacto no encontrado" });
@@ -217,6 +226,16 @@ export default function (app: Express): void {
   // DELETE /api/contacts/:id — Delete contact (restricted roles)
   app.delete("/api/contacts/:id", authenticateToken, injectScope, requireRole("admin", "area_manager", "coordinator", "supervisor"), async (req: AuthenticatedRequest, res) => {
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.scope!.userId);
+
+      if (IS_DEMO_MODE || !isUuid) {
+        ensureDemoContacts();
+        const idx = demoContactsList.findIndex(c => c.id === req.params.id);
+        if (idx === -1) return res.status(404).json({ error: "Contacto no encontrado" });
+        demoContactsList.splice(idx, 1);
+        return res.json({ success: true, message: "Contacto eliminado" });
+      }
+
       const deleted = await contactService.deleteContact(req.params.id, req.scope!);
       if (!deleted) {
         return res.status(404).json({ error: "Contacto no encontrado" });
