@@ -1,7 +1,7 @@
 {
   "version": 2,
   "framework": "vite",
-  "installCommand": "cd ../.. && rm -rf node_modules && npm install --no-audit --no-fund",
+  "installCommand": "cd ../.. && npm install --legacy-peer-deps --no-audit --no-fund",
   "buildCommand": "cd ../.. && npm run build -w apps/visor",
   "outputDirectory": "dist",
   "rewrites": [
