@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import axios from "axios";
 import { AssemblyAI } from "assemblyai";
+import { put as blobPut } from "@vercel/blob";
 import {
   localCallsMemory,
   pendingTranscripts,
@@ -256,10 +257,31 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
         transcription: correctedTranscription,
       };
 
+      // Subir audio a Vercel Blob para acceso persistente entre instancias
+      try {
+        const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+        if (blobToken && pending.audioBuffer) {
+          const ext = pending.fileName.split('.').pop() || 'mp3';
+          const blobPath = `audio/${callId}.${ext}`;
+          const blobResult = await blobPut(blobPath, pending.audioBuffer, {
+            access: 'public',
+            contentType: `audio/${ext === 'mp3' ? 'mpeg' : ext}`,
+            addRandomSuffix: false,
+          });
+          (finalCallData.metadata as any).blobUrl = blobResult.url;
+          (finalCallData.metadata as any).audioUrl = blobResult.url;
+          console.log(`[BLOB] Audio subido a Vercel Blob: ${blobResult.url}`);
+        }
+      } catch (blobErr: any) {
+        console.warn(`[BLOB] Error subiendo audio a Blob: ${blobErr.message}`);
+        // No es crítico — el audio se sirve desde memoria si es posible
+      }
+
       prependAndRemoveCall(finalCallData, callId);
       pendingTranscripts.delete(callId);
-      // NO guardamos en Supabase aún — esperamos a que se asigne un contacto
-      // saveCallToSupabase(finalCallData);
+      // Guardamos en Supabase con contact_id = null (se asigna después)
+      // Esto asegura que los datos sobrevivan entre instancias serverless
+      saveCallToSupabase(finalCallData);
       return res.json({ status: "completed", call: finalCallData });
     } catch (err: any) {
       console.error("[TRANSCRIPT] Error:", err.message);
