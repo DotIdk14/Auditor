@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { useContact, useContactCalls, useContactActivity, useNotes, useCreateNote } from '../../hooks/useContacts';
 import type { ActivityItem } from '../../hooks/useContacts';
-import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity, Send, Trash2, PhoneCall, MailPlus, Users, FileCheck, Building } from 'lucide-react';
+import { ArrowLeft, Phone, Mail, Calendar, Clock, Star, MessageSquare, AlertCircle, Activity, Send, Trash2, PhoneCall, MailPlus, Users, FileCheck, Building, ArrowUpRight } from 'lucide-react';
 import type { Contact } from '@auditor/shared-types';
 
 export default function ContactDetailPage() {
@@ -30,6 +30,11 @@ export default function ContactDetailPage() {
     } catch (err) {
       console.error('[ADD_NOTE] Error:', err);
     }
+  };
+
+  const handleAuditClick = (callId: string) => {
+    if (!callId) return;
+    navigate(`/auditor/${callId}`);
   };
 
   if (contactLoading) {
@@ -161,9 +166,14 @@ export default function ContactDetailPage() {
                         : darkMode ? 'bg-indigo-900 border-indigo-500' : 'bg-indigo-100 border-indigo-500'
                     }`} />
 
-                    <div className={`p-4 rounded-xl border transition-all hover:shadow-sm ${
-                      darkMode ? 'bg-[#1c1a18] border-[#3e382f] hover:bg-[#24211e]' : 'bg-white border-[#dfd9cc] hover:bg-stone-50'
-                    }`}>
+                    <div
+                      className={`p-4 rounded-xl border transition-all ${
+                        item.type === 'audit' && item.callId
+                          ? 'cursor-pointer hover:shadow-md ' + (darkMode ? 'bg-[#1c1a18] border-[#3e382f] hover:bg-[#24211e] hover:border-emerald-500/50' : 'bg-white border-[#dfd9cc] hover:bg-stone-50 hover:border-emerald-500/50')
+                          : darkMode ? 'bg-[#1c1a18] border-[#3e382f] hover:bg-[#24211e]' : 'bg-white border-[#dfd9cc] hover:bg-stone-50'
+                      }`}
+                      onClick={() => { if (item.type === 'audit' && item.callId) handleAuditClick(item.callId); }}
+                    >
                       <div className="flex items-center gap-2 mb-1.5">
                         {/* Icono según tipo */}
                         {item.type === 'audit' ? (
@@ -251,6 +261,16 @@ export default function ContactDetailPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* Link para auditorías: "Ver análisis completo" */}
+                      {item.type === 'audit' && item.callId && (
+                        <div className={`flex items-center gap-1 mt-2 pt-2 border-t ${
+                          darkMode ? 'border-[#3e382f] text-[#d4a373]' : 'border-stone-100 text-[#b57b54]'
+                        }`}>
+                          <span className="text-[9px] font-bold">Ver análisis completo</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
