@@ -37,30 +37,32 @@ export default function (app: Express): void {
         return res.json(filtered);
       }
 
+      // La tabla auditorias NO tiene columna status — se lee de metadata->>'status'
+      // Se usa LEFT JOIN para calls sin contacto asignado
       let query = supabase
         .from("auditorias")
         .select(`
-          id, contact_id, score, status, metadata, created_at,
-          contacts!inner(id, full_name, assigned_to, area_id, team_id)
+          id, contact_id, score, metadata, created_at,
+          contacts(id, full_name, assigned_to, area_id, team_id)
         `)
         .order("created_at", { ascending: false });
 
-      // RBAC filtering
+      // RBAC filtering (solo si hay contacto)
       if (scope.role === "agent") {
-        query = query.eq("contacts.assigned_to", scope.userId);
+        query = query.not('contacts.id', 'is', null).eq("contacts.assigned_to", scope.userId);
       } else if (scope.role === "supervisor" && scope.teamId) {
-        query = query.eq("contacts.team_id", scope.teamId);
+        query = query.not('contacts.id', 'is', null).eq("contacts.team_id", scope.teamId);
       } else if ((scope.role === "coordinator" || scope.role === "area_manager") && scope.areaId) {
-        query = query.eq("contacts.area_id", scope.areaId);
+        query = query.not('contacts.id', 'is', null).eq("contacts.area_id", scope.areaId);
       }
       // admin sees all
 
       if (status && typeof status === "string") {
-        query = query.eq("status", status);
+        query = query.filter('metadata->>status', 'eq', status);
       }
 
       if (search && typeof search === "string") {
-        query = query.ilike("contacts.full_name", `%${search}%`);
+        query = query.not('contacts.id', 'is', null).ilike("contacts.full_name", `%${search}%`);
       }
 
       const pageNum = parseInt(page as string, 10) || 1;
@@ -74,21 +76,23 @@ export default function (app: Express): void {
 
       // Transform to CallItem format
       const calls = (data || []).map((item: any) => {
-        const contact = item.contacts || {};
+        const contactRow = Array.isArray(item.contacts) ? item.contacts[0] : item.contacts;
+        const contact = contactRow || {};
         const meta = typeof item.metadata === "string" ? JSON.parse(item.metadata) : (item.metadata || {});
+        const contactName = contact.full_name || "Sin nombre";
         return {
           id: item.id,
-          clientId: contact.id || item.contact_id,
-          title: `Llamada — ${contact.full_name || "Sin nombre"}`,
+          clientId: contact.id || item.contact_id || item.id,
+          title: `Llamada — ${contactName}`,
           rawTitle: meta?.fileName || "unknown.wav",
-          shortName: contact.full_name || "Desconocido",
+          shortName: contactName,
           agent: meta?.agentName || "Sin asignar",
-          agentId: contact.assigned_to,
+          agentId: contact.assigned_to || null,
           category: meta?.category || "CALIDAD",
-          status: item.status || "por_auditar",
-          score: item.score,
+          status: meta?.status || "por_auditar",
+          score: typeof item.score === 'object' && item.score !== null ? item.score.global ?? null : item.score ?? null,
           date: item.created_at,
-          avatar: (contact.full_name || "?").split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2),
+          avatar: contactName.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2) || "??",
         };
       });
 
