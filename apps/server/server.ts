@@ -89,10 +89,9 @@ app.use(errorHandler);
 // ── Startup: seed demo data or load from Supabase ────────────────
 console.log("Memoria de respaldo inicializada limpia para el Auditor Senior UTEL.");
 
-// ── Always seed demo data as fallback ──
-// This ensures demo calls/contacts are available for viewing even when
-// Supabase is configured but has no data. Supabase data will override later.
-{
+// ── Seed demo data only in demo mode (no Supabase) ──
+// When Supabase is configured, we only load real data from the database.
+if (IS_DEMO_MODE) {
   const demo = seedAllDemoData();
   localCallsMemory.length = 0;
   localCallsMemory.push(...demo.calls);

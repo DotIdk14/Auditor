@@ -14,10 +14,8 @@ export default function (app: Express): void {
       const { status, search, page = "1", limit = "50" } = req.query;
       const scope = req.scope!;
 
-      // ── Serve from localCallsMemory (demo data seeded on startup) ──
-      // This works whether Supabase is configured or not.
-      // If Supabase has real data it gets loaded over the demo seed.
-      if (!supabase || localCallsMemory.length > 0) {
+      // ── Serve from localCallsMemory ONLY when Supabase is not available ──
+      if (!supabase) {
         let filtered = [...localCallsMemory];
 
         if (scope.role === "agent") {
