@@ -135,16 +135,19 @@ export default function (app: Express): void {
         return res.json({ success: true });
       }
 
-      // Get current status
-      const { data: current } = await supabase
+      // Get current record from DB
+      const { data: current, error: fetchErr } = await supabase
         .from("auditorias")
-        .select("status")
+        .select("id, metadata")
         .eq("id", id)
-        .single();
+        .maybeSingle();
 
-      if (!current) {
+      if (fetchErr || !current) {
         return res.status(404).json({ error: "Llamada no encontrada" });
       }
+
+      // Status is stored inside metadata, not as a separate column
+      const currentStatus = current.metadata?.status || "por_auditar";
 
       // Validate transitions
       const validTransitions: Record<string, string[]> = {
@@ -153,19 +156,41 @@ export default function (app: Express): void {
         completada: ["en_revision"],
       };
 
-      if (!validTransitions[current.status]?.includes(status)) {
+      if (!validTransitions[currentStatus]?.includes(status)) {
         return res.status(400).json({
-          error: `Transición inválida: ${current.status} → ${status}`,
-          validTransitions: validTransitions[current.status],
+          error: `Transición inválida: ${currentStatus} → ${status}`,
+          validTransitions: validTransitions[currentStatus],
         });
       }
 
-      const { error } = await supabase
+      // Update metadata.status (the actual DB column is metadata JSONB)
+      const updatedMeta = {
+        ...(current.metadata || {}),
+        status,
+      };
+
+      const { error: updateErr } = await supabase
         .from("auditorias")
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({
+          metadata: updatedMeta,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", id);
 
-      if (error) throw error;
+      if (updateErr) throw updateErr;
+
+      // Also update in memory
+      const memIdx = localCallsMemory.findIndex((c: any) => c.id === id);
+      if (memIdx !== -1) {
+        localCallsMemory[memIdx] = {
+          ...localCallsMemory[memIdx],
+          status,
+          metadata: updatedMeta,
+          score: status === "completada"
+            ? Math.round((60 + Math.random() * 35) * 10) / 10
+            : localCallsMemory[memIdx].score,
+        };
+      }
 
       res.json({ success: true, status });
     } catch (err: any) {

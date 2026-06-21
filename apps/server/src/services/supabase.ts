@@ -18,7 +18,10 @@ export async function loadCallsFromSupabase(): Promise<any[]> {
     return (data || []).map((row: any) => ({
       id: row.id,
       contact_id: row.contact_id || null,
-      status: row.status || null,
+      area_id: row.area_id || null,
+      team_id: row.team_id || null,
+      // status se guarda en metadata, no como columna separada
+      status: row.metadata?.status || null,
       metadata: row.metadata,
       score: row.score,
       analysis: row.analysis,
@@ -33,16 +36,24 @@ export async function loadCallsFromSupabase(): Promise<any[]> {
 export async function saveCallToSupabase(call: any): Promise<void> {
   if (!supabase) return;
   try {
+    // Ensure status is stored inside metadata (auditorias table has NO status column)
+    const metadata = {
+      ...(call.metadata || {}),
+      status: call.status || call.metadata?.status || 'por_auditar',
+    };
+
     const { error } = await supabase.from("auditorias").upsert({
       id: call.id,
       contact_id: call.contact_id || call.metadata?.contactId || null,
-      status: call.status || call.metadata?.status || 'por_auditar',
-      metadata: call.metadata,
-      score: call.score,
-      analysis: call.analysis,
+      area_id: call.area_id || null,
+      team_id: call.team_id || null,
+      metadata,
+      score: call.score || { global: 0 },
+      analysis: call.analysis || {},
       transcription: call.transcription || [],
     });
     if (error) console.warn("[SUPABASE] Could not save call:", error.message);
+    else console.log(`[SUPABASE] Saved call ${call.id} (contact: ${call.contact_id || 'none'})`);
   } catch (err: any) {
     console.warn("[SUPABASE] Connection error saving call:", err.message);
   }

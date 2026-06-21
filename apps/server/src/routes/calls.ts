@@ -71,10 +71,50 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Debes proporcionar un contactId o un fullName para crear un nuevo contacto." });
       }
 
-      // Find the call in memory
-      const callIndex = localCallsMemory.findIndex((c: any) => c.id === id);
-      if (callIndex === -1) {
-        return res.status(404).json({ error: "Llamada no encontrada. Primero debes subir el audio." });
+      // ── Find the call: memory first, then Supabase ────────────
+      let call: any = null;
+      const memIdx = localCallsMemory.findIndex((c: any) => c.id === id);
+
+      if (memIdx !== -1) {
+        call = { ...localCallsMemory[memIdx] };
+        console.log(`[ASSIGN_CONTACT] Found call ${id} in memory`);
+      } else if (supabase) {
+        // Fallback: look up in Supabase (Vercel cold start / different instance)
+        console.log(`[ASSIGN_CONTACT] Call ${id} not in memory, searching Supabase...`);
+        const { data: dbCall, error: dbErr } = await supabase
+          .from("auditorias")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (dbErr) {
+          console.warn(`[ASSIGN_CONTACT] Supabase lookup error: ${dbErr.message}`);
+        }
+
+        if (dbCall) {
+          call = {
+            id: dbCall.id,
+            contact_id: dbCall.contact_id || null,
+            area_id: dbCall.area_id || null,
+            team_id: dbCall.team_id || null,
+            status: dbCall.metadata?.status || null,
+            metadata: dbCall.metadata || {},
+            score: dbCall.score || { global: 0 },
+            analysis: dbCall.analysis || {},
+            transcription: dbCall.transcription || [],
+          };
+          // Also add to memory for future requests
+          localCallsMemory.unshift(call);
+          console.log(`[ASSIGN_CONTACT] Restored call ${id} from Supabase to memory`);
+        }
+      }
+
+      if (!call) {
+        return res.status(404).json({
+          error: "Llamada no encontrada.",
+          detail: "La llamada no existe en memoria ni en la base de datos. Es posible que el audio no se haya subido correctamente.",
+          callId: id,
+        });
       }
 
       let finalContactId = input.contactId;
@@ -117,21 +157,42 @@ export default function (app: Express): void {
         }
       }
 
-      // Update the call in memory with contact_id and new status
-      const call = { ...localCallsMemory[callIndex] };
+      // Verify the contact exists (if using existing contactId)
+      if (input.contactId && supabase) {
+        const { data: contactExists } = await supabase
+          .from("contacts")
+          .select("id")
+          .eq("id", finalContactId)
+          .maybeSingle();
+        if (!contactExists) {
+          return res.status(404).json({
+            error: "Contacto no encontrado.",
+            detail: "El contactId proporcionado no existe en la base de datos.",
+          });
+        }
+      }
+
+      // Update the call with contact_id and new status
       call.contact_id = finalContactId;
       call.status = 'por_auditar';
       if (!call.metadata) call.metadata = {};
       call.metadata.status = 'por_auditar';
       call.metadata.contactId = finalContactId;
+      // Inherit area/team from scope
+      if (!call.area_id) call.area_id = req.scope!.areaId || null;
+      if (!call.team_id) call.team_id = req.scope!.teamId || null;
 
-      // Replace in localCallsMemory
-      prependAndRemoveCall(call, id);
+      // Replace in localCallsMemory if it was there
+      if (memIdx !== -1) {
+        prependAndRemoveCall(call, id);
+      } else {
+        localCallsMemory.unshift(call);
+      }
 
-      // NOW save to Supabase with contact_id
+      // Save to Supabase with contact_id
       await saveCallToSupabase(call);
 
-      console.log(`[ASSIGN_CONTACT] Call ${id} assigned to contact ${finalContactId} and saved to DB`);
+      console.log(`[ASSIGN_CONTACT] Call ${id} assigned to contact ${finalContactId} — saved to DB`);
 
       return res.json({
         success: true,

@@ -271,7 +271,7 @@ export default function (app: Express): void {
 
       const { data: audits, error: auditsError } = await supabase
         .from("auditorias")
-        .select("id, contact_id, status, metadata, score, analysis, transcription, created_at")
+        .select("id, contact_id, metadata, score, analysis, transcription, created_at")
         .eq("contact_id", req.params.id)
         .order("created_at", { ascending: false });
 
@@ -334,7 +334,7 @@ export default function (app: Express): void {
       const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
         supabase
           .from("auditorias")
-          .select("id, contact_id, status, metadata, score, analysis, transcription, created_at")
+          .select("id, contact_id, metadata, score, analysis, transcription, created_at")
           .eq("contact_id", contactId)
           .order("created_at", { ascending: false }),
         supabase

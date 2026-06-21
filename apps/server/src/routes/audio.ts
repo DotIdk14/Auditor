@@ -99,6 +99,14 @@ export default function (app: Express): void {
       };
       localCallsMemory.unshift(processingCallStub);
 
+      // ── CRITICAL: Save stub to Supabase immediately ──────────
+      // On Vercel (serverless), the upload and assign-contact requests
+      // may hit different instances with independent memory.
+      // Saving to DB ensures assign-contact can find the call later.
+      saveCallToSupabase(processingCallStub).catch(err =>
+        console.warn(`[UPLOAD] Could not save stub to Supabase: ${err.message}`)
+      );
+
       const apiKey = process.env.ASSEMBLYAI_API_KEY;
       if (!apiKey) throw new Error("ASSEMBLYAI_API_KEY not configured");
 
@@ -163,6 +171,14 @@ export default function (app: Express): void {
         transcription: [],
       };
       localCallsMemory.unshift(processingCallStub);
+
+      // ── CRITICAL: Save stub to Supabase immediately ──────────
+      // On Vercel (serverless), the upload and assign-contact requests
+      // may hit different instances with independent memory.
+      // Saving to DB ensures assign-contact can find the call later.
+      saveCallToSupabase(processingCallStub).catch(err =>
+        console.warn(`[UPLOAD] Could not save stub to Supabase: ${err.message}`)
+      );
 
       const apiKey = process.env.ASSEMBLYAI_API_KEY;
       if (!apiKey) throw new Error("ASSEMBLYAI_API_KEY not configured");
