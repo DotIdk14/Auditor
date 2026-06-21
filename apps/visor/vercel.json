@@ -1,8 +1,8 @@
 {
   "version": 2,
   "framework": "vite",
-  "installCommand": "cd ../.. && npm install --legacy-peer-deps --no-audit --no-fund",
-  "buildCommand": "cd ../.. && npm run build -w apps/visor",
+  "installCommand": "echo 'Install deferred to build step'",
+  "buildCommand": "cd ../.. && npm install --no-audit --no-fund && npm run build -w apps/visor",
   "outputDirectory": "dist",
   "rewrites": [
     {
