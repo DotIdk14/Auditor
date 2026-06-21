@@ -11,10 +11,10 @@ export const PORT = parseInt(process.env.PORT || "3000", 10);
 export const JWT_SECRET = process.env.JWT_SECRET;
 export const JWT_EXPIRY = "24h";
 
-// ── AI Provider: "gemini" (default) ─────────────────────────────
-export const AI_PROVIDER = process.env.AI_PROVIDER || "gemini";
-export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+// ── AI Provider: "deepseek" (OpenAI-compatible) ─────────────────
+export const AI_PROVIDER = process.env.AI_PROVIDER || "deepseek";
+export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
