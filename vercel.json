@@ -1,6 +1,9 @@
 {
   "version": 2,
   "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w apps/visor",
+  "outputDirectory": "apps/visor/dist",
   "rewrites": [
     {
       "source": "/(.*)",
