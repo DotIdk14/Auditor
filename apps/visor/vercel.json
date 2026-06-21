@@ -1,8 +1,9 @@
 {
   "version": 2,
-  "installCommand": "cd ../.. && npm install",
-  "buildCommand": "cd ../.. && npm run build -w apps/visor",
-  "outputDirectory": "dist",
+  "rootDirectory": "apps/visor",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w apps/visor",
+  "outputDirectory": "apps/visor/dist",
   "framework": "vite",
   "rewrites": [
     {
