@@ -135,6 +135,31 @@ export async function createContact(
   const areaId = scope.areaId;
   const teamId = scope.teamId;
 
+  // Resolve userId to a valid UUID if it's an email (password-based auth)
+  let resolvedUserId = userId;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+  if (!isUuid && supabaseAdmin) {
+    try {
+      const { data: authUser } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", userId)
+        .maybeSingle();
+
+      if (authUser?.id) {
+        resolvedUserId = authUser.id;
+      } else {
+        // Try auth.users directly
+        const { data: adminData } = await supabaseAdmin.rpc("get_user_id_by_email", { user_email: userId });
+        // If RPC not available, fall through and use email as-is
+      }
+    } catch {
+      // If lookup fails, fall through — the DB will reject non-UUID values
+      // but we avoid crashing here
+    }
+  }
+
   const record: Record<string, unknown> = {
     full_name: input.fullName,
     phone: input.phone || null,
@@ -142,7 +167,7 @@ export async function createContact(
     company: input.company || null,
     source: input.source || "manual",
     status: input.status || "lead",
-    assigned_to: userId,
+    assigned_to: resolvedUserId,
     area_id: areaId,
     team_id: teamId,
     pipeline_id: input.pipelineId || null,
