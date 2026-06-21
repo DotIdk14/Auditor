@@ -1,4 +1,4 @@
-import { supabase } from "../config.js";
+import { supabase, supabaseAdmin } from "../config.js";
 import type { Contact, ContactCreate, ContactUpdate, ContactFilters, PaginatedResponse, ServiceScope } from "../types.js";
 
 const TABLE = "contacts";
@@ -54,13 +54,14 @@ export async function listContacts(
   filters: ContactFilters,
   scope: ServiceScope
 ): Promise<PaginatedResponse<Contact>> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
   const offset = (page - 1) * pageSize;
 
-  let query = supabase.from(TABLE).select("*", { count: "exact" });
+  let query = client.from(TABLE).select("*", { count: "exact" });
 
   // Apply scope filter
   query = buildScopeFilter(query, scope);
@@ -106,9 +107,10 @@ export async function getContact(
   id: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
-  let query = supabase.from(TABLE).select("*").eq("id", id);
+  let query = client.from(TABLE).select("*").eq("id", id);
   query = buildScopeFilter(query, scope);
 
   const { data, error } = await query.single();
@@ -126,7 +128,8 @@ export async function createContact(
   userId: string,
   scope: ServiceScope
 ): Promise<Contact> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
   // Derive area_id and team_id from the creating user's scope
   const areaId = scope.areaId;
@@ -148,7 +151,7 @@ export async function createContact(
     last_activity_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from(TABLE)
     .insert(record)
     .select()
@@ -163,7 +166,8 @@ export async function updateContact(
   input: ContactUpdate,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
   // First verify the contact exists and is accessible
   const existing = await getContact(id, scope);
@@ -184,7 +188,7 @@ export async function updateContact(
     updates.last_activity_at = new Date().toISOString();
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from(TABLE)
     .update(updates)
     .eq("id", id)
@@ -200,12 +204,13 @@ export async function updateContactStage(
   stageId: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
   const existing = await getContact(id, scope);
   if (!existing) return null;
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from(TABLE)
     .update({
       stage_id: stageId,
@@ -223,12 +228,13 @@ export async function deleteContact(
   id: string,
   scope: ServiceScope
 ): Promise<boolean> {
-  if (!supabase) throw new Error("Supabase no disponible");
+  const client = supabaseAdmin || supabase;
+  if (!client) throw new Error("Supabase no disponible");
 
   const existing = await getContact(id, scope);
   if (!existing) return false;
 
-  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+  const { error } = await client.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(`Error al eliminar contacto: ${error.message}`);
   return true;
 }
@@ -238,10 +244,11 @@ export async function findContactByPhoneOrEmail(
   email?: string | null,
   scope?: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) return null;
+  const client = supabaseAdmin || supabase;
+  if (!client) return null;
   if (!phone && !email) return null;
 
-  let query = supabase.from(TABLE).select("*");
+  let query = client.from(TABLE).select("*");
 
   if (phone && email) {
     query = query.or(`phone.eq.${phone},email.eq.${email}`);

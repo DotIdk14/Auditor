@@ -193,8 +193,30 @@ export default function (app: Express): void {
 
           if (correctPassword && password === correctPassword) {
             const role = FALLBACK_ROLES[searchEmail] || "supervisor";
+
+            // Intentar resolver el UUID real del usuario en auth.users
+            // Esto es necesario para que assigned_to funcione correctamente
+            // en la tabla contacts (FK a auth.users)
+            let userSub = searchEmail;
+            if (supabaseAdmin) {
+              try {
+                const { data: authUser } = await supabaseAdmin
+                  .schema("auth")
+                  .from("users")
+                  .select("id")
+                  .eq("email", searchEmail)
+                  .maybeSingle();
+                if (authUser?.id) {
+                  userSub = authUser.id;
+                  console.log(`[AUTH] UUID resuelto para ${searchEmail}: ${userSub}`);
+                }
+              } catch (err: any) {
+                console.warn(`[AUTH] No se pudo resolver UUID para ${searchEmail}: ${err.message}`);
+              }
+            }
+
             const token = signToken({
-              sub: searchEmail,
+              sub: userSub,
               email: searchEmail,
               displayName: username || searchEmail.split("@")[0],
               role,

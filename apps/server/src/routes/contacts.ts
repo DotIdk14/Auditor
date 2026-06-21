@@ -25,7 +25,7 @@ function ensureDemoContacts() {
 
 const createContactSchema = z.object({
   fullName: z.string().min(1, "El nombre es obligatorio").max(200),
-  phone: z.string().regex(/^[\d\s\-+()]{7,}$/, "Teléfono inválido").optional().nullable(),
+  phone: z.string().regex(/^[\d\s\-+()]{4,}$/, "Teléfono inválido (mín. 4 dígitos)").optional().nullable(),
   email: z.string().email("Email inválido").optional().nullable(),
   company: z.string().max(200).optional().nullable(),
   source: z.enum(["inbound", "outbound", "referral", "web", "event", "other", "manual"]).optional().default("manual"),
@@ -125,7 +125,15 @@ export default function (app: Express): void {
     try {
       const input = createContactSchema.parse(req.body);
 
-      if (IS_DEMO_MODE) {
+      // Si el userId no es un UUID válido, el usuario se autenticó por password
+      // sin tener cuenta en auth.users. En ese caso, creamos el contacto en memoria.
+      const userId = req.scope!.userId;
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+
+      if (IS_DEMO_MODE || !isUuid) {
+        if (!IS_DEMO_MODE) {
+          console.log(`[CONTACTS] userId no es UUID (${userId}), creando contacto en memoria`);
+        }
         ensureDemoContacts();
         const newContact = {
           id: `demo-contact-${Date.now()}`,
@@ -135,8 +143,8 @@ export default function (app: Express): void {
           company: input.company || null,
           source: input.source || "manual",
           status: input.status || "lead",
-          assigned_to: req.scope!.userId,
-          assignedToName: req.user?.displayName || "Usuario Demo",
+          assigned_to: userId,
+          assignedToName: req.user?.displayName || "Usuario",
           area_id: req.scope!.areaId || null,
           team_id: req.scope!.teamId || null,
           stageName: null,
@@ -149,7 +157,7 @@ export default function (app: Express): void {
         return res.status(201).json(newContact);
       }
 
-      const contact = await contactService.createContact(input, req.scope!.userId, req.scope!);
+      const contact = await contactService.createContact(input, userId, req.scope!);
       res.status(201).json(contact);
     } catch (err: any) {
       if (err instanceof z.ZodError) {
