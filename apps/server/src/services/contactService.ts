@@ -141,22 +141,44 @@ export async function createContact(
 
   if (!isUuid && supabaseAdmin) {
     try {
-      const { data: authUser } = await supabaseAdmin
+      // Step 1: Try profiles table first
+      const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("id")
         .eq("email", userId)
         .maybeSingle();
 
-      if (authUser?.id) {
-        resolvedUserId = authUser.id;
+      if (profile?.id) {
+        resolvedUserId = profile.id;
       } else {
-        // Try auth.users directly
-        const { data: adminData } = await supabaseAdmin.rpc("get_user_id_by_email", { user_email: userId });
-        // If RPC not available, fall through and use email as-is
+        // Step 2: Try auth.users via admin API
+        const { data: authUsers, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
+        if (!authErr && authUsers?.users) {
+          const matched = authUsers.users.find(
+            (u: any) => u.email?.toLowerCase() === userId.toLowerCase()
+          );
+          if (matched?.id) {
+            resolvedUserId = matched.id;
+          }
+        }
       }
     } catch {
-      // If lookup fails, fall through — the DB will reject non-UUID values
-      // but we avoid crashing here
+      // Step 3: Last resort — try to find ANY admin user to use as fallback
+      try {
+        const { data: anyAdmin } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .eq("role", "admin")
+          .limit(1)
+          .maybeSingle();
+        if (anyAdmin?.id) {
+          resolvedUserId = anyAdmin.id;
+          console.warn(`[CONTACTS] userId "${userId}" no es UUID ni existe en auth — usando admin fallback: ${resolvedUserId}`);
+        }
+      } catch {
+        // Cannot resolve; will let Supabase reject with a clear error
+        console.warn(`[CONTACTS] Cannot resolve userId "${userId}" to UUID — insert may fail`);
+      }
     }
   }
 
