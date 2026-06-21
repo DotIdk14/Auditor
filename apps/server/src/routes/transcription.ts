@@ -223,6 +223,16 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
         console.error("[TRANSCRIPT] Error en análisis OpenRouter:", orErr.message);
       }
 
+      // Normalizar el formato de análisis: extraer checklist → rubric
+      const utelChecklist = (finalUtelResult as any)?.checklist || (finalUtelResult as any)?.rubric || [];
+      const rubricItems = utelChecklist.map((item: any, i: number) => ({
+        title: item.title || `Criterio ${i + 1}`,
+        points: Math.round((item.score || 0) * (item.weight || 10)),
+        maxPoints: item.weight || 10,
+        status: (item.score || 0) >= 0.8 ? 'success' : (item.score || 0) >= 0.5 ? 'warning' : 'danger',
+        details: [item.feedback || item.evaluacion || 'Sin detalle'],
+      }));
+
       const finalCallData = {
         id: callId,
         contact_id: null,
@@ -237,7 +247,7 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
           status: "pending_contact",
         },
         score: {
-          global: Math.round(finalUtelResult.totalScore * 10),
+          global: Math.round((finalUtelResult as any).totalScore * 10 || 75),
           greeting: 85,
           needDiscovery: 80,
           objectionHandling: 70,
@@ -253,6 +263,17 @@ Responde JSON: { "speakers": { "0": "Vendedor"|"Cliente", "1": "...", ... } }`);
           salesOutcome,
           utel: finalUtelResult,
           emotionalAnalysis,
+          // Los siguientes campos son para compatibilidad con visor-audits.ts
+          rubric: rubricItems,
+          checklist: utelChecklist,
+          coaching: {
+            strengths,
+            improvements: weaknesses,
+            nextSteps,
+          },
+          agentName: 'Sistema Automático',
+          purchaseIntentPct: (finalUtelResult as any)?.emotionalAnalysis?.purchaseAptitudeScore || Math.round((finalUtelResult as any).totalScore * 10 || 50),
+          purchaseIntentLabel: (finalUtelResult as any)?.emotionalAnalysis?.purchaseAptitudeLabel || 'Medio',
         },
         transcription: correctedTranscription,
       };
