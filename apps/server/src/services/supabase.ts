@@ -1,4 +1,4 @@
-import { supabase } from "../config.js";
+import { supabase, supabaseAdmin } from "../config.js";
 
 // ── Call persistence ──────────────────────────────────────────────
 
@@ -34,7 +34,8 @@ export async function loadCallsFromSupabase(): Promise<any[]> {
 }
 
 export async function saveCallToSupabase(call: any): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
     // Ensure status is stored inside metadata (auditorias table has NO status column)
     const metadata = {
@@ -42,7 +43,7 @@ export async function saveCallToSupabase(call: any): Promise<void> {
       status: call.status || call.metadata?.status || 'por_auditar',
     };
 
-    const { error } = await supabase.from("auditorias").upsert({
+    const { error } = await client.from("auditorias").upsert({
       id: call.id,
       contact_id: call.contact_id || call.metadata?.contactId || null,
       area_id: call.area_id || null,
@@ -60,9 +61,10 @@ export async function saveCallToSupabase(call: any): Promise<void> {
 }
 
 export async function deleteCallFromSupabase(id: string): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
-    const { error } = await supabase.from("auditorias").delete().eq("id", id);
+    const { error } = await client.from("auditorias").delete().eq("id", id);
     if (error) console.warn("[SUPABASE] Could not delete call:", error.message);
   } catch (err: any) {
     console.warn("[SUPABASE] Connection error deleting call:", err.message);
@@ -72,9 +74,10 @@ export async function deleteCallFromSupabase(id: string): Promise<void> {
 // ── Notas persistence ─────────────────────────────────────────────
 
 export async function saveNotaToSupabase(nota: any): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
-    const { error } = await supabase.from("notas").upsert({
+    const { error } = await client.from("notas").upsert({
       id: nota.id,
       auditoria_id: nota.auditoriaId,
       supervisor_email: nota.supervisorEmail,
@@ -114,9 +117,10 @@ export async function loadNotasFromSupabase(auditoriaId: string): Promise<any[]>
 }
 
 export async function deleteNotaFromSupabase(notaId: string): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
-    const { error } = await supabase.from("notas").delete().eq("id", notaId);
+    const { error } = await client.from("notas").delete().eq("id", notaId);
     if (error) console.warn("[SUPABASE] Could not delete nota:", error.message);
   } catch (err: any) {
     console.warn("[SUPABASE] Connection error deleting nota:", err.message);
@@ -126,9 +130,10 @@ export async function deleteNotaFromSupabase(notaId: string): Promise<void> {
 // ── Objeciones persistence ─────────────────────────────────────────
 
 export async function saveObjecionToSupabase(objecion: any): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
-    const { error } = await supabase.from("objeciones").upsert({
+    const { error } = await client.from("objeciones").upsert({
       id: objecion.id,
       auditoria_id: objecion.auditoriaId,
       supervisor_email: objecion.supervisorEmail,
@@ -172,9 +177,10 @@ export async function loadObjecionesFromSupabase(auditoriaId: string): Promise<a
 }
 
 export async function deleteObjecionFromSupabase(objecionId: string): Promise<void> {
-  if (!supabase) return;
+  const client = supabaseAdmin || supabase;
+  if (!client) return;
   try {
-    const { error } = await supabase.from("objeciones").delete().eq("id", objecionId);
+    const { error } = await client.from("objeciones").delete().eq("id", objecionId);
     if (error) console.warn("[SUPABASE] Could not delete objecion:", error.message);
   } catch (err: any) {
     console.warn("[SUPABASE] Connection error deleting objecion:", err.message);
