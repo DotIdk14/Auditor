@@ -11,10 +11,11 @@ export const PORT = parseInt(process.env.PORT || "3000", 10);
 export const JWT_SECRET = process.env.JWT_SECRET;
 export const JWT_EXPIRY = "24h";
 
-// ── AI Provider: "deepseek" (OpenAI-compatible) ─────────────────
-export const AI_PROVIDER = process.env.AI_PROVIDER || "deepseek";
-export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
-export const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+// ── AI Provider: OpenCode Go (OpenAI-compatible) ───────────────
+export const AI_PROVIDER = process.env.AI_PROVIDER || "opencodego";
+export const OPENCODE_API_KEY = process.env.OPENCODE_API_KEY || "";
+export const OPENCODE_MODEL = process.env.OPENCODE_MODEL || "deepseek-v4-flash";
+export const OPENCODE_BASE_URL = process.env.OPENCODE_BASE_URL || "https://api.opencode.go/v1";
 
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
