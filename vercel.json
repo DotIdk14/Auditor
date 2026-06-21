@@ -1,10 +1,18 @@
 {
   "version": 2,
   "framework": "vite",
-  "installCommand": "npm install",
   "buildCommand": "npm run build -w apps/visor",
   "outputDirectory": "apps/visor/dist",
+  "functions": {
+    "apps/server/api/**/*.ts": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/apps/server/api/index.ts"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
