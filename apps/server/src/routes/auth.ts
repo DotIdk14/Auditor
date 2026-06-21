@@ -160,16 +160,23 @@ export default function (app: Express): void {
             areaId,
             teamId,
           });
-        } else {
-          console.warn(`[AUTH_DENIED] Acceso denegado para: ${email}.`);
+        }
+
+        // Si NO está autorizado por Supabase/ALLOWED_EMAILS pero hay password,
+        // NO retornamos 403 aún — dejamos que Option 2 lo intente.
+        if (!password) {
+          console.warn(`[AUTH_DENIED] Acceso denegado para: ${email} (sin password).`);
           return res.status(403).json({
             success: false,
             error: `Acceso denegado: El correo ${email} no tiene permisos. Contacta al administrador.`,
           });
         }
+
+        // Si hay password, caemos a Option 2
+        console.log(`[AUTH] ${email} no autorizado por perfil/ALLOWED_EMAILS, intentando password...`);
       }
 
-      // Option 2: Password Authentication (legacy fallback)
+      // Option 2: Password Authentication
       if (password) {
         const correctPassword = process.env.SUPERVISOR_PASSWORD;
 
@@ -196,6 +203,9 @@ export default function (app: Express): void {
             });
             return res.json({ success: true, token, username: username || searchEmail.split("@")[0], role });
           }
+
+          // Password incorrecto
+          return res.status(401).json({ success: false, error: "Contraseña de acceso incorrecta." });
         }
 
         if (!correctPassword) {

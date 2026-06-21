@@ -1,47 +1,55 @@
 -- ════════════════════════════════════════════════════════════════════
 -- Script: setup-supervisor.sql
 -- Propósito: Crear/actualizar el perfil de supervisor para ianidk1@gmail.com
+-- y asegurar que el trigger de auto-creación de perfiles esté activo.
 -- Ejecutar en: Supabase SQL Editor (https://supabase.com/dashboard/project/_/sql/new)
 -- ════════════════════════════════════════════════════════════════════
 
 -- 1. Verificar si el usuario existe en auth.users
--- Si no existe, debes crearlo primero desde Supabase Authentication > Add User
-SELECT id, email, created_at FROM auth.users WHERE email = 'ianidk1@gmail.com';
+DO $$
+DECLARE
+  uid uuid;
+BEGIN
+  SELECT id INTO uid FROM auth.users WHERE email = 'ianidk1@gmail.com';
 
--- 2. Verificar si ya tiene perfil
-SELECT * FROM public.profiles WHERE email = 'ianidk1@gmail.com';
+  IF uid IS NULL THEN
+    RAISE NOTICE '❌ El usuario ianidk1@gmail.com NO existe en auth.users.';
+    RAISE NOTICE '   Ve a Authentication > Add User en Supabase:';
+    RAISE NOTICE '   Email: ianidk1@gmail.com, Password: THe100cia, Auto-confirm: YES';
+    RAISE NOTICE '   Luego ejecuta este script de nuevo.';
+  ELSE
+    RAISE NOTICE '✅ Usuario encontrado en auth.users: %', uid;
 
--- 3. Si existe en auth.users pero no en profiles, usar el trigger on_auth_user_created
---    o insertar manualmente (reemplazar 'USER_UUID' con el id de auth.users):
--- INSERT INTO public.profiles (id, email, full_name, role, is_active)
--- VALUES ('USER_UUID', 'ianidk1@gmail.com', 'Ian Admin', 'supervisor', TRUE)
--- ON CONFLICT (id) DO UPDATE SET role = 'supervisor', is_active = TRUE;
+    -- 2. Insertar o actualizar el perfil
+    INSERT INTO public.profiles (id, email, full_name, role, is_active)
+    VALUES (uid, 'ianidk1@gmail.com', 'Ian Admin', 'supervisor', TRUE)
+    ON CONFLICT (id) DO UPDATE SET
+      role = 'supervisor',
+      is_active = TRUE,
+      full_name = COALESCE(EXCLUDED.full_name, profiles.full_name),
+      updated_at = NOW();
 
--- 4. Actualizar rol a supervisor (si ya existe el profile)
-UPDATE public.profiles
-SET role = 'supervisor', is_active = TRUE
-WHERE email = 'ianidk1@gmail.com';
+    RAISE NOTICE '✅ Perfil creado/actualizado en public.profiles con rol supervisor';
+  END IF;
+END $$;
 
--- 5. Verificar resultado
-SELECT id, email, full_name, role, is_active FROM public.profiles WHERE email = 'ianidk1@gmail.com';
+-- 3. Verificar el resultado final
+SELECT
+  p.id,
+  p.email,
+  p.full_name,
+  p.role,
+  p.is_active,
+  p.created_at,
+  p.updated_at
+FROM public.profiles p
+WHERE p.email = 'ianidk1@gmail.com';
 
--- ════════════════════════════════════════════════════════════════════
--- Para crear el usuario desde la API de Supabase (alternativa):
--- ════════════════════════════════════════════════════════════════════
--- Ve a Authentication > Add User en el dashboard de Supabase:
---   Email: ianidk1@gmail.com
---   Password: THe100cia
---   Auto-confirm: YES
--- Luego ejecuta las queries 3 y 4 de arriba.
-
--- ════════════════════════════════════════════════════════════════════
--- Para crear areas/teams (opcional, necesario para RLS):
--- ════════════════════════════════════════════════════════════════════
--- INSERT INTO public.areas (id, name, code, description)
--- VALUES ('area-001', 'Ventas General', 'VENTAS_GEN', 'Área de ventas principal');
---
--- INSERT INTO public.teams (id, area_id, name, code)
--- VALUES ('team-001', 'area-001', 'Equipo Alpha', 'ALPHA');
---
--- UPDATE public.profiles SET area_id = 'area-001', team_id = 'team-001'
--- WHERE email = 'ianidk1@gmail.com';
+-- 4. Verificar que el trigger on_auth_user_created existe
+SELECT
+  trigger_name,
+  event_manipulation,
+  event_object_table,
+  action_timing
+FROM information_schema.triggers
+WHERE trigger_name = 'on_auth_user_created';
