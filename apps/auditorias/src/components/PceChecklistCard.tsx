@@ -208,3 +208,4 @@ export default function PceChecklistCard({ utelData, globalScore }: PceChecklist
     </div>
   );
 }
+
