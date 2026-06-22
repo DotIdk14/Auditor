@@ -242,9 +242,6 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
 
       </div>
 
-      {/* Separador */}
-      <div className="border-t border-[#222222] my-1" />
-
       {/* 2. SECCIÓN DE RESÚMENES, MODALIDAD Y PSICOLOGÍA */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
 
@@ -275,7 +272,7 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
             </div>
           </div>
 
-          {/* Modalidad Detectada y Evaluación Detallada */}
+          {/* Modalidad Detectada y Justificación */}
           <div className={`rounded-2xl border p-5 shadow-xs flex flex-col gap-3 transition-colors ${theme.border}`} id="modalidad-card">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-widest flex items-center gap-1">
@@ -312,58 +309,73 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
 
       </div>
 
-      {/* 3. SECCIÓN DE RETROALIMENTACIÓN Y COACHING */}
+      {/* 3. SECCIÓN DE RETROALIMENTACIÓN Y COACHING DETALLADO */}
       <div className="bg-[#121212] rounded-2xl border border-[#222222] p-6 shadow-sm flex flex-col gap-5 w-full" id="advisor-performance-card">
         <div className="border-b border-[#222222] pb-3">
           <h3 className="text-xs uppercase tracking-wider text-gray-400 font-bold flex items-center gap-1.5">
             <Award className="w-4 h-4 text-indigo-400" />
-            Coaching de Desempeño Educativo y Áreas de Mejora del Asesor
+            Coaching de Desempeño Detallado
           </h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          {/* FORTALEZAS */}
           <div className="flex flex-col gap-2.5 bg-[#121212]">
-            <h4 className="text-xs font-bold text-emerald-450 text-[#00c8a5] flex items-center gap-1 tracking-wider uppercase pb-1 border-b border-emerald-500/10">
+            <h4 className="text-xs font-bold text-[#00c8a5] flex items-center gap-1 tracking-wider uppercase pb-1 border-b border-emerald-500/10">
               <ThumbsUp className="w-3.5 h-3.5" />
-              Fortalezas Auditadas
+              Fortalezas
             </h4>
             <ul className="flex flex-col gap-2">
-              {activeCall.analysis.strengths.map((str, i) => (
-                <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-[#00c8a5] rounded-full mt-1.5 flex-shrink-0" />
-                  <span>{str}</span>
-                </li>
-              ))}
+              {activeCall.analysis.strengths && activeCall.analysis.strengths.length > 0 ? (
+                activeCall.analysis.strengths.map((str, i) => (
+                  <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-[#00c8a5] rounded-full mt-1.5 flex-shrink-0" />
+                    <span>{str}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-xs text-gray-500 italic">No se identificaron fortalezas.</li>
+              )}
             </ul>
           </div>
 
+          {/* ÁREAS DE OPORTUNIDAD */}
           <div className="flex flex-col gap-2.5 md:border-l md:border-t-0 border-[#222222] md:pl-6 pt-4 md:pt-0">
             <h4 className="text-xs font-bold text-rose-450 text-rose-400 flex items-center gap-1 tracking-wider uppercase pb-1 border-b border-rose-500/10">
               <ThumbsDown className="w-3.5 h-3.5" />
               Áreas de Oportunidad
             </h4>
             <ul className="flex flex-col gap-2">
-              {activeCall.analysis.weaknesses.map((weak, i) => (
-                <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-rose-500 rounded-full mt-1.5 flex-shrink-0" />
-                  <span>{weak}</span>
-                </li>
-              ))}
+              {activeCall.analysis.weaknesses && activeCall.analysis.weaknesses.length > 0 ? (
+                activeCall.analysis.weaknesses.map((weak, i) => (
+                  <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5">
+                    <div className="w-1.5 h-1.5 bg-rose-500 rounded-full mt-1.5 flex-shrink-0" />
+                    <span>{weak}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-xs text-gray-500 italic">No se identificaron áreas de mejora.</li>
+              )}
             </ul>
           </div>
 
+          {/* PRÓXIMOS PASOS */}
           <div className="flex flex-col gap-2.5 md:border-l md:border-t-0 border-[#222222] md:pl-6 pt-4 md:pt-0">
             <h4 className="text-xs font-bold text-indigo-400 flex items-center gap-1 tracking-wider uppercase pb-1 border-b border-indigo-500/10">
               <Calendar className="w-3.5 h-3.5" />
-              Próximos Pasos Recomendados
+              Próximos Pasos
             </h4>
             <ul className="flex flex-col gap-2">
-              {activeCall.analysis.nextSteps.map((step, i) => (
-                <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5 bg-[#181818] p-2.5 rounded-lg border border-[#222222]">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
-                  <span>{step}</span>
-                </li>
-              ))}
+              {activeCall.analysis.nextSteps && activeCall.analysis.nextSteps.length > 0 ? (
+                activeCall.analysis.nextSteps.map((step, i) => (
+                  <li key={i} className="text-xs text-gray-300 flex items-start gap-1.5 bg-[#181818] p-2.5 rounded-lg border border-[#222222]">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
+                    <span>{step}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-xs text-gray-500 italic">Sin próximos pasos recomendados.</li>
+              )}
             </ul>
           </div>
         </div>
