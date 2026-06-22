@@ -100,6 +100,7 @@ export interface ChecklistItem {
   id: string;
   title: string;
   weight: number;
+  passingThreshold: number;
   score: number;
   status: 'passed' | 'failed';
   feedback: string;
@@ -147,6 +148,7 @@ export function buildChecklist(
       id: cat.id,
       title: cat.title,
       weight: cat.weight,
+      passingThreshold: cat.passingThreshold,
       score,
       status: score >= cat.passingThreshold ? 'passed' : 'failed',
       feedback: feedbackMap[cat.title] || cat.defaultFeedback,

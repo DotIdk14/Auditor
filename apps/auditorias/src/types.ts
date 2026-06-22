@@ -29,6 +29,7 @@ export interface UtelChecklistItem {
   id: string
   title: string
   weight: number
+  passingThreshold: number
   score: number
   status: 'passed' | 'failed'
   feedback: string

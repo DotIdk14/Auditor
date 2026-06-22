@@ -165,11 +165,11 @@ export function generateHighFidelitySimulatedCall(
       "GESTIÓN Y REGISTRO": "6.00 pts - Servicio excepcional. Se programó el envío por correo la bienvenida formal y se agendó hora matemática para mañana a las 11:00 AM.",
     },
     checklist: [
-      { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: scoreC1, status: 'passed' as const, feedback: "Indagación de perfil del prospecto.", subitems: subC1 },
-      { id: "C2", title: "GENERALIDADES", weight: 1.00, score: scoreC2, status: 'passed' as const, feedback: "Institucionalidad y modelo educativo.", subitems: subC2 },
-      { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: scoreC3, status: 'passed' as const, feedback: "Información de costos y beneficios.", subitems: subC3 },
-      { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: scoreC4, status: 'passed' as const, feedback: "Cierre de compromisos.", subitems: subC4 },
-      { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: scoreC5, status: 'passed' as const, feedback: "Cumplimiento de procesos UTEL.", subitems: subC5 },
+      { id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, passingThreshold: 0.80, score: scoreC1, status: 'passed' as const, feedback: "Indagación de perfil del prospecto.", subitems: subC1 },
+      { id: "C2", title: "GENERALIDADES", weight: 1.00, passingThreshold: 0.80, score: scoreC2, status: 'passed' as const, feedback: "Institucionalidad y modelo educativo.", subitems: subC2 },
+      { id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, passingThreshold: 0.80, score: scoreC3, status: 'passed' as const, feedback: "Información de costos y beneficios.", subitems: subC3 },
+      { id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, passingThreshold: 0.75, score: scoreC4, status: 'passed' as const, feedback: "Cierre de compromisos.", subitems: subC4 },
+      { id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, passingThreshold: 4.00, score: scoreC5, status: 'passed' as const, feedback: "Cumplimiento de procesos UTEL.", subitems: subC5 },
     ],
   };
 

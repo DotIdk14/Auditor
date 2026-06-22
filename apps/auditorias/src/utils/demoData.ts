@@ -56,7 +56,7 @@ export function generateDemoCall(): SalesCall {
         },
         checklist: [
           {
-            id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, score: 1.00, status: 'passed',
+            id: "C1", title: "CONOCE A TU CLIENTE", weight: 1.00, passingThreshold: 0.80, score: 1.00, status: 'passed',
             feedback: "Indagación de perfil del prospecto.",
             subitems: [
               { id: "c1_linea", name: "Interés en línea", weight: 0.20, checked: true },
@@ -67,7 +67,7 @@ export function generateDemoCall(): SalesCall {
             ]
           },
           {
-            id: "C2", title: "GENERALIDADES", weight: 1.00, score: 1.00, status: 'passed',
+            id: "C2", title: "GENERALIDADES", weight: 1.00, passingThreshold: 0.80, score: 1.00, status: 'passed',
             feedback: "Institucionalidad y modelo educativo.",
             subitems: [
               { id: "c2_num", name: "Numeralia (12+ años, 3 países, egresados)", weight: 0.34, checked: true },
@@ -76,7 +76,7 @@ export function generateDemoCall(): SalesCall {
             ]
           },
           {
-            id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, score: 1.00, status: 'passed',
+            id: "C3", title: "OFERTA ACADÉMICA", weight: 1.00, passingThreshold: 0.80, score: 1.00, status: 'passed',
             feedback: "Información de costos y beneficios.",
             subitems: [
               { id: "c3_costos", name: "Costos", weight: 0.20, checked: true },
@@ -87,7 +87,7 @@ export function generateDemoCall(): SalesCall {
             ]
           },
           {
-            id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, score: 1.00, status: 'passed',
+            id: "C4", title: "ACUERDOS Y CIERRE", weight: 1.00, passingThreshold: 0.75, score: 1.00, status: 'passed',
             feedback: "Cierre de compromisos.",
             subitems: [
               { id: "c4_res", name: "Resumen de la oferta", weight: 0.25, checked: true },
@@ -97,7 +97,7 @@ export function generateDemoCall(): SalesCall {
             ]
           },
           {
-            id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, score: 6.00, status: 'passed',
+            id: "C5", title: "GESTIÓN Y REGISTRO", weight: 6.00, passingThreshold: 4.00, score: 6.00, status: 'passed',
             feedback: "Cumplimiento de procesos UTEL.",
             subitems: [
               { id: "c5_int", name: "Hablar directamente con el interesado", weight: 1.20, checked: true },
