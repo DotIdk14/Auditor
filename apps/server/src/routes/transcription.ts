@@ -6,6 +6,8 @@ import {
   localCallsMemory,
   pendingTranscripts,
   prependAndRemoveCall,
+  supabase,
+  supabaseAdmin,
 } from "../config.js";
 import { assemblyAITranscribe } from "../services/assemblyai.js";
 import { callOpenRouter } from "../services/openrouter.js";
@@ -48,12 +50,75 @@ export default function (app: Express): void {
   // GET /api/transcript/:callId — Poll transcript status and get results
   app.get("/api/transcript/:callId", async (req, res) => {
     const { callId } = req.params;
-    const pending = pendingTranscripts.get(callId);
+    let pending = pendingTranscripts.get(callId);
 
+    // ── If not in memory, try to recover from Supabase ────────────
+    // This is critical for Vercel serverless: upload happened on instance A,
+    // but polling hits instance B where pendingTranscripts is empty.
     if (!pending) {
+      // 1. Check localCallsMemory first (already completed, warm instance)
       const existing = localCallsMemory.find(c => c.id === callId);
       if (existing) return res.json({ status: "completed", call: existing });
-      return res.status(404).json({ error: "Transcripción no encontrada" });
+
+      // 2. Try to recover from Supabase (persistent across instances)
+      if (supabase) {
+        try {
+          const client = supabaseAdmin || supabase;
+          const { data: dbCall } = await client
+            .from("auditorias")
+            .select("*")
+            .eq("id", callId)
+            .maybeSingle();
+
+          if (!dbCall) {
+            return res.status(404).json({ error: "Transcripción no encontrada", callId });
+          }
+
+          const meta = dbCall?.metadata || {};
+
+          // 2a. If analysis is already complete, restore the full call
+          if (meta.analysisComplete) {
+            const restoredCall = {
+              id: dbCall.id,
+              contact_id: dbCall.contact_id || null,
+              status: meta.status || 'por_auditar',
+              metadata: meta,
+              score: dbCall.score || { global: 0 },
+              analysis: dbCall.analysis || {},
+              transcription: dbCall.transcription || [],
+            };
+            localCallsMemory.unshift(restoredCall);
+            return res.json({ status: "completed", call: restoredCall });
+          }
+
+          // 2b. If transcriptId exists, reconstruct pending entry
+          const transcriptId = meta.transcriptId || meta.transcript_id;
+          if (transcriptId) {
+            pending = {
+              transcriptId,
+              audioBuffer: Buffer.alloc(0), // placeholder — audio will be re-fetched from Blob
+              fileName: meta?.fileName || "audio.mp3",
+              callId,
+              timestamp: Date.now(),
+            };
+            pendingTranscripts.set(callId, pending);
+            console.log(`[TRANSCRIPT] Recovered transcript ${transcriptId} for ${callId} from Supabase`);
+          } else {
+            // 2c. Call exists but no transcriptId and no analysisComplete → upload never completed
+            return res.status(404).json({
+              error: "Transcripción no encontrada",
+              detail: "El audio se recibió pero la transcripción no se inició. El transcriptId no está disponible en la base de datos.",
+              callId,
+            });
+          }
+        } catch (dbErr: any) {
+          console.warn(`[TRANSCRIPT] Supabase recovery failed for ${callId}: ${dbErr.message}`);
+          return res.status(404).json({ error: "Transcripción no encontrada", callId });
+        }
+      } else {
+        // No Supabase configured — in-memory only
+        return res.status(404).json({ error: "Transcripción no encontrada", callId });
+      }
     }
 
     const apiKey = process.env.ASSEMBLYAI_API_KEY;
@@ -320,6 +385,11 @@ ${JSON.stringify(correctedTranscription, null, 2)}
 
       prependAndRemoveCall(finalCallData, callId);
       pendingTranscripts.delete(callId);
+      // Mark analysis as complete and remove transient transcriptId
+      // so cold-start recovery knows this call is fully processed
+      (finalCallData.metadata as any).analysisComplete = true;
+      delete (finalCallData.metadata as any).transcriptId;
+      delete (finalCallData.metadata as any).transcript_id;
       // Guardamos en Supabase con contact_id = null (se asigna después)
       // Esto asegura que los datos sobrevivan entre instancias serverless
       saveCallToSupabase(finalCallData);

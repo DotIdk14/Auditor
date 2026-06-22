@@ -126,6 +126,20 @@ export default function (app: Express): void {
         timestamp: Date.now(),
       });
 
+      // ── Persist transcriptId in Supabase so polling survives cold starts ──
+      // On Vercel serverless, the next /api/transcript/:callId request may hit
+      // a different instance where pendingTranscripts is empty. Saving the
+      // transcript ID to the DB allows any instance to pick up and continue.
+      saveCallToSupabase({
+        id: callId,
+        metadata: { ...processingCallStub.metadata, transcriptId: transcript.id },
+        score: processingCallStub.score,
+        analysis: processingCallStub.analysis,
+        transcription: [],
+      }).catch(err =>
+        console.warn(`[UPLOAD] Could not save transcriptId to Supabase: ${err.message}`)
+      );
+
       console.log(`[UPLOAD] Transcripción asíncrona iniciada: callId=${callId}, transcriptId=${transcript.id}`);
       return res.json({ status: "processing", callId, transcriptId: transcript.id });
     } catch (error: any) {
@@ -197,6 +211,17 @@ export default function (app: Express): void {
         callId,
         timestamp: Date.now(),
       });
+
+      // ── Persist transcriptId in Supabase so polling survives cold starts ──
+      saveCallToSupabase({
+        id: callId,
+        metadata: { ...processingCallStub.metadata, transcriptId: transcript.id },
+        score: processingCallStub.score,
+        analysis: processingCallStub.analysis,
+        transcription: [],
+      }).catch(err =>
+        console.warn(`[BLOB] Could not save transcriptId to Supabase: ${err.message}`)
+      );
 
       console.log(`[BLOB] Transcripción asíncrona iniciada: callId=${callId}, transcriptId=${transcript.id}`);
       return res.json({ status: "processing", callId, transcriptId: transcript.id });
