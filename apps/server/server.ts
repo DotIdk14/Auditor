@@ -22,6 +22,7 @@ import mountDashboardRoutes from "./src/routes/dashboard.js";
 import mountVisorCallsRoutes from "./src/routes/visor-calls.js";
 import mountVisorAuditsRoutes from "./src/routes/visor-audits.js";
 import mountVisorResourcesRoutes from "./src/routes/visor-resources.js";
+import mountRecoveryRoutes from "./src/routes/recovery.js";
 
 const app = express();
 
@@ -101,6 +102,7 @@ mountDashboardRoutes(app);
 mountVisorCallsRoutes(app);
 mountVisorAuditsRoutes(app);
 mountVisorResourcesRoutes(app);
+mountRecoveryRoutes(app);
 
 // ── 404 handler (after all routes, before error handler) ─────────
 app.use((req, res, _next) => {
@@ -119,6 +121,12 @@ app.use((req, res, _next) => {
       "/api/tasks",
       "/api/visor/calls",
       "/api/whisper",
+      "/api/admin/assemblyai-transcripts",
+      "/api/admin/recover-transcript/:callId",
+      "/api/admin/force-recover/:callId",
+      "/api/admin/zombie-calls",
+      "/api/admin/zombie-call/:callId",
+      "/api/admin/cleanup-zombies",
     ],
   });
 });
