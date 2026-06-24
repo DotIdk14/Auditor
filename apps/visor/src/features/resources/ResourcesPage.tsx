@@ -1,12 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Image, MessageSquareText, AlertTriangle, StickyNote, Copy, Plus, X } from 'lucide-react';
+import { Image, MessageSquareText, AlertTriangle, StickyNote, Copy, Plus, X, CheckCircle2, Circle } from 'lucide-react';
 
 export default function ResourcesPage() {
   const { darkMode } = useOutletContext<{ darkMode: boolean }>();
   const [activeTab, setActiveTab] = useState<'images' | 'speech' | 'objections' | 'notes'>('images');
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [noteContent, setNoteContent] = useState('');
+  const [completedSpeeches, setCompletedSpeeches] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('completedSpeeches') || '[]');
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('completedSpeeches', JSON.stringify(completedSpeeches));
+  }, [completedSpeeches]);
+
+  const toggleSpeech = (id: string) => {
+    setCompletedSpeeches(prev =>
+      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+    );
+  };
 
   const tabs = [
     { id: 'images', label: 'Imágenes', icon: Image },
@@ -59,7 +74,7 @@ export default function ResourcesPage() {
       )}
 
       {activeTab === 'speech' && (
-        <div className="space-y-4 max-w-2xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {[
             {
               id: 'apertura',
@@ -177,20 +192,43 @@ De hecho, pensando en tu círculo cercano: ¿Hay alguien que también esté busc
 • Si responde SÍ: ¡Excelente! Compárteme su nombre y número y con gusto le brindo la información para apoyarlo.
 • Si responde NO: No pasa nada, [Nombre]. Si después recuerdas a alguien, me lo puedes compartir por WhatsApp y con gusto lo apoyo.`
             }
-          ].map((speech) => (
-            <div key={speech.id} className={`rounded-[5px] border-[3px] p-6 ${
-              darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'
-            }`}>
-              <h3 className={`text-sm font-bold font-display mb-3 ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-                {speech.icono} {speech.titulo}
-              </h3>
-              <div className={`text-[11px] leading-relaxed p-3 rounded-xl whitespace-pre-line ${
-                darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-stone-50 text-stone-600'
+          ].map((speech) => {
+            const isCompleted = completedSpeeches.includes(speech.id);
+            return (
+              <div key={speech.id} className={`rounded-[5px] border-[3px] p-5 transition-all ${
+                isCompleted
+                  ? darkMode
+                    ? 'bg-emerald-950/20 border-emerald-800/40 shadow-[4px_4px_0px_#052e16] order-1'
+                    : 'bg-emerald-50/80 border-emerald-300 shadow-[4px_4px_0px_#65a30d] order-1'
+                  : darkMode
+                    ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]'
+                    : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'
               }`}>
-                {speech.contenido}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className={`text-sm font-bold font-display ${isCompleted ? 'line-through opacity-60' : ''} ${
+                    darkMode ? 'text-stone-200' : 'text-stone-800'
+                  }`}>
+                    {speech.icono} {speech.titulo}
+                  </h3>
+                  <button onClick={() => toggleSpeech(speech.id)}
+                    className={`p-1 rounded-lg transition-all hover:scale-110 ${
+                      isCompleted
+                        ? 'text-emerald-500'
+                        : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
+                    }`}>
+                    {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                  </button>
+                </div>
+                <div className={`text-[11px] leading-relaxed p-3 rounded-xl whitespace-pre-line ${
+                  isCompleted
+                    ? darkMode ? 'bg-emerald-950/10 text-stone-500' : 'bg-emerald-50/50 text-stone-500'
+                    : darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-stone-50 text-stone-600'
+                }`}>
+                  {speech.contenido}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
