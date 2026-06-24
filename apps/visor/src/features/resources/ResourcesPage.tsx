@@ -60,31 +60,137 @@ export default function ResourcesPage() {
 
       {activeTab === 'speech' && (
         <div className="space-y-4 max-w-2xl">
-          <div className={`rounded-[5px] border-[3px] p-6 ${
-            darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'
-          }`}>
-            <h3 className={`text-sm font-bold font-display mb-3 ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-              🎯 Apertura
-            </h3>
-            <p className={`text-[11px] leading-relaxed p-3 rounded-xl ${darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-stone-50 text-stone-600'}`}>
-              "Buenos días/tardes, me comunico con [nombre] de parte de [institución]. 
-              El motivo de mi llamada es darle seguimiento a la información que solicitó acerca de nuestros programas 
-              académicos. ¿Me permite unos minutos para comentarle los detalles?"
-            </p>
-          </div>
+          {[
+            {
+              id: 'apertura',
+              icono: '🎯',
+              titulo: 'Apertura',
+              contenido: `Hola, buen día/tarde/noche. ¿Me comunico con [Nombre]? Mucho gusto, soy Ian Jarquín, asesor educativo de UTEL Universidad. ¿Cómo te encuentras el día de hoy?
 
-          <div className={`rounded-[5px] border-[3px] p-6 ${
-            darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'
-          }`}>
-            <h3 className={`text-sm font-bold font-display mb-3 ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-              💎 Presentación de Valor
-            </h3>
-            <p className={`text-[11px] leading-relaxed p-3 rounded-xl ${darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-stone-50 text-stone-600'}`}>
-              "Nuestro programa está diseñado para personas como usted que buscan crecer profesionalmente 
-              sin descuidar sus actividades actuales. Contamos con: horarios flexibles, tutores 
-              especializados y una plataforma 100% en línea."
-            </p>
-          </div>
+[Escuchar y responder: "Qué bueno, me da gusto escucharte."]
+
+Te contacto porque vi que solicitaste información sobre nuestra Licenciatura en [Carrera], ¿correcto?
+
+[Escuchar y responder: "Perfecto."]
+
+Para brindarte mejor atención, dime, ¿actualmente ya cuentas con tu certificado de bachillerato?
+
+[Escuchar y responder: "Excelente."]
+
+Y cuéntame, ¿esta sería la primera universidad que estás revisando o ya habías solicitado información en alguna otra institución?`
+            },
+            {
+              id: 'deteccion_necesidades',
+              icono: '🔍',
+              titulo: 'Detección de Necesidades',
+              contenido: `Perfecto, gracias por compartirme eso. Para poder recomendarte mejor la opción, me gustaría conocer un poco más de ti. ¿Qué fue lo que te motivó a buscar una licenciatura en este momento?
+
+[Escuchar y responder: "Entiendo."]
+
+Y actualmente, ¿te encuentras trabajando, estudiando o realizando alguna otra actividad?
+
+[Escuchar y responder: "Perfecto."]
+
+¿La idea de estudiar esta carrera va más enfocada a crecer laboralmente, cambiar de área, mejorar tus oportunidades o es principalmente un objetivo personal de obtener tu título?
+
+[Escuchar y responder: "Muy bien."]
+
+Y pensando a futuro, si en algunos años ya tuvieras tu título profesional y la preparación que buscas, ¿qué te gustaría que cambiara para ti a nivel laboral, económico o personal?`
+            },
+            {
+              id: 'modalidad_flexibilidad',
+              icono: '⚡',
+              titulo: 'Modalidad y Flexibilidad UTEL',
+              contenido: `Excelente, me gusta porque tienes claro lo que buscas alcanzar. Por lo que me comentas, considero que UTEL puede ser una opción que se adapte muy bien a tu situación. Algo importante es que nosotros nacimos como universidad en línea; no tuvimos que adaptarnos después a esta modalidad, sino que todos nuestros procesos fueron diseñados para personas que trabajan, tienen familia o necesitan flexibilidad.
+
+Actualmente contamos con aula virtual disponible las 24 horas, clases y materiales en línea, actividades organizadas durante la semana y acceso desde celular, tablet o computadora, sin necesidad de trasladarte a un campus.
+
+De hecho, para entender cómo podrías organizarlo: Si tú pudieras diseñar tu horario ideal para estudiar, ¿en qué momento del día crees que podrías dedicarle tiempo a tu carrera?
+
+[Escuchar]
+
+Justamente esa es una de las ventajas: tú adaptas la universidad a tu rutina, no tu rutina a la universidad.`
+            },
+            {
+              id: 'explicacion_licenciatura',
+              icono: '📚',
+              titulo: 'Explicación de la Licenciatura',
+              contenido: `Ahora sí, déjame platicarte un poco más sobre la Licenciatura en [Carrera]. Tiene una duración aproximada de [duración]. El plan de estudios está diseñado para que avances desarrollando conocimientos y competencias que puedas aplicar en el área profesional.
+
+Dentro de la carrera podrás encontrar temas clave como: [Materia o área 1], [Materia o área 2], [Materia o área 3] y [Materia o área 4]. Lo interesante es que desde los primeros periodos empiezas a desarrollar habilidades que puedes aplicar en proyectos personales o laborales.
+
+Me comentabas que buscabas la licenciatura por [RESPUESTA DE SONDEO], ¿verdad?`
+            },
+            {
+              id: 'validez_titulacion',
+              icono: '🎓',
+              titulo: 'Validez Oficial y Titulación',
+              contenido: `UTEL cuenta con Reconocimiento de Validez Oficial de Estudios (RVOE), por lo que tus estudios tienen respaldo oficial en México. Al concluir tu trayectoria académica podrás iniciar tu proceso de titulación de acuerdo con los requisitos del programa.
+
+Para ti, ¿qué tan importante es que la universidad tenga validez oficial y que puedas obtener un título profesional?`
+            },
+            {
+              id: 'acompanamiento_academico',
+              icono: '🤝',
+              titulo: 'Acompañamiento Académico',
+              contenido: `Perfecto. Otro punto importante es que durante la carrera no estarás solo. Tendrás el acompañamiento constante de docentes, un gestor académico, el área de éxito estudiantil y un equipo de revisión académica. La idea es que tengas apoyo durante todo el proceso y puedas avanzar correctamente.`
+            },
+            {
+              id: 'beneficio_platzi',
+              icono: '🚀',
+              titulo: 'Beneficio Platzi',
+              contenido: `Además, actualmente nuestros estudiantes cuentan con un beneficio adicional al iniciar clases: acceso a una membresía de Platzi sin costo extra. ¿Ya conocías Platzi?
+
+• Si responde SÍ: Excelente, entonces ya sabes el valor que tiene complementar una carrera con cursos de inteligencia artificial, liderazgo, programación, idiomas, marketing y muchas otras áreas.
+• Si responde NO: Platzi es una plataforma educativa reconocida en Latinoamérica que sirve como complemento para fortalecer habilidades adicionales mientras estudias.
+
+¿Consideras que algo así podría ayudarte a complementar tu perfil profesional?`
+            },
+            {
+              id: 'costos_inversion',
+              icono: '💰',
+              titulo: 'Costos e Inversión',
+              contenido: `Y ahora sí, te comparto la parte de inversión. Los costos de lista son de $2,000 MXN para la inscripción, una colegiatura mensual de $7,490 MXN y un complemento académico de $2,000 MXN cada 4 meses.
+
+Sin embargo, actualmente contamos con un beneficio de beca cercano al 50%, por lo que el costo final disminuye considerablemente. Para revisar exactamente cómo quedaría en tu caso, necesito validar tus datos y revisar la beca disponible.`
+            },
+            {
+              id: 'cierre_pasos',
+              icono: '📝',
+              titulo: 'Cierre y Siguiente Paso',
+              contenido: `Para apoyarte con tu proceso necesito generar tu registro y revisar tu beneficio. Los datos que necesito son tu nombre completo, CURP, correo electrónico y un número alterno de contacto.
+
+Respecto al inicio de clases tenemos estas fechas disponibles: [FECHAS]. ¿Cuál de estas opciones se ajusta mejor a tus planes?
+
+[Tomar datos]
+
+Perfecto, [Nombre]. Antes de finalizar, quiero asegurarme de resolver cualquier duda. ¿Qué información te gustaría tener clara para sentirte completamente seguro(a) de avanzar?`
+            },
+            {
+              id: 'referidos',
+              icono: '👥',
+              titulo: 'Programa de Referidos',
+              contenido: `Por cierto, [Nombre], antes de finalizar quiero comentarte un beneficio adicional que tienes como alumno UTEL. Contamos con un programa de recomendación: si conoces a alguien que también quiera estudiar y se inscribe con nosotros, puedes recibir hasta $2,000 MXN aplicados a tu colegiatura por cada referido.
+
+De hecho, pensando en tu círculo cercano: ¿Hay alguien que también esté buscando estudiar, terminar una carrera o mejorar profesionalmente?
+
+• Si responde SÍ: ¡Excelente! Compárteme su nombre y número y con gusto le brindo la información para apoyarlo.
+• Si responde NO: No pasa nada, [Nombre]. Si después recuerdas a alguien, me lo puedes compartir por WhatsApp y con gusto lo apoyo.`
+            }
+          ].map((speech) => (
+            <div key={speech.id} className={`rounded-[5px] border-[3px] p-6 ${
+              darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'
+            }`}>
+              <h3 className={`text-sm font-bold font-display mb-3 ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
+                {speech.icono} {speech.titulo}
+              </h3>
+              <div className={`text-[11px] leading-relaxed p-3 rounded-xl whitespace-pre-line ${
+                darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-stone-50 text-stone-600'
+              }`}>
+                {speech.contenido}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
