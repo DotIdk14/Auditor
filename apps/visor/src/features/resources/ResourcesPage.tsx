@@ -74,7 +74,21 @@ export default function ResourcesPage() {
       )}
 
       {activeTab === 'speech' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className={`text-[10px] font-bold ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+              {completedSpeeches.length} / 10 completados
+            </p>
+            {completedSpeeches.length > 0 && (
+              <button onClick={() => setCompletedSpeeches([])}
+                className={`text-[9px] font-bold px-3 py-1.5 rounded-xl border transition-all ${
+                  darkMode ? 'border-red-900/40 text-red-400 hover:bg-red-950/20' : 'border-red-200 text-red-500 hover:bg-red-50'
+                }`}>
+                Reiniciar todo
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {[
             {
               id: 'apertura',
@@ -230,6 +244,7 @@ De hecho, pensando en tu círculo cercano: ¿Hay alguien que también esté busc
             );
           })}
         </div>
+      </div>
       )}
 
       {activeTab === 'objections' && (
