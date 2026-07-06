@@ -78,7 +78,7 @@ export function useCreateNote() {
   return useMutation({
     mutationFn: ({ callId, text }: { callId: string; text: string }) =>
       apiClient.post(`/llamadas/${callId}/notas`, {
-        supervisorEmail: localStorage.getItem('visor_device_id') || 'unknown@visor.com',
+        supervisorEmail: localStorage.getItem('visor_device_id') || 'unknown@localhost',
         supervisorName: 'Usuario',
         segmentStart: 0,
         segmentEnd: 0,

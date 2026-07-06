@@ -1,9 +1,8 @@
 import type { Express } from "express";
 import jwt from "jsonwebtoken";
-import { supabase, supabaseAdmin, loginLimiter, JWT_SECRET, IS_DEMO_MODE } from "../config.js";
+import { supabase, supabaseAdmin, loginLimiter, JWT_SECRET } from "../config.js";
 import { signToken } from "../middleware/auth.js";
 import type { UserRole, JWTPayload } from "../types.js";
-import { findDemoUser } from "../services/demoSeeder.js";
 
 /**
  * Maps old Spanish role names to new English role names
@@ -29,12 +28,6 @@ function mapRole(oldRole: string | null | undefined): UserRole {
 
 // ── Email → Role mapping for fallback auth ──
 const FALLBACK_ROLES: Record<string, UserRole> = {
-  "admin@visor.com": "admin",
-  "sofia@visor.com": "area_manager",
-  "marcos@visor.com": "area_manager",
-  "zakir@visor.com": "coordinator",
-  "bagas@visor.com": "supervisor",
-  "leonardo@visor.com": "agent",
   "ianidk1@gmail.com": "supervisor",
 };
 
@@ -43,31 +36,6 @@ export default function (app: Express): void {
   app.post("/api/login", loginLimiter, async (req, res) => {
     try {
       const { email, displayName, username, password } = req.body;
-
-      // Option 0: Demo Mode — hardcoded test users (no DB required)
-      if (IS_DEMO_MODE && email && password) {
-        const demoUser = findDemoUser(email.trim().toLowerCase(), password);
-        if (demoUser) {
-          console.log(`[AUTH_DEMO] Acceso demo: ${demoUser.email} como ${demoUser.role}`);
-          const token = signToken({
-            sub: `demo-${demoUser.email.split('@')[0]}`,
-            email: demoUser.email,
-            displayName: demoUser.displayName,
-            role: demoUser.role,
-            areaId: demoUser.areaId,
-            teamId: demoUser.teamId,
-          });
-          return res.json({
-            success: true,
-            token,
-            username: demoUser.displayName,
-            role: demoUser.role,
-            areaId: demoUser.areaId,
-            teamId: demoUser.teamId,
-          });
-        }
-        // If not a demo user, fall through to normal auth
-      }
 
       // Option 1: Google OAuth / Email-based
       if (email) {

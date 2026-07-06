@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Shield, Key, Sparkles, User, ArrowRight, Coffee, Heart } from 'lucide-react';
+import { Shield, Key, User, ArrowRight, Coffee } from 'lucide-react';
 import { useAuthStore } from '../../auth/authStore';
 
 export default function LoginPage() {
@@ -10,21 +10,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-
-  const demoProfiles = [
-    { label: 'Admin 👑', username: 'admin@visor.com', role: 'admin', desc: 'Ver todo el sistema', color: 'from-amber-200 to-amber-300 text-amber-900' },
-    { label: 'Gerente Ventas 📈', username: 'sofia@visor.com', role: 'gerente', desc: 'Campañas / Retención', color: 'from-peach-100 to-peach-200 text-stone-800' },
-    { label: 'Gerente Soporte 🎧', username: 'marcos@visor.com', role: 'gerente', desc: 'Auditoría de Soporte', color: 'from-sky-100 to-sky-250 text-sky-900' },
-    { label: 'Coordinador 📋', username: 'zakir@visor.com', role: 'coordinador', desc: 'Coordinador Comercial', color: 'from-indigo-100 to-indigo-200 text-indigo-900' },
-    { label: 'Supervisor 🔍', username: 'bagas@visor.com', role: 'supervisor', desc: 'Controles de Calidad', color: 'from-purple-100 to-purple-200 text-purple-900' },
-    { label: 'Agente Ventas 🗣️', username: 'leonardo@visor.com', role: 'agente', desc: 'Agente Comercial', color: 'from-emerald-100 to-emerald-250 text-emerald-900' },
-  ];
-
-  const handleQuickSelect = (profile: typeof demoProfiles[0]) => {
-    setUsername(profile.username);
-    setPassword('123');
-    setLocalError(null);
-  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,39 +74,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Quick Access */}
-          <div className="space-y-4 pt-8">
-            <div className="flex items-center gap-2 text-[#d4a373] text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-4 h-4" />
-              <span>Acceso Rápido de Prueba (Demo Notebook)</span>
-            </div>
-            <p className="text-sm text-stone-400">Haz clic en cualquiera de estos perfiles para inicializar tu espacio de trabajo:</p>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {demoProfiles.map((p) => {
-                const isSelected = username === p.username;
-                return (
-                  <button
-                    key={p.username}
-                    type="button"
-                    onClick={() => handleQuickSelect(p)}
-                    className={`p-4 rounded-xl border text-left transition-all relative overflow-hidden group cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#1c1a18] border-[#d4a373] shadow-[0_0_10px_rgba(212,163,115,0.1)]'
-                        : 'bg-[#151311] border-[#2a2622] hover:border-[#3e382f]'
-                    }`}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className={`text-sm font-bold ${isSelected ? 'text-white' : 'text-stone-200'}`}>
-                        {p.label}
-                      </span>
-                      <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-pink-400' : 'bg-pink-300'}`} />
-                    </div>
-                    <p className="text-xs text-stone-400 line-clamp-1">{p.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+
         </div>
 
         {/* Right Side: Login Card */}
@@ -156,7 +109,7 @@ export default function LoginPage() {
                   id="login-username"
                   name="username"
                   type="text"
-                  placeholder="ej. admin@visor.com, sofia"
+                  placeholder="ej. usuario@correo.com"
                   value={username}
                   onChange={(e) => { setUsername(e.target.value); setLocalError(null); }}
                   className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"

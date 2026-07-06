@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { supabase, supabaseAdmin, localCallsMemory } from "../config.js";
-import { generateDemoAuditFull } from "../services/demoSeeder.js";
 
 /**
  * Transform a local memory call record into AuditFullResponse format.
@@ -89,22 +88,13 @@ export default function (app: Express): void {
     try {
       const { callId } = req.params;
 
-      // ── 1. Demo mode: serve generated audit data for any demo-prefixed callId ──
-      if (callId && callId.startsWith("demo-")) {
-        const demoData = generateDemoAuditFull(callId);
-        if (demoData) {
-          return res.json(demoData);
-        }
-        return res.status(404).json({ error: "Auditoría demo no encontrada" });
-      }
-
-      // ── 2. Check localCallsMemory FIRST (covers uploaded calls not yet in Supabase) ──
+      // ── 1. Check localCallsMemory FIRST (covers uploaded calls not yet in Supabase) ──
       const localCall = localCallsMemory.find((c: any) => c.id === callId);
       if (localCall) {
         return res.json(toAuditFullResponse(localCall));
       }
 
-      // ── 3. If Supabase is not configured and not found in memory, return 404 ──
+      // ── 2. If Supabase is not configured and not found in memory, return 404 ──
       if (!supabase) {
         return res.status(404).json({ error: "Auditoría no encontrada" });
       }

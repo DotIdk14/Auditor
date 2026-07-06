@@ -4,10 +4,9 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { supabase, PORT, IS_DEMO_MODE, JWT_SECRET, setLocalCallsMemory, demoContactsList, localCallsMemory, localNotasMemory } from "./src/config.js";
+import { supabase, PORT, JWT_SECRET, setLocalCallsMemory, localCallsMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
-import { seedAllDemoData } from "./src/services/demoSeeder.js";
 
 import mountAuthRoutes from "./src/routes/auth.js";
 import mountCallsRoutes from "./src/routes/calls.js";
@@ -81,7 +80,7 @@ app.get("/api/health", (_req, res) => {
   const routeCount = app._router?.stack?.filter((layer: any) => layer.route).length || 0;
   res.json({
     status: "ok",
-    mode: IS_DEMO_MODE ? "demo" : "supabase",
+    supabase: !!supabase,
     jwt: !!JWT_SECRET,
     routes: routeCount,
     timestamp: new Date().toISOString(),
@@ -136,20 +135,6 @@ app.use(errorHandler);
 
 // ── Startup: seed demo data or load from Supabase ────────────────
 console.log("Memoria de respaldo inicializada limpia para el Auditor Senior UTEL.");
-
-// ── Seed demo data only in demo mode (no Supabase) ──
-// When Supabase is configured, we only load real data from the database.
-if (IS_DEMO_MODE) {
-  const demo = seedAllDemoData();
-  localCallsMemory.length = 0;
-  localCallsMemory.push(...demo.calls);
-  demoContactsList.length = 0;
-  demoContactsList.push(...demo.contacts);
-  for (const [callId, notes] of Object.entries(demo.notes)) {
-    localNotasMemory.set(callId, notes);
-  }
-  console.log(`[DEMO] Seed completado: ${demo.calls.length} calls, ${demo.contacts.length} contactos, ${Object.keys(demo.notes).length} sets de notas`);
-}
 
 if (supabase) {
   loadCallsFromSupabase().then((calls) => {
