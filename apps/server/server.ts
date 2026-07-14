@@ -161,36 +161,20 @@ if (supabase) {
   } catch (_) { /* ignore */ }
 }
 
-// ── Vite / static integration ────────────────────────────────────
-const startServer = async () => {
-  // Listen FIRST so the server is available immediately
+// ── Static file serving (prod only — dev visor runs separately on :5174) ──
+if (process.env.NODE_ENV === "production") {
+  const distPath = path.join(process.cwd(), "dist");
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
+
+// ── Start server ────────────────────────────────────────────────
+if (!process.env.VERCEL) {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor en puerto ${PORT}`);
   });
-
-  // Then try to attach Vite middleware (dev mode) or static files (prod)
-  try {
-    if (process.env.NODE_ENV !== "production") {
-      const { createServer: createViteServer } = await import("vite");
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-    } else {
-      const distPath = path.join(process.cwd(), "dist");
-      app.use(express.static(distPath));
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    }
-  } catch (err: any) {
-    console.log(`[VITE] Middleware no disponible (opcional): ${err.message}`);
-  }
-};
-
-if (!process.env.VERCEL) {
-  startServer();
 }
 
 export default app;
