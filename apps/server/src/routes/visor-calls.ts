@@ -201,4 +201,76 @@ export default function (app: Express): void {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // POST /api/visor/calls/guardar - Save call session state (guide, notes, profile)
+  app.post("/api/visor/calls/guardar", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
+    try {
+      const bodySchema = z.object({
+        clientName: z.string().optional(),
+        career: z.string().optional(),
+        callSteps: z.array(z.object({
+          id: z.string(),
+          type: z.enum(['section', 'custom']),
+          sectionId: z.string().optional(),
+          title: z.string().optional(),
+          content: z.string().optional(),
+          skipped: z.boolean().optional(),
+        })).optional(),
+        currentStep: z.number().optional(),
+        finalDecision: z.enum(['yes', 'no']).nullable().optional(),
+        notes: z.array(z.object({
+          id: z.string(),
+          content: z.string(),
+          timestamp: z.number(),
+        })).optional(),
+        safeChecklist: z.array(z.object({
+          id: z.string(),
+          label: z.string(),
+          checked: z.boolean(),
+        })).optional(),
+        profileTags: z.object({
+          trabaja: z.boolean(),
+          tieneHijos: z.boolean(),
+          preocupadoCostos: z.boolean(),
+        }).optional(),
+        variables: z.record(z.string(), z.string()).optional(),
+      });
+
+      const data = bodySchema.parse(req.body);
+      const userId = req.scope?.userId || "unknown";
+
+      if (supabase) {
+        const { error } = await supabase.from("call_guides").insert({
+          user_id: userId,
+          client_name: data.clientName || null,
+          career: data.career || null,
+          call_steps: data.callSteps || [],
+          current_step: data.currentStep || 0,
+          final_decision: data.finalDecision || null,
+          notes: data.notes || [],
+          safe_checklist: data.safeChecklist || [],
+          profile_tags: data.profileTags || { trabaja: false, tieneHijos: false, preocupadoCostos: false },
+          variables: data.variables || {},
+          created_at: new Date().toISOString(),
+        });
+
+        if (error) {
+          console.error("[VISOR_CALLS] Error saving guide:", error.message);
+          return res.status(500).json({ error: error.message });
+        }
+      }
+
+      res.status(201).json({
+        success: true,
+        id: `guide_${Date.now()}`,
+        message: "Guía de llamada guardada correctamente",
+      });
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: err.issues });
+      }
+      console.error("[VISOR_CALLS] Error saving guide:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
