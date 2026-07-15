@@ -1,12 +1,27 @@
+import { useState } from 'react';
 import { useCallStore } from '../../store/useCallStore';
 import { StepItem } from './StepItem';
-import { RotateCcw, Plus } from 'lucide-react';
+import { RotateCcw, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 interface Props { darkMode: boolean; }
 
 export function CallSidebar({ darkMode }: Props) {
   const { callSteps, resetCall, getCallProgress, setShowAddStepModal } = useCallStore();
   const progress = getCallProgress();
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <div className="w-10 shrink-0">
+        <button onClick={() => setCollapsed(false)}
+          className={`w-full flex items-center justify-center p-2 rounded-2xl border transition-all ${
+            darkMode ? 'bg-[#1c1a18] border-[#3e382f] text-stone-400 hover:text-stone-200' : 'bg-white border-[#dfd9cc] text-stone-500 hover:text-stone-700'
+          }`} title="Expandir mapa">
+          <PanelLeftOpen className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full lg:w-72 shrink-0">
@@ -20,6 +35,9 @@ export function CallSidebar({ darkMode }: Props) {
             <button onClick={resetCall} className={`p-1 rounded-lg transition-all hover:scale-110 ${
               darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
             }`} title="Reiniciar llamada"><RotateCcw className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setCollapsed(true)} className={`p-1 rounded-lg transition-all hover:scale-110 ${
+              darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
+            }`} title="Minimizar mapa"><PanelLeftClose className="w-3.5 h-3.5" /></button>
           </div>
         </div>
         <div className={`w-full h-1.5 rounded-full overflow-hidden mb-3 ${darkMode ? 'bg-[#24211e]' : 'bg-stone-100'}`}>

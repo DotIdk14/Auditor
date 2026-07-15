@@ -114,7 +114,7 @@ export function CostFlowStep({ darkMode }: Props) {
               <div className="flex items-center justify-center gap-4">
                 <button onClick={() => { setCallCostDecision('yes'); jumpToAcordar(); }}
                   className="px-8 py-3 rounded-xl bg-emerald-600 text-white text-sm font-black hover:bg-emerald-500 transition-all hover:scale-105 shadow-lg shadow-emerald-900/30">SÍ</button>
-                <button onClick={() => { setCallCostDecision('no'); jumpToAcordar(); }}
+                <button onClick={() => setCallCostDecision('no')}
                   className={`px-8 py-3 rounded-xl text-sm font-black transition-all hover:scale-105 border-2 ${
                     darkMode ? 'border-red-800/40 text-red-400 hover:bg-red-950/30' : 'border-red-200 text-red-600 hover:bg-red-50'
                   }`}>NO</button>

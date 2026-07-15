@@ -1,27 +1,49 @@
+import { useEffect } from 'react';
 import { useCallStore } from '../../store/useCallStore';
 import { defaultSpeechSections } from '../../data/defaultSpeeches';
+import { objectionReasons } from '../../data/defaultObjections';
 import { renderScriptText } from '../../utils/renderScriptText';
-import { SafeReturnChecklist } from './SafeReturnChecklist';
-import { VariablesPanel } from './VariablesPanel';
 import { SondeoSelector } from './SondeoSelector';
-import { InterestDecision } from './InterestDecision';
 import { CostFlowStep } from './CostFlowStep';
 import { AcordarStep } from './AcordarStep';
 import { NavigationBar } from './NavigationBar';
-import { AlertCircle, Star, XCircle } from 'lucide-react';
-import { CheckCircle2 } from 'lucide-react';
+import { AlertCircle, Star, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
 
 interface Props { darkMode: boolean; }
+
+const SONDEO_TO_SPEECH: Record<string, string> = {
+  'Crecer laboralmente': 'modalidad_flexibilidad',
+  'Cambiar de área': 'explicacion_licenciatura',
+  'Mejorar oportunidades': 'validez_titulacion',
+  'Objetivo personal / obtener título': 'validez_titulacion',
+  'Apoyo familiar': 'modalidad_flexibilidad',
+  'Promoción o ascenso': 'explicacion_licenciatura',
+};
 
 export function ConversationAssistant({ darkMode }: Props) {
   const {
     currentCallStep, callSteps, callVariables,
-    getSectionSpeeches, defaultSpeeches: defaults, callInterestDecision,
-    getSafeCallStep, profileTags,
+    getSectionSpeeches, defaultSpeeches: defaults,
+    getSafeCallStep, setDefaultSpeech,
+    callInterestDecision, setCallInterestDecision,
+    getMergedObjections, toggleUsedResponse, usedResponses,
+    callCostReason, setCallCostReason,
   } = useCallStore();
 
   const currentStep = getSafeCallStep();
   if (!currentStep) return null;
+
+  const isPersonalizar = currentStep.sectionId === 'personalizar';
+  const sondeoAnswer = callVariables['RESPUESTA DE SONDEO'] || '';
+
+  useEffect(() => {
+    if (isPersonalizar && sondeoAnswer && !defaults['personalizar']) {
+      const recommended = SONDEO_TO_SPEECH[sondeoAnswer];
+      if (recommended) {
+        setDefaultSpeech('personalizar', recommended);
+      }
+    }
+  }, [isPersonalizar, sondeoAnswer]);
 
   if (currentStep.type === 'custom') {
     return (
@@ -54,16 +76,9 @@ export function ConversationAssistant({ darkMode }: Props) {
   const section = defaultSpeechSections.find(s => s.id === currentStep.sectionId);
   const speeches = getSectionSpeeches(currentStep.sectionId || '');
 
-  const isPersonalizar = currentStep.sectionId === 'personalizar';
   const isCostos = currentStep.sectionId === 'costos';
   const isAcordar = currentStep.sectionId === 'acordar';
   const isSondeo = currentStep.sectionId === 'sondeo';
-
-  // Profile-based benefit highlighting for costos
-  const profileHighlights: string[] = [];
-  if (profileTags.trabaja) profileHighlights.push('flexibilidad de horarios');
-  if (profileTags.tieneHijos) profileHighlights.push('clases grabadas 24/7');
-  if (profileTags.preocupadoCostos) profileHighlights.push('beca significativa');
 
   return (
     <div className="space-y-4">
@@ -83,78 +98,178 @@ export function ConversationAssistant({ darkMode }: Props) {
         </div>
       </div>
 
-      {/* Safe return checklist */}
-      <SafeReturnChecklist darkMode={darkMode} />
-
-      {/* Variables panel */}
-      <VariablesPanel darkMode={darkMode} />
-
-      {/* Profile tags for sondeo */}
-      {isSondeo && (
-        <div className={`rounded-2xl border p-4 ${darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'}`}>
-          <p className={`text-[9px] font-bold mb-2 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
-            Perfil del cliente (selecciona lo que aplique):
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {([
-              { key: 'trabaja' as const, label: 'Trabaja', icon: '💼' },
-              { key: 'tieneHijos' as const, label: 'Tiene Hijos', icon: '👨‍👩‍👧' },
-              { key: 'preocupadoCostos' as const, label: 'Preocupado por Costos', icon: '💰' },
-            ]).map(tag => (
-              <button key={tag.key} onClick={() => useCallStore.getState().toggleProfileTag(tag.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-[10px] font-bold transition-all ${
-                  profileTags[tag.key]
-                    ? darkMode ? 'bg-amber-900/40 border-amber-600 text-amber-200 scale-105' : 'bg-amber-100 border-amber-500 text-amber-800 scale-105'
-                    : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:border-amber-800/40' : 'bg-white border-stone-200 text-stone-500 hover:border-amber-300'
-                }`}>
-                <span>{tag.icon}</span> {tag.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Profile benefit highlights for costos */}
-      {isCostos && profileHighlights.length > 0 && (
-        <div className={`rounded-2xl border p-3 ${darkMode ? 'bg-amber-950/10 border-amber-800/30' : 'bg-amber-50 border-amber-200'}`}>
-          <p className={`text-[9px] font-bold mb-1 ${darkMode ? 'text-amber-400' : 'text-amber-700'}`}>
-            ✨ Beneficios relevantes para este cliente:
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {profileHighlights.map(h => (
-              <span key={h} className={`text-[8px] font-bold px-2 py-1 rounded-full ${darkMode ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
-                {h}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Speech content area */}
       {isPersonalizar ? (
         <div className="space-y-3">
           <p className={`text-[9px] font-bold ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
             Todos los beneficios que se le otorgan al cliente:
           </p>
-          {speeches.map(speech => {
-            const isFav = defaults['personalizar'] === speech.id;
-            const isCustom = speech.isCustom === true;
-            return (
-              <div key={speech.id} className={`rounded-xl border-[2px] p-4 ${isFav ? darkMode ? 'bg-[#24211e] border-emerald-800/30' : 'bg-emerald-50/50 border-emerald-200' : darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-stone-200'}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {isFav && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 shrink-0" />}
-                  <h4 className={`text-[11px] font-bold font-display ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>{speech.title}</h4>
-                  {isCustom && (
-                    <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>MI speech</span>
-                  )}
+          {(() => {
+            const recommendedId = sondeoAnswer ? SONDEO_TO_SPEECH[sondeoAnswer] : null;
+            const sorted = [...speeches].sort((a, b) => {
+              if (a.id === recommendedId) return -1;
+              if (b.id === recommendedId) return 1;
+              return 0;
+            });
+            return sorted.map(speech => {
+              const isFav = defaults['personalizar'] === speech.id;
+              const isRecommended = speech.id === recommendedId;
+              const isCustom = speech.isCustom === true;
+              return (
+                <div key={speech.id} className={`rounded-xl border-[2px] p-4 ${
+                  isRecommended
+                    ? darkMode ? 'bg-amber-950/20 border-amber-600/50 ring-1 ring-amber-600/20' : 'bg-amber-50 border-amber-400 ring-1 ring-amber-200'
+                    : isFav
+                      ? darkMode ? 'bg-[#24211e] border-emerald-800/30' : 'bg-emerald-50/50 border-emerald-200'
+                      : darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-stone-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {isRecommended && <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                    {isFav && !isRecommended && <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 shrink-0" />}
+                    <h4 className={`text-[11px] font-bold font-display ${isRecommended ? 'text-amber-600 dark:text-amber-400' : 'text-stone-200 dark:text-stone-800'}`}>{speech.title}</h4>
+                    {isRecommended && (
+                      <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/40 text-amber-300' : 'bg-amber-200 text-amber-700'}`}>Recomendado</span>
+                    )}
+                    {isCustom && (
+                      <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>MI speech</span>
+                    )}
+                  </div>
+                  <div className={`text-[10px] leading-relaxed p-3 rounded-lg whitespace-pre-line ${isRecommended ? 'bg-amber-100/50 dark:bg-amber-950/20' : 'bg-[#1c1a18] dark:bg-white'} ${isRecommended ? 'text-stone-700 dark:text-stone-300' : 'text-stone-400 dark:text-stone-600'}`}>
+                    {renderScriptText(speech.content, darkMode, callVariables)}
+                  </div>
                 </div>
-                <div className={`text-[10px] leading-relaxed p-3 rounded-lg whitespace-pre-line ${darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-white text-stone-600'}`}>
-                  {renderScriptText(speech.content, darkMode, callVariables)}
+              );
+            });
+          })()}
+          
+          {/* Interest decision */}
+          {callInterestDecision === null && (
+            <div className={`rounded-2xl border-[2px] p-4 ${darkMode ? 'bg-[#24211e] border-amber-800/30' : 'bg-amber-50/50 border-amber-200'}`}>
+              <p className={`text-[11px] font-bold font-display mb-3 ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
+                ¿Le interesa continuar?
+              </p>
+              <p className={`text-[9px] mb-4 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+                Selecciona SÍ o NO para continuar al cierre.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setCallInterestDecision('yes')}
+                  className="flex-1 py-3 rounded-xl bg-emerald-500/20 border-2 border-emerald-500/40 text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/30 transition-all">
+                  SÍ — Le interesa
+                </button>
+                <button onClick={() => setCallInterestDecision('no')}
+                  className="flex-1 py-3 rounded-xl bg-red-500/20 border-2 border-red-500/40 text-red-400 text-[11px] font-bold hover:bg-red-500/30 transition-all">
+                  NO — No le interesa
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Interest decision result */}
+          {callInterestDecision === 'yes' && (
+            <div className={`flex items-center gap-3 p-4 rounded-xl ${darkMode ? 'bg-emerald-950/20 border border-emerald-800/30' : 'bg-emerald-50 border border-emerald-200'}`}>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+              <div>
+                <p className={`text-[10px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>SÍ — Confirma interés</p>
+                <p className={`text-[8px] mt-0.5 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>Continuar al siguiente paso</p>
+              </div>
+            </div>
+          )}
+
+          {callInterestDecision === 'no' && (
+            <div className="space-y-3">
+              <div className={`flex items-center gap-3 p-4 rounded-xl ${darkMode ? 'bg-red-950/20 border border-red-800/30' : 'bg-red-50 border border-red-200'}`}>
+                <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                <div>
+                  <p className={`text-[10px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>NO — No le interesa</p>
+                  <p className={`text-[8px] mt-0.5 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>Selecciona la razón para ver objeciones relevantes</p>
                 </div>
               </div>
-            );
-          })}
-          <InterestDecision darkMode={darkMode} label="¿Le interesa continuar?" sublabel="Selecciona SÍ o NO para continuar al cierre." />
+
+              {/* Objection reason selector */}
+              {callCostReason === null && (
+                <div className={`rounded-xl border-[2px] p-5 ${darkMode ? 'bg-[#24211e] border-amber-800/30' : 'bg-amber-50/50 border-amber-200'}`}>
+                  <p className={`text-sm font-black font-display mb-2 ${darkMode ? 'text-stone-100' : 'text-stone-900'}`}>¿Cuál es la razón?</p>
+                  <p className={`text-[10px] mb-4 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Selecciona el motivo para ver las objeciones más relevantes.</p>
+                  <div className="space-y-2">
+                    {objectionReasons.map((reason) => (
+                      <button key={reason.id} onClick={() => setCallCostReason(reason.id)}
+                        className={`w-full text-left p-3 rounded-xl border-2 text-[11px] font-bold transition-all ${
+                          darkMode ? 'border-[#4a4036] text-stone-300 hover:border-amber-800/40 hover:text-amber-400 hover:bg-amber-950/20'
+                          : 'border-stone-200 text-stone-600 hover:border-amber-300 hover:text-amber-700 hover:bg-amber-50'
+                        }`}>{reason.label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Objections list */}
+              {callCostReason !== null && (() => {
+                const mergedObjections = getMergedObjections();
+                const checkRelevance = (catId: string) => {
+                  const r = objectionReasons.find(rs => rs.id === callCostReason);
+                  return r?.matchedObjections.includes(catId) ?? false;
+                };
+                const sorted = [...mergedObjections].sort((a, b) => {
+                  const r = objectionReasons.find(rs => rs.id === callCostReason);
+                  if (!r) return 0;
+                  return (r.matchedObjections.includes(a.id) ? -1 : 0) - (r.matchedObjections.includes(b.id) ? -1 : 0);
+                });
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>OBJECIONES DISPONIBLES</span>
+                      <span className={`text-[9px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+                        Razón: {objectionReasons.find(r => r.id === callCostReason)?.label}
+                      </span>
+                      <button onClick={() => setCallCostReason(null)}
+                        className={`ml-auto text-[9px] font-bold px-2 py-1 rounded-lg border transition-all ${
+                          darkMode ? 'border-[#3e382f] text-stone-400 hover:text-stone-200' : 'border-stone-200 text-stone-500 hover:text-stone-700'
+                        }`}>Cambiar</button>
+                    </div>
+                    {sorted.map((cat) => {
+                      const relevant = checkRelevance(cat.id);
+                      return (
+                        <div key={cat.id} className={`rounded-xl border-[2px] p-4 ${
+                          relevant ? darkMode ? 'bg-amber-950/20 border-amber-800/40' : 'bg-amber-50 border-amber-300'
+                          : darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-stone-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm">{cat.icon}</span>
+                            <h4 className={`text-[11px] font-bold font-display ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>{cat.title}</h4>
+                            {relevant && (
+                              <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/40 text-amber-300' : 'bg-amber-200 text-amber-700'}`}>Relevante</span>
+                            )}
+                          </div>
+                          <p className={`text-[9px] italic mb-2 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>{cat.objection}</p>
+                          {cat.responses.map((resp) => {
+                            const isUsed = usedResponses.includes(resp.id);
+                            return (
+                              <div key={resp.id} className="mb-2 last:mb-0">
+                                <div className="flex items-center justify-between">
+                                  <p className={`text-[9px] font-bold mb-1 ${darkMode ? 'text-stone-300' : 'text-stone-700'}`}>{resp.title}</p>
+                                  <button onClick={() => toggleUsedResponse(resp.id)}
+                                    className={`text-[8px] font-bold px-2 py-0.5 rounded-lg transition-all ${
+                                      isUsed
+                                        ? darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+                                        : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
+                                    }`}>
+                                    {isUsed ? '✓ Usado' : 'Marcar usado'}
+                                  </button>
+                                </div>
+                                <div className={`text-[10px] leading-relaxed p-3 rounded-lg whitespace-pre-line ${isUsed ? 'opacity-50' : ''} ${darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-white text-stone-600'}`}>
+                                  {resp.content}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       ) : isCostos ? (
         <CostFlowStep darkMode={darkMode} />

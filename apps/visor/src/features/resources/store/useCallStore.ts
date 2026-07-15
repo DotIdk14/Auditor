@@ -1,8 +1,13 @@
 import { create } from 'zustand';
-import type { CallStep, Speech, ObjectionResponse, ObjectionCategory, SafeCheckItem, CallNote, ActiveTab, CostDecision } from '../types';
+import type {
+  CallStep, Speech, ObjectionResponse, ObjectionCategory, SafeCheckItem, CallNote,
+  ActiveTab, CostDecision, ProspectProfile, ValueCheckItem, Motivation, PainPoint,
+} from '../types';
+import { DEFAULT_PROSPECT_PROFILE, DEFAULT_VALUE_CHECKLIST } from '../types';
 import { defaultSpeechSections } from '../data/defaultSpeeches';
 import { defaultObjectionCategories } from '../data/defaultObjections';
 import { DEFAULT_CALL_STEPS } from '../data/callSteps';
+import { generateTags } from '../data/profile/profileEngine';
 import {
   getCustomSpeeches, saveCustomSpeeches,
   getCustomObjections, saveCustomObjections,
@@ -109,6 +114,28 @@ interface CallState {
   getAllSectionsMerged: () => (typeof defaultSpeechSections[number] & { speeches: Speech[] })[];
   getCallProgress: () => number;
   getSafeCallStep: () => CallStep;
+
+  // ─── GPS STATE ─────────────────────────────────────────
+  profile: ProspectProfile;
+  updateProfile: (updates: Partial<ProspectProfile>) => void;
+  updateProfileSituation: (updates: Partial<ProspectProfile['situation']>) => void;
+  toggleMotivation: (m: Motivation) => void;
+  togglePainPoint: (p: PainPoint) => void;
+  regenerateTags: () => void;
+
+  usedBlockIds: string[];
+  markBlockUsed: (blockId: string) => void;
+  markBlockSignal: (blockId: string, signal: 'positive' | 'negative') => void;
+  blockSignals: Record<string, 'positive' | 'negative'>;
+
+  valueChecklist: ValueCheckItem[];
+  toggleValueCheck: (id: string) => void;
+
+  callCostReasonGPS: string | null;
+  setCallCostReasonGPS: (v: string | null) => void;
+
+  convictionLevel: number | null;
+  setConvictionLevel: (v: number | null) => void;
 }
 
 const DEFAULT_SAFE_CHECKLIST: SafeCheckItem[] = [
@@ -202,6 +229,12 @@ export const useCallStore = create<CallState>((set, get) => ({
       visitedSteps: new Set([0]),
       showDemoInvite: false,
       callInterestDecision: null,
+      profile: { ...DEFAULT_PROSPECT_PROFILE },
+      usedBlockIds: [],
+      blockSignals: {},
+      valueChecklist: [...DEFAULT_VALUE_CHECKLIST],
+      callCostReasonGPS: null,
+      convictionLevel: null,
     });
   },
 
@@ -509,4 +542,65 @@ export const useCallStore = create<CallState>((set, get) => ({
     const { callSteps, currentCallStep } = get();
     return callSteps[currentCallStep] || callSteps[0];
   },
+
+  // ─── GPS STATE ─────────────────────────────────────────
+  profile: { ...DEFAULT_PROSPECT_PROFILE },
+  updateProfile: (updates) => set(s => {
+    const newProfile = { ...s.profile, ...updates };
+    newProfile.generatedTags = generateTags(newProfile);
+    return { profile: newProfile };
+  }),
+  updateProfileSituation: (updates) => set(s => {
+    const newProfile = { ...s.profile, situation: { ...s.profile.situation, ...updates } };
+    newProfile.generatedTags = generateTags(newProfile);
+    return { profile: newProfile };
+  }),
+  toggleMotivation: (m) => set(s => {
+    const exists = s.profile.motivations.includes(m);
+    const newMotivations = exists
+      ? s.profile.motivations.filter(x => x !== m)
+      : [...s.profile.motivations, m];
+    const newProfile = { ...s.profile, motivations: newMotivations };
+    newProfile.generatedTags = generateTags(newProfile);
+    return { profile: newProfile };
+  }),
+  togglePainPoint: (p) => set(s => {
+    const exists = s.profile.painPoints.includes(p);
+    const newPainPoints = exists
+      ? s.profile.painPoints.filter(x => x !== p)
+      : [...s.profile.painPoints, p];
+    const newProfile = { ...s.profile, painPoints: newPainPoints };
+    newProfile.generatedTags = generateTags(newProfile);
+    return { profile: newProfile };
+  }),
+  regenerateTags: () => set(s => ({
+    profile: { ...s.profile, generatedTags: generateTags(s.profile) },
+  })),
+
+  usedBlockIds: [],
+  markBlockUsed: (blockId) => set(s => ({
+    usedBlockIds: s.usedBlockIds.includes(blockId)
+      ? s.usedBlockIds
+      : [...s.usedBlockIds, blockId],
+  })),
+  markBlockSignal: (blockId, signal) => set(s => ({
+    blockSignals: { ...s.blockSignals, [blockId]: signal },
+    usedBlockIds: s.usedBlockIds.includes(blockId)
+      ? s.usedBlockIds
+      : [...s.usedBlockIds, blockId],
+  })),
+  blockSignals: {},
+
+  valueChecklist: [...DEFAULT_VALUE_CHECKLIST],
+  toggleValueCheck: (id) => set(s => ({
+    valueChecklist: s.valueChecklist.map(item =>
+      item.id === id ? { ...item, checked: !item.checked } : item
+    ),
+  })),
+
+  callCostReasonGPS: null,
+  setCallCostReasonGPS: (v) => set({ callCostReasonGPS: v }),
+
+  convictionLevel: null,
+  setConvictionLevel: (v) => set({ convictionLevel: v }),
 }));

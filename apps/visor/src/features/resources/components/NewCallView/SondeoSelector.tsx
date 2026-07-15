@@ -1,5 +1,5 @@
 import { useCallStore } from '../../store/useCallStore';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { CheckCircle2, Circle, Sparkles } from 'lucide-react';
 
 interface Props { darkMode: boolean; }
 
@@ -12,9 +12,37 @@ const SONDEO_OPTIONS = [
   'Promoción o ascenso',
 ];
 
+const SONDEO_BENEFITS: Record<string, { title: string; content: string }> = {
+  'Crecer laboralmente': {
+    title: 'Crecimiento profesional',
+    content: 'UTEL te ofrece networking con profesionales del sector, proyectos reales aplicables a tu trabajo y un plan de estudios actualizado al mercado laboral actual.',
+  },
+  'Cambiar de área': {
+    title: 'Transición profesional',
+    content: 'Con UTEL puedes reinventarte: nuestro modelo flexible te permite estudiar mientras trabajas, facilitando el cambio de carrera sin dejar de generar ingresos.',
+  },
+  'Mejorar oportunidades': {
+    title: 'Más oportunidades',
+    content: 'El título profesional amplía significativamente tus opciones laborales. UTEL te prepara con competencias que las empresas buscan actualmente.',
+  },
+  'Objetivo personal / obtener título': {
+    title: 'Cumple tu meta',
+    content: 'Obtener tu título es un logro personal que nadie te puede quitar. UTEL te acompaña paso a paso para que lo logres en tu tiempo.',
+  },
+  'Apoyo familiar': {
+    title: 'Futuro para tu familia',
+    content: 'Estudiar en UTEL es una inversión en el bienestar de tu familia. La flexibilidad te permite estar presente mientras construyes un futuro mejor.',
+  },
+  'Promoción o ascenso': {
+    title: 'Avanza en tu carrera',
+    content: 'Muchas empresas requieren título para ascensos. UTEL te da las herramientas prácticas para que no solo obtengas el título, sino que te diferencies.',
+  },
+};
+
 export function SondeoSelector({ darkMode }: Props) {
   const { callVariables, setCallVariables } = useCallStore();
   const selected = callVariables['RESPUESTA DE SONDEO'] || '';
+  const benefit = selected ? SONDEO_BENEFITS[selected] : null;
 
   return (
     <div className={`rounded-2xl border-[2px] p-4 ${darkMode ? 'bg-[#24211e] border-amber-800/30' : 'bg-amber-50/50 border-amber-200'}`}>
@@ -46,6 +74,19 @@ export function SondeoSelector({ darkMode }: Props) {
         <p className={`text-[8px] mt-2 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
           Se sustituirá <span className="font-bold text-amber-500">[RESPUESTA DE SONDEO]</span> en los scripts de Personalizar.
         </p>
+      )}
+      {benefit && (
+        <div className={`mt-4 rounded-xl border-[2px] p-4 ${darkMode ? 'bg-[#1c1a18] border-emerald-800/30' : 'bg-emerald-50/50 border-emerald-200'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="w-4 h-4 text-emerald-500" />
+            <p className={`text-[10px] font-bold font-display ${darkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+              {benefit.title}
+            </p>
+          </div>
+          <p className={`text-[10px] leading-relaxed ${darkMode ? 'text-stone-400' : 'text-stone-600'}`}>
+            {benefit.content}
+          </p>
+        </div>
       )}
     </div>
   );

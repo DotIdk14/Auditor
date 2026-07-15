@@ -1,0 +1,68 @@
+import type { ObjectionPsychology } from '../../types';
+
+export const objectionPsychologyMap: Record<string, ObjectionPsychology> = {
+  costos: {
+    realMeaning: 'No ve suficiente valor para justificar la inversión. No es que no tenga dinero, es que no está convencido de que vale la pena.',
+    emotionBehind: 'Miedo a perder dinero, miedo a equivocarse, inseguridad en la decisión.',
+    dontSay: '"Pero es una inversión en ti mismo" — suena a discurso genérico y el prospecto lo sabe.',
+    recommendedSpeech: 'Entiendo tu preocupación. Déjame mostrarte algo: con la beca que tienes, la colegiatura baja de $7,240 a $2,419. Y si piensas en cuánto ganarías más con título, la diferencia es significativa.',
+    followUpQuestion: '¿Qué opinas? ¿Con la beca sería más accesible?',
+    afterResponse: 'Si acepta: avanzar al cierre. Si sigue dudando: escala 1-10.',
+  },
+  duda: {
+    realMeaning: 'Necesita más información o validación. No es un "no", es un "todavía no estoy seguro".',
+    emotionBehind: 'Inseguridad, miedo a equivocarse, necesidad de aprobación externa.',
+    dontSay: '"Piénsalo bien" — le das permiso para no decidir y probablemente no vuelva a llamar.',
+    recommendedSpeech: 'Por supuesto, es una decisión importante. Lo que sí me gustaría que sepas es que la beca tiene fecha de vigencia. ¿Te parece si te doy un resumen de los puntos clave para que los tengas claros?',
+    followUpQuestion: '¿Qué duda específica te queda por resolver?',
+    afterResponse: 'Si resuelve duda: avanzar. Si no: agendar seguimiento con fecha.',
+  },
+  tiempo: {
+    realMeaning: 'No cree que pueda compatibilizar estudios con su vida actual. No es falta de tiempo real, es falta de confianza en la modalidad.',
+    emotionBehind: 'Agobio, sobrecarga, percepción de que será demasiado difícil.',
+    dontSay: '"Todos encuentran tiempo" — invalidas su preocupación y generas resentimiento.',
+    recommendedSpeech: 'Entiendo perfectamente. La mayoría de nuestros estudiantes trabajan tiempo completo. Con clases grabadas que puedes ver a cualquier hora y materiales disponibles 24/7, tú defines cuándo estudiar.',
+    followUpQuestion: '¿En qué momento del día crees que podrías dedicarle 30-45 minutos?',
+    afterResponse: 'Si identifica momento: mostrar horario flexible. Si no: ofrecer modalidad semipresencial si aplica.',
+  },
+  modalidad: {
+    realMeaning: 'No confía en que la educación en línea sea de calidad o que pueda aprender sin estar en un salón físico.',
+    emotionBehind: 'Escepticismo, preferencia por lo tradicional, miedo a lo desconocido.',
+    dontSay: '"La educación en línea es igual de buena" — es una afirmación genérica sin evidencia.',
+    recommendedSpeech: 'Lo entiendo, muchas personas piensan eso al principio. Pero UTEL no es una universidad tradicional adaptada a línea, nacimos así. Tenemos webinarios ao vivo, tutorías personalizadas y un gestor académico que te acompaña.',
+    followUpQuestion: '¿Te gustaría que te muestre cómo funciona el aula virtual?',
+    afterResponse: 'Si acepta demo: mostrar. Si no: enfatizar acompañamiento humano.',
+  },
+  competencia: {
+    realMeaning: 'Ya tiene otra opción o está comparando. No es un rechazo a UTEL, es una comparación pendiente.',
+    emotionBehind: 'Confusión por exceso de opciones, necesidad de claridad, miedo a elegir mal.',
+    dontSay: '"Somos mejores que ellos" — suena desesperado y poco profesional.',
+    recommendedSpeech: 'Me alegra que estés explorando opciones. ¿Qué es lo que más te ha gustado de esa universidad? Quizás UTEL puede ofrecerte algo similar con la ventaja de la flexibilidad y las becas disponibles.',
+    followUpQuestion: '¿Qué es lo más importante para ti al elegir una universidad?',
+    afterResponse: 'Comparar punto por punto con UTEL. Destacar diferenciadores.',
+  },
+  confianza: {
+    realMeaning: 'No conoce UTEL o no confía en la institución. Necesita prueba social y autoridad.',
+    emotionBehind: 'Desconfianza, miedo a estafa, inseguridad institucional.',
+    dontSay: '"Somos la mejor universidad en línea" — afirmación sin evidencia.',
+    recommendedSpeech: 'UTEL es una universidad con más de 15 años de trayectoria, con Reconocimiento de Validez Oficial de Estudios por la SEP. Cientos de egresados ya ejercen profesionalmente con nuestro título.',
+    followUpQuestion: '¿Qué necesitarías para sentirte seguro/a?',
+    afterResponse: 'Ofrecer datos concretos: egresados, acreditación, reseñas.',
+  },
+  calidad: {
+    realMeaning: 'Duda de que la educación en línea pueda ser tan buena como la presencial.',
+    emotionBehind: 'Escepticismo sobre el modelo educativo, comparación con universidades presenciales.',
+    dontSay: '"Es la misma calidad" — no explicar el por qué.',
+    recommendedSpeech: 'Nuestro modelo educativo está diseñado para que apliques lo que aprendes directamente en tu trabajo. Tenemos docentes en activo en el sector, evaluaciones constantes y seguimiento personalizado.',
+    followUpQuestion: '¿Qué es lo que más valoras en una educación?',
+    afterResponse: 'Conectar respuestas con modelo UTEL.',
+  },
+  familia: {
+    realMeaning: 'Necesita aprobación de alguien más para decidir. No tiene autonomía total en la decisión.',
+    emotionBehind: 'Presión familiar, necesidad de apoyo, miedo a decidir solo.',
+    dontSay: '"Es tu decisión" — lo aísla y genera más presión.',
+    recommendedSpeech: 'Por supuesto, es una decisión importante y es bueno contar con el apoyo de tu familia. ¿Te gustaría que te prepare un resumen con los puntos clave que puedas compartir con ellos?',
+    followUpQuestion: '¿Quién más estaría involucrado en la decisión?',
+    afterResponse: 'Preparar resumen ejecutivo para compartir. Ofrecer llamada conjunta.',
+  },
+};
