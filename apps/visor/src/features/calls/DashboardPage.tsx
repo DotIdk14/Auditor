@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useOutletContext } from 'react-router-dom';
 import { useCalls, useMoveCall } from '../../hooks/useCalls';
@@ -27,6 +28,22 @@ export default function DashboardPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isContactAddOpen, setIsContactAddOpen] = useState(false);
   const [isNoteAddOpen, setIsNoteAddOpen] = useState(false);
+
+  const buttonRefs = useRef<Record<string, HTMLButtonElement>>({});
+  const menuRefs = useRef<Record<string, HTMLDivElement>>({});
+
+  useEffect(() => {
+    if (!activeCardMenuId) return;
+    const handleClick = (e: MouseEvent) => {
+      const menu = menuRefs.current[activeCardMenuId];
+      const btn = buttonRefs.current[activeCardMenuId];
+      if (menu && !menu.contains(e.target as Node) && btn && !btn.contains(e.target as Node)) {
+        setActiveCardMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [activeCardMenuId]);
 
   const { data: calls = [], isLoading, error } = useCalls({ search: searchQuery || undefined });
   const moveCall = useMoveCall();
@@ -88,6 +105,8 @@ export default function DashboardPage() {
             onAuditSelect={handleAuditSelect}
             onMoveCall={(id: string, status: CallStatus) => moveCall.mutate({ id, status })}
             onAdd={() => setIsAddOpen(true)}
+            buttonRefs={buttonRefs}
+            menuRefs={menuRefs}
           />
         )}
 
@@ -200,7 +219,19 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect }: an
   );
 }
 
-function KanbanBoard({ calls, darkMode, getCallsByStatus, activeCardMenuId, setActiveCardMenuId, onAuditSelect, onMoveCall, onAdd }: any) {
+function KanbanBoard({ calls, darkMode, getCallsByStatus, activeCardMenuId, setActiveCardMenuId, onAuditSelect, onMoveCall, onAdd, buttonRefs, menuRefs }: any) {
+  const getMenuPosition = (callId: string): React.CSSProperties => {
+    const btn = buttonRefs.current[callId];
+    if (!btn) return {};
+    const card = btn.closest('[data-call-card]');
+    const rect = (card || btn).getBoundingClientRect();
+    return {
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+    };
+  };
+
   const columns = [
     { id: 'por_auditar', title: 'Por auditar', color: 'bg-orange-400', dotColor: 'bg-orange-400' },
     { id: 'en_revision', title: 'En revisión', color: 'bg-purple-400', dotColor: 'bg-purple-400' },
@@ -239,7 +270,7 @@ function KanbanBoard({ calls, darkMode, getCallsByStatus, activeCardMenuId, setA
                 </div>
               ) : (
                 getCallsByStatus(col.id).map((call: any) => (
-                  <div key={call.id}
+                  <div key={call.id} data-call-card
                     onClick={() => onAuditSelect(call.id)}
                     className={`border-[3px] rounded-[5px] p-4 transition-all cursor-pointer hover:-translate-x-1 hover:-translate-y-1 ${
                       darkMode ? 'bg-[#24211e] border-[#4a4036] hover:bg-[#2e2a24] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] hover:bg-stone-50 shadow-[4px_4px_0px_#2d2d2d]'
@@ -255,34 +286,39 @@ function KanbanBoard({ calls, darkMode, getCallsByStatus, activeCardMenuId, setA
                       
                       <div className="relative" onClick={(e) => e.stopPropagation()}>
                         <button
+                          ref={(el) => { if (el) buttonRefs.current[call.id] = el; }}
                           onClick={() => setActiveCardMenuId(activeCardMenuId === call.id ? null : call.id)}
                           className={`p-1 rounded-lg ${darkMode ? 'hover:bg-[#2e2a24] text-stone-400' : 'hover:bg-stone-100 text-stone-400'}`}>
                           <MoreVertical className="w-3.5 h-3.5" />
                         </button>
                         
-                        {activeCardMenuId === call.id && (
-                          <div className={`absolute right-0 top-6 w-44 border rounded-xl shadow-lg z-20 py-1 text-xs ${
-                            darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'
-                          }`}>
+                        {activeCardMenuId === call.id && createPortal(
+                          <div
+                            ref={(el) => { if (el) menuRefs.current[call.id] = el; }}
+                            style={getMenuPosition(call.id)}
+                            className={`fixed border rounded-xl shadow-xl z-[9999] py-1 text-xs ${
+                              darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'
+                            }`}>
                             {col.id !== 'en_revision' && (
-                              <button className={`w-full text-left px-3 py-2 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
+                              <button className={`w-full text-left px-3 py-2.5 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
                                 onClick={() => { onMoveCall(call.id, 'en_revision'); setActiveCardMenuId(null); }}>
                                 Mover a: En revisión
                               </button>
                             )}
                             {col.id !== 'completada' && (
-                              <button className={`w-full text-left px-3 py-2 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
+                              <button className={`w-full text-left px-3 py-2.5 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
                                 onClick={() => { onMoveCall(call.id, 'completada'); setActiveCardMenuId(null); }}>
                                 Mover a: Completada
                               </button>
                             )}
                             {col.id !== 'por_auditar' && (
-                              <button className={`w-full text-left px-3 py-2 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
+                              <button className={`w-full text-left px-3 py-2.5 ${darkMode ? 'hover:bg-[#24211e] text-stone-200' : 'hover:bg-[#FAF6F0] text-stone-700'}`}
                                 onClick={() => { onMoveCall(call.id, 'por_auditar'); setActiveCardMenuId(null); }}>
                                 Mover a: Por auditar
                               </button>
                             )}
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </div>
                     </div>

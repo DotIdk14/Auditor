@@ -183,8 +183,32 @@ export const AnnotationSchema = z.object({
 
 export type ContactStatus = 'lead' | 'prospect' | 'customer' | 'churned';
 export type ContactSource = 'inbound' | 'outbound' | 'referral' | 'web' | 'event' | 'other' | 'manual';
+export type ContactDisposition = 'no_contactado' | 'cuelgue' | 'evaluando';
+
+export type InteractionType = 'llamada' | 'correo' | 'whatsapp';
+export type InteractionTipificacion = 'positiva' | 'negativa';
+
+export interface InteractionFile {
+  name: string;
+  type: string;
+  size: number;
+  url: string;
+}
+
+export interface Interaction {
+  id: string;
+  contact_id: string;
+  type: InteractionType;
+  tipificacion: InteractionTipificacion;
+  notes: string | null;
+  files: InteractionFile[];
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+}
 
 export const ContactStatusSchema = z.enum(['lead', 'prospect', 'customer', 'churned']);
+export const ContactDispositionSchema = z.enum(['no_contactado', 'cuelgue', 'evaluando']);
 
 export interface Contact {
   id: string;
@@ -194,6 +218,8 @@ export interface Contact {
   company: string | null;
   source: ContactSource;
   status: ContactStatus;
+  disposition: ContactDisposition;
+  disposition_locked: boolean;
   assigned_to: string;
   assignedToName?: string;
   area_id: string | null;
@@ -203,6 +229,7 @@ export interface Contact {
   stageName?: string;
   metadata: Record<string, unknown>;
   last_activity_at: string | null;
+  callback_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -210,6 +237,8 @@ export interface Contact {
 export interface ContactFilters {
   search?: string;
   status?: ContactStatus;
+  source?: ContactSource;
+  disposition?: ContactDisposition;
   assignedTo?: string;
   stageId?: string;
   areaId?: string;

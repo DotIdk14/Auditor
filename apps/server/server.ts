@@ -4,7 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { supabase, PORT, JWT_SECRET, setLocalCallsMemory, localCallsMemory } from "./src/config.js";
+import { supabase, PORT, JWT_SECRET, setLocalCallsMemory, localCallsMemory, localContactsMemory, prependContact } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
@@ -22,6 +22,7 @@ import mountVisorCallsRoutes from "./src/routes/visor-calls.js";
 import mountVisorAuditsRoutes from "./src/routes/visor-audits.js";
 import mountVisorResourcesRoutes from "./src/routes/visor-resources.js";
 import mountRecoveryRoutes from "./src/routes/recovery.js";
+import mountInteractionsRoutes from "./src/routes/interactions.js";
 
 const app = express();
 
@@ -102,6 +103,7 @@ mountVisorCallsRoutes(app);
 mountVisorAuditsRoutes(app);
 mountVisorResourcesRoutes(app);
 mountRecoveryRoutes(app);
+mountInteractionsRoutes(app);
 
 // ── 404 handler (after all routes, before error handler) ─────────
 app.use((req, res, _next) => {
@@ -135,6 +137,146 @@ app.use(errorHandler);
 
 // ── Startup: seed demo data or load from Supabase ────────────────
 console.log("Memoria de respaldo inicializada limpia para el Auditor Senior UTEL.");
+
+// Seed demo contacts when no Supabase is configured
+if (!supabase && localContactsMemory.length === 0) {
+  const now = new Date().toISOString();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString();
+  const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString();
+  const demoContacts = [
+    // ── No contactados ──
+    {
+      id: "demo-contact-001",
+      full_name: "María García López",
+      phone: "+52 55 1234 5678",
+      email: "maria.garcia@empresa.com",
+      company: "Tech Solutions SA",
+      source: "web",
+      status: "lead",
+      disposition: "no_contactado",
+      disposition_locked: false,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: {},
+      last_activity_at: null,
+      callback_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: "demo-contact-002",
+      full_name: "Roberto Díaz Sánchez",
+      phone: "+52 55 8765 4321",
+      email: "roberto.diaz@negocios.com",
+      company: "Negocios Globales",
+      source: "outbound",
+      status: "lead",
+      disposition: "no_contactado",
+      disposition_locked: false,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: {},
+      last_activity_at: null,
+      callback_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+    // ── Cuelgues (pendientes de callback) ──
+    {
+      id: "demo-contact-003",
+      full_name: "Carlos Rodríguez Martínez",
+      phone: "+52 33 9876 5432",
+      email: "carlos.rodriguez@firma.mx",
+      company: "Consultoría Moderna",
+      source: "referral",
+      status: "lead",
+      disposition: "cuelgue",
+      disposition_locked: false,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: { notes: "Se le marcó pero no contestó. Pide que le llamemos mañana por la tarde." },
+      last_activity_at: now,
+      callback_at: tomorrow,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: "demo-contact-004",
+      full_name: "Laura Hernández Ruiz",
+      phone: "+52 81 5555 9999",
+      email: "laura.hernandez@corp.com",
+      company: "Corporativo del Norte",
+      source: "inbound",
+      status: "lead",
+      disposition: "cuelgue",
+      disposition_locked: false,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: { notes: "En reunión, pide volver a llamar a las 3pm" },
+      last_activity_at: now,
+      callback_at: nextWeek,
+      created_at: now,
+      updated_at: now,
+    },
+    // ── Prospectos evaluando ──
+    {
+      id: "demo-contact-005",
+      full_name: "Ana Martínez Fernández",
+      phone: "+52 81 5555 1234",
+      email: "ana.martinez@corporativo.com",
+      company: "Corporativo del Norte",
+      source: "outbound",
+      status: "prospect",
+      disposition: "evaluando",
+      disposition_locked: true,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: { notes: "Se le envió catálogo de servicios. Está comparando precios con la competencia." },
+      last_activity_at: now,
+      callback_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: "demo-contact-006",
+      full_name: "Pedro López Gutiérrez",
+      phone: "+52 55 1111 2222",
+      email: "pedro.lopez@startup.io",
+      company: "StartupTech",
+      source: "event",
+      status: "prospect",
+      disposition: "evaluando",
+      disposition_locked: true,
+      assigned_to: "admin@test.com",
+      area_id: null,
+      team_id: null,
+      pipeline_id: null,
+      stage_id: null,
+      metadata: { notes: "Conocido en el evento de tecnología. Le interesó el módulo de auditoría." },
+      last_activity_at: now,
+      callback_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+  ];
+  demoContacts.forEach(c => prependContact(c));
+  console.log(`[SEED] ${demoContacts.length} contactos de prueba cargados (2 no contactados, 2 cuelgues, 2 prospectos evaluando).`);
+}
 
 if (supabase) {
   loadCallsFromSupabase().then((calls) => {

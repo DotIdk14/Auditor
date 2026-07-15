@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User, Phone, Mail, Building, Check } from 'lucide-react';
+import { X, User, Phone, Mail, Building, Check, CalendarClock } from 'lucide-react';
 import { useCreateContact } from '../../hooks/useContacts';
 import { useAuthStore } from '../../auth/authStore';
+import type { ContactDisposition } from '@auditor/shared-types';
 
 interface Props {
   darkMode: boolean;
@@ -15,6 +16,8 @@ export default function AddContactModal({ darkMode, onClose }: Props) {
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [status, setStatus] = useState('lead');
+  const [disposition, setDisposition] = useState<ContactDisposition>('no_contactado');
+  const [callbackAt, setCallbackAt] = useState('');
 
   const createContact = useCreateContact();
 
@@ -52,6 +55,8 @@ export default function AddContactModal({ darkMode, onClose }: Props) {
         email: email.trim() || undefined,
         company: company.trim() || undefined,
         status,
+        disposition,
+        callbackAt: callbackAt ? new Date(callbackAt).toISOString() : undefined,
       });
       onClose();
     } catch (err) {
@@ -200,6 +205,50 @@ export default function AddContactModal({ darkMode, onClose }: Props) {
                 <option value="churned">Churned</option>
               </select>
             </div>
+
+            {/* Disposición */}
+            <div>
+              <label htmlFor="contact-disposition" className={`text-[10px] font-bold mb-1 block ${darkMode ? 'text-stone-300' : 'text-stone-500'}`}>
+                Disposición
+              </label>
+              <select
+                id="contact-disposition"
+                name="disposition"
+                value={disposition}
+                onChange={(e) => setDisposition(e.target.value as ContactDisposition)}
+                className={`w-full border rounded-xl py-2.5 px-3.5 text-xs focus:outline-none transition-all ${
+                  darkMode
+                    ? 'bg-[#24211e] border-[#3e382f] text-stone-200 focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373]'
+                    : 'bg-[#fcfbf9] border-[#dfd9cc] text-stone-800 focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373]'
+                }`}
+              >
+                <option value="no_contactado">No contactado</option>
+                <option value="cuelgue">Cuelgue / Pendiente</option>
+                <option value="evaluando">Evaluando</option>
+              </select>
+            </div>
+
+            {/* Callback (solo para cuelgues) */}
+            {disposition === 'cuelgue' && (
+              <div>
+                <label htmlFor="contact-callback" className={`text-[10px] font-bold flex items-center gap-1 mb-1 ${darkMode ? 'text-stone-300' : 'text-stone-500'}`}>
+                  <CalendarClock className="w-3 h-3" />
+                  Fecha de callback
+                </label>
+                <input
+                  id="contact-callback"
+                  name="callbackAt"
+                  type="datetime-local"
+                  value={callbackAt}
+                  onChange={(e) => setCallbackAt(e.target.value)}
+                  className={`w-full border rounded-xl py-2.5 px-3.5 text-xs focus:outline-none transition-all ${
+                    darkMode
+                      ? 'bg-[#24211e] border-[#3e382f] text-stone-200 focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373]'
+                      : 'bg-[#fcfbf9] border-[#dfd9cc] text-stone-800 focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373]'
+                  }`}
+                />
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pt-2">

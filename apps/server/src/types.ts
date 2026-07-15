@@ -68,6 +68,7 @@ export interface Team {
 
 export type ContactStatus = 'lead' | 'prospect' | 'customer' | 'churned';
 export type ContactSource = 'inbound' | 'outbound' | 'referral' | 'web' | 'event' | 'other' | 'manual';
+export type ContactDisposition = 'no_contactado' | 'cuelgue' | 'evaluando';
 
 export interface Contact {
   id: string;
@@ -77,6 +78,8 @@ export interface Contact {
   company: string | null;
   source: ContactSource;
   status: ContactStatus;
+  disposition: ContactDisposition;
+  disposition_locked: boolean;
   assigned_to: string;
   area_id: string | null;
   team_id: string | null;
@@ -84,6 +87,7 @@ export interface Contact {
   stage_id: string | null;
   metadata: Record<string, unknown>;
   last_activity_at: string | null;
+  callback_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -95,6 +99,8 @@ export interface ContactCreate {
   company?: string | null;
   source?: ContactSource;
   status?: ContactStatus;
+  disposition?: ContactDisposition;
+  callbackAt?: string | null;
   pipelineId?: string;
   stageId?: string;
   metadata?: Record<string, unknown>;
@@ -107,6 +113,9 @@ export interface ContactUpdate {
   company?: string | null;
   source?: ContactSource;
   status?: ContactStatus;
+  disposition?: ContactDisposition;
+  dispositionLocked?: boolean;
+  callbackAt?: string | null;
   stageId?: string | null;
   metadata?: Record<string, unknown>;
 }
@@ -222,6 +231,8 @@ export interface ApiError {
 export interface ContactFilters {
   search?: string;
   status?: ContactStatus;
+  source?: ContactSource;
+  disposition?: ContactDisposition;
   assignedTo?: string;
   stageId?: string;
   areaId?: string;

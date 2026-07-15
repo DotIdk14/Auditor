@@ -35,6 +35,9 @@ import {
   Calendar,
   Clock,
   ChevronRight,
+  PhoneOff,
+  PhoneForwarded,
+  ClipboardCheck,
 } from "lucide-react";
 
 // ─── Status Config ──────────────────────────────────────────────────────────
@@ -44,6 +47,12 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secon
   prospect: { label: "Prospecto", variant: "default" },
   customer: { label: "Cliente", variant: "default" },
   churned: { label: "Perdido", variant: "destructive" },
+};
+
+const DISPOSITION_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  no_contactado: { label: "No contactado", icon: <PhoneOff className="h-4 w-4" />, color: "text-blue-600" },
+  cuelgue: { label: "Cuelgue / Pendiente", icon: <PhoneForwarded className="h-4 w-4" />, color: "text-amber-600" },
+  evaluando: { label: "Evaluando", icon: <ClipboardCheck className="h-4 w-4" />, color: "text-emerald-600" },
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -119,6 +128,8 @@ export default function ContactDetail() {
         company: data.company || null,
         source: data.source,
         status: data.status,
+        disposition: data.disposition,
+        callbackAt: data.callbackAt ? new Date(data.callbackAt).toISOString() : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact", id] });
@@ -235,6 +246,30 @@ export default function ContactDetail() {
                 <InfoRow icon={<Building2 className="h-4 w-4" />} label="Empresa" value={contact.company || "—"} />
                 <InfoRow icon={<Globe className="h-4 w-4" />} label="Origen" value={SOURCE_LABELS[contact.source] || contact.source} />
                 <InfoRow icon={<Tag className="h-4 w-4" />} label="Estado" value={STATUS_CONFIG[contact.status]?.label ?? contact.status} />
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">
+                    {DISPOSITION_CONFIG[contact.disposition]?.icon ?? <Tag className="h-4 w-4" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">Disposición</p>
+                    <p className={cn("text-sm font-medium", DISPOSITION_CONFIG[contact.disposition]?.color ?? "")}>
+                      {DISPOSITION_CONFIG[contact.disposition]?.label ?? contact.disposition}
+                    </p>
+                  </div>
+                </div>
+                {contact.disposition === "cuelgue" && contact.callbackAt && (
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 text-amber-600">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground">Fecha de callback</p>
+                      <p className="text-sm font-medium text-amber-600">
+                        {formatDate(contact.callbackAt)}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -402,6 +437,8 @@ export default function ContactDetail() {
           company: contact.company ?? "",
           source: contact.source,
           status: contact.status,
+          disposition: contact.disposition ?? "no_contactado",
+          callbackAt: contact.callbackAt ?? "",
         }}
       />
     </div>

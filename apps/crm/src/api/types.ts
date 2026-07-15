@@ -26,6 +26,7 @@ export type ContactSource =
   | 'event'
   | 'other'
   | 'manual';
+export type ContactDisposition = 'no_contactado' | 'cuelgue' | 'evaluando';
 
 export interface Contact {
   id: string;
@@ -35,6 +36,7 @@ export interface Contact {
   company: string | null;
   source: ContactSource;
   status: ContactStatus;
+  disposition: ContactDisposition;
   assignedTo: string;
   areaId: string | null;
   teamId: string | null;
@@ -42,6 +44,7 @@ export interface Contact {
   stageId: string | null;
   metadata: Record<string, unknown>;
   lastActivityAt: string | null;
+  callbackAt: string | null;
   createdAt: string;
   updatedAt: string;
   /** Joined field from API */
@@ -57,6 +60,8 @@ export interface ContactCreate {
   company?: string | null;
   source?: ContactSource;
   status?: ContactStatus;
+  disposition?: ContactDisposition;
+  callbackAt?: string | null;
   pipelineId?: string;
   stageId?: string;
   metadata?: Record<string, unknown>;
@@ -69,6 +74,8 @@ export interface ContactUpdate {
   company?: string | null;
   source?: ContactSource;
   status?: ContactStatus;
+  disposition?: ContactDisposition;
+  callbackAt?: string | null;
   stageId?: string | null;
   metadata?: Record<string, unknown>;
 }
@@ -77,6 +84,7 @@ export interface ContactFilters {
   search?: string;
   status?: ContactStatus;
   source?: ContactSource;
+  disposition?: ContactDisposition;
   assignedTo?: string;
   stageId?: string;
   areaId?: string;

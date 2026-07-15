@@ -1,4 +1,5 @@
-import { supabase, supabaseAdmin } from "../config.js";
+import { randomUUID } from "crypto";
+import { supabase, supabaseAdmin, localContactsMemory, prependContact, updateContactInMemory, removeContactById } from "../config.js";
 import type { Contact, ContactCreate, ContactUpdate, ContactFilters, PaginatedResponse, ServiceScope } from "../types.js";
 
 const TABLE = "contacts";
@@ -12,6 +13,8 @@ function mapRow(row: any): Contact {
     company: row.company,
     source: row.source,
     status: row.status,
+    disposition: row.disposition || "no_contactado",
+    disposition_locked: row.disposition_locked || false,
     assigned_to: row.assigned_to,
     area_id: row.area_id,
     team_id: row.team_id,
@@ -19,19 +22,136 @@ function mapRow(row: any): Contact {
     stage_id: row.stage_id,
     metadata: row.metadata || {},
     last_activity_at: row.last_activity_at,
+    callback_at: row.callback_at || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
 }
 
-/**
- * Build a Supabase query with RLS-aware filters based on user scope.
- * This is a backend complement to PostgreSQL RLS (defense in depth).
- */
+function now() {
+  return new Date().toISOString();
+}
+
+// ─── Local memory helpers ──────────────────────────────────────────────────
+
+function localList(filters: ContactFilters): PaginatedResponse<Contact> {
+  let items = [...localContactsMemory];
+
+  if (filters.search) {
+    const s = filters.search.toLowerCase();
+    items = items.filter(c =>
+      c.full_name?.toLowerCase().includes(s) ||
+      c.phone?.toLowerCase().includes(s) ||
+      c.email?.toLowerCase().includes(s) ||
+      c.company?.toLowerCase().includes(s)
+    );
+  }
+  if (filters.status) items = items.filter(c => c.status === filters.status);
+  if (filters.source) items = items.filter(c => c.source === filters.source);
+  if (filters.disposition) items = items.filter(c => (c.disposition || "no_contactado") === filters.disposition);
+  if (filters.assignedTo) items = items.filter(c => c.assigned_to === filters.assignedTo);
+  if (filters.stageId) items = items.filter(c => c.stage_id === filters.stageId);
+  if (filters.areaId) items = items.filter(c => c.area_id === filters.areaId);
+  if (filters.teamId) items = items.filter(c => c.team_id === filters.teamId);
+
+  items.sort((a, b) => {
+    const aDate = a.last_activity_at || a.created_at;
+    const bDate = b.last_activity_at || b.created_at;
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
+  });
+
+  const page = filters.page || 1;
+  const pageSize = filters.pageSize || 25;
+  const start = (page - 1) * pageSize;
+  const paged = items.slice(start, start + pageSize);
+
+  return {
+    data: paged.map(mapRow),
+    total: items.length,
+    page,
+    pageSize,
+    totalPages: Math.ceil(items.length / pageSize),
+  };
+}
+
+function localGet(id: string): Contact | null {
+  const found = localContactsMemory.find(c => c.id === id);
+  return found ? mapRow(found) : null;
+}
+
+function localCreate(input: ContactCreate, userId: string, scope: ServiceScope): Contact {
+  const ts = now();
+  const record: any = {
+    id: randomUUID(),
+    full_name: input.fullName,
+    phone: input.phone || null,
+    email: input.email || null,
+    company: input.company || null,
+    source: input.source || "manual",
+    status: input.status || "lead",
+    disposition: input.disposition || "no_contactado",
+    disposition_locked: false,
+    assigned_to: userId,
+    area_id: scope.areaId,
+    team_id: scope.teamId,
+    pipeline_id: input.pipelineId || null,
+    stage_id: input.stageId || null,
+    metadata: input.metadata || {},
+    last_activity_at: ts,
+    callback_at: input.callbackAt || null,
+    created_at: ts,
+    updated_at: ts,
+  };
+  prependContact(record);
+  return mapRow(record);
+}
+
+function localUpdate(id: string, input: ContactUpdate, role?: string): Contact | null {
+  const existing = localContactsMemory.find(c => c.id === id);
+  if (!existing) return null;
+
+  const updates: Record<string, unknown> = { updated_at: now() };
+  if (input.fullName !== undefined) updates.full_name = input.fullName;
+  if (input.phone !== undefined) updates.phone = input.phone;
+  if (input.email !== undefined) updates.email = input.email;
+  if (input.company !== undefined) updates.company = input.company;
+  if (input.source !== undefined) updates.source = input.source;
+  if (input.status !== undefined) updates.status = input.status;
+  if (input.callbackAt !== undefined) updates.callback_at = input.callbackAt;
+  if (input.metadata !== undefined) updates.metadata = input.metadata;
+  if (input.stageId !== undefined) updates.stage_id = input.stageId;
+  if (input.dispositionLocked !== undefined) updates.disposition_locked = input.dispositionLocked;
+
+  if (input.disposition !== undefined) {
+    const currentDisposition = existing.disposition || "no_contactado";
+    const isLocked = existing.disposition_locked || currentDisposition === "evaluando";
+    const isAdmin = role === "admin";
+
+    if (isLocked && !isAdmin && input.disposition !== currentDisposition) {
+      console.warn(`[CONTACTS] Disposition locked for ${id}. Cannot change from evaluando without admin role.`);
+    } else {
+      updates.disposition = input.disposition;
+      if (input.disposition === "evaluando") {
+        updates.disposition_locked = true;
+      }
+    }
+  }
+
+  if (input.stageId !== undefined || input.status !== undefined || input.disposition !== undefined) {
+    updates.last_activity_at = now();
+  }
+  return updateContactInMemory(id, updates);
+}
+
+function localDelete(id: string): boolean {
+  return removeContactById(id);
+}
+
+// ─── Scope filter (Supabase) ──────────────────────────────────────────────
+
 function buildScopeFilter(query: any, scope: ServiceScope) {
   switch (scope.role) {
     case "admin":
-      // Admin sees all - no filter needed
       break;
     case "area_manager":
     case "coordinator":
@@ -50,23 +170,22 @@ function buildScopeFilter(query: any, scope: ServiceScope) {
   return query;
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────
+
 export async function listContacts(
   filters: ContactFilters,
   scope: ServiceScope
 ): Promise<PaginatedResponse<Contact>> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localList(filters);
 
+  const client = supabaseAdmin || supabase;
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
   const offset = (page - 1) * pageSize;
 
   let query = client.from(TABLE).select("*", { count: "exact" });
-
-  // Apply scope filter
   query = buildScopeFilter(query, scope);
 
-  // Apply search filter (full-text search across name, phone, email, company)
   if (filters.search) {
     const s = filters.search.trim();
     query = query.or(
@@ -74,24 +193,21 @@ export async function listContacts(
     );
   }
 
-  // Apply specific filters
   if (filters.status) query = query.eq("status", filters.status);
+  if (filters.source) query = query.eq("source", filters.source);
+  if (filters.disposition) query = query.eq("disposition", filters.disposition);
   if (filters.assignedTo) query = query.eq("assigned_to", filters.assignedTo);
   if (filters.stageId) query = query.eq("stage_id", filters.stageId);
-  if (filters.areaId && (scope.role === "admin")) query = query.eq("area_id", filters.areaId);
-  if (filters.teamId && (scope.role === "admin" || scope.role === "area_manager" || scope.role === "coordinator")) {
+  if (filters.areaId && scope.role === "admin") query = query.eq("area_id", filters.areaId);
+  if (filters.teamId && ["admin", "area_manager", "coordinator"].includes(scope.role)) {
     query = query.eq("team_id", filters.teamId);
   }
 
-  // Order by last activity (most recent first), fallback to created_at
   query = query.order("last_activity_at", { ascending: false, nullsFirst: false });
   query = query.order("created_at", { ascending: false });
-
-  // Pagination
   query = query.range(offset, offset + pageSize - 1);
 
   const { data, error, count } = await query;
-
   if (error) throw new Error(`Error al listar contactos: ${error.message}`);
 
   return {
@@ -107,19 +223,17 @@ export async function getContact(
   id: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localGet(id);
 
+  const client = supabaseAdmin || supabase;
   let query = client.from(TABLE).select("*").eq("id", id);
   query = buildScopeFilter(query, scope);
 
   const { data, error } = await query.single();
-
   if (error) {
-    if (error.code === "PGRST116") return null; // Not found
+    if (error.code === "PGRST116") return null;
     throw new Error(`Error al obtener contacto: ${error.message}`);
   }
-
   return data ? mapRow(data) : null;
 }
 
@@ -128,20 +242,17 @@ export async function createContact(
   userId: string,
   scope: ServiceScope
 ): Promise<Contact> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localCreate(input, userId, scope);
 
-  // Derive area_id and team_id from the creating user's scope
+  const client = supabaseAdmin || supabase;
   const areaId = scope.areaId;
   const teamId = scope.teamId;
 
-  // Resolve userId to a valid UUID if it's an email (password-based auth)
   let resolvedUserId = userId;
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
 
   if (!isUuid && supabaseAdmin) {
     try {
-      // Step 1: Try profiles table first
       const { data: profile } = await supabaseAdmin
         .from("profiles")
         .select("id")
@@ -151,19 +262,15 @@ export async function createContact(
       if (profile?.id) {
         resolvedUserId = profile.id;
       } else {
-        // Step 2: Try auth.users via admin API
         const { data: authUsers, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
         if (!authErr && authUsers?.users) {
           const matched = authUsers.users.find(
             (u: any) => u.email?.toLowerCase() === userId.toLowerCase()
           );
-          if (matched?.id) {
-            resolvedUserId = matched.id;
-          }
+          if (matched?.id) resolvedUserId = matched.id;
         }
       }
     } catch {
-      // Step 3: Last resort — try to find ANY admin user to use as fallback
       try {
         const { data: anyAdmin } = await supabaseAdmin
           .from("profiles")
@@ -171,14 +278,8 @@ export async function createContact(
           .eq("role", "admin")
           .limit(1)
           .maybeSingle();
-        if (anyAdmin?.id) {
-          resolvedUserId = anyAdmin.id;
-          console.warn(`[CONTACTS] userId "${userId}" no es UUID ni existe en auth — usando admin fallback: ${resolvedUserId}`);
-        }
-      } catch {
-        // Cannot resolve; will let Supabase reject with a clear error
-        console.warn(`[CONTACTS] Cannot resolve userId "${userId}" to UUID — insert may fail`);
-      }
+        if (anyAdmin?.id) resolvedUserId = anyAdmin.id;
+      } catch { /* ignore */ }
     }
   }
 
@@ -189,6 +290,7 @@ export async function createContact(
     company: input.company || null,
     source: input.source || "manual",
     status: input.status || "lead",
+    disposition: input.disposition || "no_contactado",
     assigned_to: resolvedUserId,
     area_id: areaId,
     team_id: teamId,
@@ -196,6 +298,7 @@ export async function createContact(
     stage_id: input.stageId || null,
     metadata: input.metadata || {},
     last_activity_at: new Date().toISOString(),
+    callback_at: input.callbackAt || null,
   };
 
   const { data, error } = await client
@@ -213,10 +316,9 @@ export async function updateContact(
   input: ContactUpdate,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localUpdate(id, input, scope.role);
 
-  // First verify the contact exists and is accessible
+  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return null;
 
@@ -227,11 +329,27 @@ export async function updateContact(
   if (input.company !== undefined) updates.company = input.company;
   if (input.source !== undefined) updates.source = input.source;
   if (input.status !== undefined) updates.status = input.status;
+  if (input.callbackAt !== undefined) updates.callback_at = input.callbackAt;
   if (input.metadata !== undefined) updates.metadata = input.metadata;
   if (input.stageId !== undefined) updates.stage_id = input.stageId;
+  if (input.dispositionLocked !== undefined) updates.disposition_locked = input.dispositionLocked;
 
-  // Update last_activity_at on meaningful changes
-  if (input.stageId !== undefined || input.status !== undefined) {
+  if (input.disposition !== undefined) {
+    const currentDisposition = existing.disposition || "no_contactado";
+    const isLocked = existing.disposition_locked || currentDisposition === "evaluando";
+    const isAdmin = scope.role === "admin";
+
+    if (isLocked && !isAdmin && input.disposition !== currentDisposition) {
+      console.warn(`[CONTACTS] Disposition locked for ${id}. Cannot change from evaluando without admin role.`);
+    } else {
+      updates.disposition = input.disposition;
+      if (input.disposition === "evaluando") {
+        updates.disposition_locked = true;
+      }
+    }
+  }
+
+  if (input.stageId !== undefined || input.status !== undefined || input.disposition !== undefined) {
     updates.last_activity_at = new Date().toISOString();
   }
 
@@ -251,9 +369,9 @@ export async function updateContactStage(
   stageId: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localUpdate(id, { stageId });
 
+  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return null;
 
@@ -275,9 +393,9 @@ export async function deleteContact(
   id: string,
   scope: ServiceScope
 ): Promise<boolean> {
-  const client = supabaseAdmin || supabase;
-  if (!client) throw new Error("Supabase no disponible");
+  if (!supabase) return localDelete(id);
 
+  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return false;
 
@@ -291,8 +409,14 @@ export async function findContactByPhoneOrEmail(
   email?: string | null,
   scope?: ServiceScope
 ): Promise<Contact | null> {
+  if (!supabase) {
+    const found = localContactsMemory.find(c =>
+      (phone && c.phone === phone) || (email && c.email === email)
+    );
+    return found ? mapRow(found) : null;
+  }
+
   const client = supabaseAdmin || supabase;
-  if (!client) return null;
   if (!phone && !email) return null;
 
   let query = client.from(TABLE).select("*");
@@ -305,12 +429,108 @@ export async function findContactByPhoneOrEmail(
     query = query.eq("email", email);
   }
 
-  if (scope) {
-    query = buildScopeFilter(query, scope);
-  }
+  if (scope) query = buildScopeFilter(query, scope);
 
   const { data, error } = await query.limit(1).maybeSingle();
-
   if (error || !data) return null;
   return mapRow(data);
+}
+
+// ─── Link Audit to Contact ──────────────────────────────────────────────
+
+export interface LinkAuditResult {
+  contact: Contact;
+  auditId: string;
+  previousDisposition: ContactDisposition;
+}
+
+export async function linkAuditToContact(
+  contactId: string,
+  auditId: string,
+  tipificacion: "positiva" | "negativa",
+  scope: ServiceScope
+): Promise<LinkAuditResult> {
+  const contact = await getContact(contactId, scope);
+  if (!contact) throw new Error("Contacto no encontrado");
+
+  const previousDisposition = contact.disposition;
+  let newDisposition: ContactDisposition = contact.disposition;
+  let newLocked = contact.disposition_locked;
+
+  if (tipificacion === "positiva") {
+    newDisposition = "evaluando";
+    newLocked = true;
+  } else {
+    // negative: only change if not locked
+    if (!contact.disposition_locked) {
+      newDisposition = "cuelgue";
+    }
+  }
+
+  // Update the audit's contact_id
+  if (supabase) {
+    const client = supabaseAdmin || supabase;
+    const { error: auditErr } = await client
+      .from("auditorias")
+      .update({ contact_id: contactId })
+      .eq("id", auditId);
+    if (auditErr) console.warn("[LINK_AUDIT] Error updating audit:", auditErr.message);
+  } else {
+    // Local: update in-memory calls
+    const { localCallsMemory } = await import("../config.js");
+    const call = localCallsMemory.find((c: any) => c.id === auditId);
+    if (call) {
+      call.contact_id = contactId;
+      if (call.metadata) call.metadata.contactId = contactId;
+    }
+  }
+
+  // Update contact disposition
+  const updated = await updateContact(
+    contactId,
+    { disposition: newDisposition, dispositionLocked: newLocked },
+    scope
+  );
+
+  return {
+    contact: updated || contact,
+    auditId,
+    previousDisposition,
+  };
+}
+
+export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
+  if (!supabase) {
+    // Local: return calls from memory that have no contact_id
+    const { localCallsMemory } = await import("../config.js");
+    return localCallsMemory
+      .filter((c: any) => !c.contact_id && c.status === "completada")
+      .map((c: any) => ({
+        id: c.id,
+        title: c.metadata?.fileName || c.rawTitle || `Auditoría ${c.id.slice(0, 8)}`,
+        agent: c.agent || c.metadata?.agentName || "Desconocido",
+        score: c.score,
+        date: c.date || c.created_at,
+        created_at: c.created_at || c.date,
+      }));
+  }
+
+  const client = supabaseAdmin || supabase;
+  const { data, error } = await client
+    .from("auditorias")
+    .select("id, metadata, score, created_at")
+    .is("contact_id", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) throw new Error(`Error al obtener auditorías sin vincular: ${error.message}`);
+
+  return (data || []).map((a: any) => ({
+    id: a.id,
+    title: a.metadata?.fileName || `Auditoría ${a.id.slice(0, 8)}`,
+    agent: a.metadata?.agentName || "Desconocido",
+    score: a.score != null ? (typeof a.score === "object" ? (a.score as any).global ?? null : a.score) : null,
+    date: a.created_at,
+    created_at: a.created_at,
+  }));
 }

@@ -35,6 +35,7 @@ export const supabaseAdmin = supabaseUrl && supabaseServiceKey
 // ── Shared in-memory state (backup when Supabase unavailable) ─────
 
 export let localCallsMemory: any[] = [];
+export let localContactsMemory: any[] = [];
 export const audioBuffers = new Map<string, Buffer>();
 
 export const pendingTranscripts = new Map<string, {
@@ -47,6 +48,7 @@ export const pendingTranscripts = new Map<string, {
 
 export const localNotasMemory = new Map<string, any[]>();
 export const localObjecionesMemory = new Map<string, any[]>();
+export let localInteractionsMemory: any[] = [];
 
 // ── Mutator helpers (for ESM live-binding reassignment) ───────────
 
@@ -64,6 +66,35 @@ export function prependAndRemoveCall(newCall: any, callId: string): void {
 
 export function removeCallById(callId: string): void {
   localCallsMemory = localCallsMemory.filter(c => c.id !== callId);
+}
+
+export function setLocalContactsMemory(contacts: any[]): void {
+  localContactsMemory = contacts;
+}
+
+export function prependContact(contact: any): void {
+  localContactsMemory = [contact, ...localContactsMemory];
+}
+
+export function updateContactInMemory(id: string, updates: Partial<any>): any | null {
+  const idx = localContactsMemory.findIndex(c => c.id === id);
+  if (idx === -1) return null;
+  localContactsMemory[idx] = { ...localContactsMemory[idx], ...updates };
+  return localContactsMemory[idx];
+}
+
+export function removeContactById(id: string): boolean {
+  const len = localContactsMemory.length;
+  localContactsMemory = localContactsMemory.filter(c => c.id !== id);
+  return localContactsMemory.length < len;
+}
+
+export function prependInteraction(interaction: any): void {
+  localInteractionsMemory = [interaction, ...localInteractionsMemory];
+}
+
+export function getInteractionsByContact(contactId: string): any[] {
+  return localInteractionsMemory.filter(i => i.contact_id === contactId);
 }
 
 // ── Multer upload config ──────────────────────────────────────────

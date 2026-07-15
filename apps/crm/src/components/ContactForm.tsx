@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ContactCreate, ContactUpdate, ContactSource, ContactStatus } from "@/api/types";
+import type { ContactCreate, ContactUpdate, ContactSource, ContactStatus, ContactDisposition } from "@/api/types";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,8 @@ export type ContactFormData = {
   company: string;
   source: ContactSource;
   status: ContactStatus;
+  disposition: ContactDisposition;
+  callbackAt: string;
 };
 
 interface ContactFormProps {
@@ -58,6 +60,12 @@ const STATUS_OPTIONS: { value: ContactStatus; label: string }[] = [
   { value: "churned", label: "Perdido" },
 ];
 
+const DISPOSITION_OPTIONS: { value: ContactDisposition; label: string; description: string }[] = [
+  { value: "no_contactado", label: "No contactado", description: "Aún no se ha intentado contactar" },
+  { value: "cuelgue", label: "Cuelgue / Pendiente", description: "No se pudo contactar, pendiente de llamada" },
+  { value: "evaluando", label: "Evaluando", description: "Ya se le dio información, está evaluando" },
+];
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function ContactForm({
@@ -75,6 +83,8 @@ export default function ContactForm({
     company: "",
     source: "manual",
     status: "lead",
+    disposition: "no_contactado",
+    callbackAt: "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof ContactFormData, string>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -89,6 +99,10 @@ export default function ContactForm({
         company: initialData?.company ?? "",
         source: initialData?.source ?? "manual",
         status: initialData?.status ?? "lead",
+        disposition: initialData?.disposition ?? "no_contactado",
+        callbackAt: initialData?.callbackAt
+          ? new Date(initialData.callbackAt).toISOString().slice(0, 16)
+          : "",
       });
       setErrors({});
     }
@@ -101,6 +115,10 @@ export default function ContactForm({
 
     if (!form.fullName.trim()) {
       newErrors.fullName = "El nombre es obligatorio";
+    }
+
+    if (form.disposition === "cuelgue" && !form.callbackAt) {
+      newErrors.callbackAt = "Para cuelgues, indica fecha y hora de callback";
     }
 
     setErrors(newErrors);
@@ -119,7 +137,6 @@ export default function ContactForm({
       await onSubmit(form);
       onOpenChange(false);
     } catch (err) {
-      // Error handling is delegated to the parent
       console.error("ContactForm submit error:", err);
     } finally {
       setSubmitting(false);
@@ -133,7 +150,6 @@ export default function ContactForm({
     value: ContactFormData[K],
   ) {
     setForm((prev) => ({ ...prev, [key]: value }));
-    // Clear error when user starts typing
     if (errors[key]) {
       setErrors((prev) => ({ ...prev, [key]: undefined }));
     }
@@ -209,6 +225,53 @@ export default function ContactForm({
             />
           </div>
 
+          {/* Disposition — prominent, first selector */}
+          <div className="space-y-2">
+            <Label htmlFor="contact-disposition">
+              Disposición del contacto <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              value={form.disposition}
+              onValueChange={(val: ContactDisposition) => updateField("disposition", val)}
+            >
+              <SelectTrigger id="contact-disposition">
+                <SelectValue placeholder="Seleccionar disposición" />
+              </SelectTrigger>
+              <SelectContent>
+                {DISPOSITION_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    <div>
+                      <span className="font-medium">{opt.label}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">— {opt.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Callback date — only when disposition is cuelgue */}
+          {form.disposition === "cuelgue" && (
+            <div className="space-y-2">
+              <Label htmlFor="contact-callbackAt">
+                Fecha/hora de callback <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="contact-callbackAt"
+                type="datetime-local"
+                value={form.callbackAt}
+                onChange={(e) => updateField("callbackAt", e.target.value)}
+                aria-invalid={!!errors.callbackAt}
+                aria-describedby={errors.callbackAt ? "contact-callback-error" : undefined}
+              />
+              {errors.callbackAt && (
+                <p id="contact-callback-error" className="text-sm text-destructive">
+                  {errors.callbackAt}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Source & Status – side by side */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -231,7 +294,7 @@ export default function ContactForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contact-status">Estado</Label>
+              <Label htmlFor="contact-status">Estado CRM</Label>
               <Select
                 value={form.status}
                 onValueChange={(val: ContactStatus) => updateField("status", val)}
