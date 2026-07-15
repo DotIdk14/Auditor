@@ -12,7 +12,7 @@ import { objectionReasons } from '../../data/defaultObjections';
 
 interface Props { darkMode: boolean; }
 
-export function ConversationAssistant({ darkMode }: Props) {
+export function ConversationAssistantGPS({ darkMode }: Props) {
   const {
     currentCallStep, callSteps, callVariables,
     getSafeCallStep,
