@@ -87,7 +87,8 @@ export const useAuthStore = create<AuthState>()(
       // Store device ID for compatibility
       localStorage.setItem(DEVICE_ID_KEY, email);
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Error de inicio de sesión';
+      const raw = err?.response?.data?.error || err?.message || 'Error de inicio de sesión';
+      const msg = typeof raw === 'string' ? raw : 'Error de autenticación';
       set({ error: msg, loading: false });
       throw new Error(msg);
     }

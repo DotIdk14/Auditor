@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@insforge/sdk": "^1.4.4",
+    "@types/cors": "^2.8.19",
     "@vercel/blob": "^2.4.1",
     "@vercel/node": "^5.8.17",
     "assemblyai": "^4.35.0",
     "axios": "^1.17.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",

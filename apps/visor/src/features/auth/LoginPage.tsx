@@ -64,12 +64,12 @@ export default function LoginPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5 text-left">
-              {(localError || error) && (
-                <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-xs flex gap-2">
-                  <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{localError || error}</span>
-                </div>
-              )}
+            {(localError || error) && (
+              <div className="mb-5 p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-xs flex gap-2">
+                <Shield className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{typeof (localError || error) === 'string' ? (localError || error) : 'Error de autenticación'}</span>
+              </div>
+            )}
 
               <div className="space-y-2">
                 <label htmlFor="login-email" className="text-sm font-semibold flex items-center gap-2 text-stone-300">
