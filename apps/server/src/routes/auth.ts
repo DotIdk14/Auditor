@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { randomUUID } from "crypto";
 import { loginLimiter } from "../config.js";
 import { authenticateToken, signToken } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
@@ -22,7 +23,7 @@ function mapRole(role: string | null | undefined): UserRole {
 }
 
 export default function (app: Express): void {
-  // POST /api/login — Google OAuth
+  // POST /api/login — Registro/login abierto. Todos entran como agente por defecto.
   app.post("/api/login", loginLimiter, async (req, res) => {
     try {
       const { email, displayName } = req.body;
@@ -36,9 +37,8 @@ export default function (app: Express): void {
       let areaId: string | null = null;
       let teamId: string | null = null;
       let userId: string | null = null;
-      let isAuthorized = false;
 
-      // Try InsForge profiles first
+      // Buscar o crear perfil en InsForge
       if (insforge) {
         try {
           const { data: profile, error } = await insforge.database
@@ -54,41 +54,39 @@ export default function (app: Express): void {
                 error: "Tu cuenta está desactivada. Contacta al administrador.",
               });
             }
-            isAuthorized = true;
             userId = profile.id;
             if (profile.full_name) userName = profile.full_name;
             userRole = mapRole(profile.role);
             areaId = profile.area_id || null;
             teamId = profile.team_id || null;
+          } else {
+            // Auto-registro: crear perfil como agente
+            const newId = randomUUID();
+            const { error: insertError } = await insforge.database.from("profiles").insert([{
+              id: newId,
+              email: searchEmail,
+              full_name: userName,
+              role: "agent",
+              is_active: true,
+            }]);
+            if (!insertError) {
+              userId = newId;
+              console.log(`[AUTH] Nuevo perfil creado: ${searchEmail} (agent)`);
+            } else {
+              console.warn("[AUTH] Error al crear perfil:", insertError.message);
+              userId = searchEmail;
+            }
           }
         } catch (err: any) {
-          console.warn("[AUTH] InsForge lookup failed, trying fallback:", err.message);
+          console.warn("[AUTH] InsForge lookup failed, allowing as agent:", err.message);
+          userId = searchEmail;
         }
-      }
-
-      // Fallback: ALLOWED_EMAILS
-      if (!isAuthorized) {
-        const allowedEmailsEnv = process.env.ALLOWED_EMAILS || "";
-        const allowedEmails = new Set(
-          allowedEmailsEnv.split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
-        );
-
-        if (allowedEmails.size > 0 && allowedEmails.has(searchEmail)) {
-          isAuthorized = true;
-          userRole = "supervisor";
-          console.log(`[AUTH_FALLBACK] ${searchEmail} autorizado por ALLOWED_EMAILS`);
-        }
-      }
-
-      if (!isAuthorized) {
-        return res.status(403).json({
-          success: false,
-          error: `Acceso denegado: El correo ${email} no tiene permisos.`,
-        });
+      } else {
+        userId = searchEmail;
       }
 
       const token = signToken({
-        sub: userId || searchEmail,
+        sub: userId,
         email: searchEmail,
         displayName: userName,
         role: userRole,
