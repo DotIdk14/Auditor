@@ -22,7 +22,7 @@ export function ConvictionScale({ darkMode, onScale }: Props) {
   };
 
   return (
-    <div className={`rounded-2xl border-[2px] p-4 ${darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'}`}>
+    <div className={`rounded-xl border p-5 ${darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-stone-200'}`}>
       <p className={`text-[10px] font-bold mb-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
         <TrendingUp className="w-3.5 h-3.5 inline mr-1" />
         ESCALA DE CONVICCIÓN

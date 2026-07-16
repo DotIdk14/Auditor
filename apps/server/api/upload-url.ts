@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { issueSignedToken, presignUrl } from '@vercel/blob';
 
@@ -13,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const token = process.env.BLOB_READ_WRITE_TOKEN!;
-    const uniquePath = `audio/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${filename}`;
+    const uniquePath = `audio/${Date.now()}-${randomUUID().split("-")[0]}-${filename}`;
 
     const signedToken = await issueSignedToken({
       token,
@@ -32,6 +33,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ presignedUrl });
   } catch (error: any) {
     console.error('[UPLOAD_URL] Error:', error.message);
-    return res.status(500).json({ error: `Failed to generate upload URL: ${error.message}` });
+    return res.status(500).json({ error: "Error al generar URL de carga" });
   }
 }

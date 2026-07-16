@@ -1,4 +1,7 @@
 import type { Express } from "express";
+import { randomUUID } from "crypto";
+import { authenticateToken, injectScope } from "../middleware/auth.js";
+import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { localObjecionesMemory } from "../config.js";
 import {
   saveObjecionToSupabase,
@@ -8,16 +11,17 @@ import {
 
 export default function (app: Express): void {
   // POST /api/llamadas/:id/objeciones — Add an objection
-  app.post("/api/llamadas/:id/objeciones", async (req, res) => {
+  app.post("/api/llamadas/:id/objeciones", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const auditoriaId = req.params.id;
-    const { supervisorEmail, supervisorName, segmentStart, segmentEnd, tipoObjecion, severidad, text } = req.body;
+    const supervisorEmail = req.user?.email;
+    const { supervisorName, segmentStart, segmentEnd, tipoObjecion, severidad, text } = req.body;
 
     if (!supervisorEmail || !text || segmentStart === undefined || segmentEnd === undefined || !tipoObjecion || !severidad) {
       return res.status(400).json({ error: "supervisorEmail, text, segmentStart, segmentEnd, tipoObjecion, and severidad are required." });
     }
 
     const objecion = {
-      id: `obj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: `obj_${Date.now()}_${randomUUID().split("-")[0]}`,
       auditoriaId,
       supervisorEmail,
       supervisorName: supervisorName || supervisorEmail.split("@")[0],
@@ -39,7 +43,7 @@ export default function (app: Express): void {
   });
 
   // GET /api/llamadas/:id/objeciones — List objections for a call
-  app.get("/api/llamadas/:id/objeciones", async (req, res) => {
+  app.get("/api/llamadas/:id/objeciones", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const auditoriaId = req.params.id;
     const supabaseObjeciones = await loadObjecionesFromSupabase(auditoriaId);
     const localObjeciones = localObjecionesMemory.get(auditoriaId) || [];
@@ -51,7 +55,7 @@ export default function (app: Express): void {
   });
 
   // DELETE /api/llamadas/:id/objeciones/:objecionId — Delete an objection
-  app.delete("/api/llamadas/:id/objeciones/:objecionId", async (req, res) => {
+  app.delete("/api/llamadas/:id/objeciones/:objecionId", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { id: auditoriaId, objecionId } = req.params;
 
     if (localObjecionesMemory.has(auditoriaId)) {

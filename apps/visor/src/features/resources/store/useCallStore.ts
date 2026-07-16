@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  CallStep, Speech, ObjectionResponse, ObjectionCategory, SafeCheckItem, CallNote,
+  CallStep, Speech, ObjectionResponse, ObjectionCategory, SafeCheckItem,
   ActiveTab, CostDecision, ProspectProfile, ValueCheckItem, Motivation, PainPoint,
 } from '../types';
 import { DEFAULT_PROSPECT_PROFILE, DEFAULT_VALUE_CHECKLIST } from '../types';
@@ -13,7 +13,7 @@ import {
   getCustomObjections, saveCustomObjections,
   getDefaultSpeeches, saveDefaultSpeeches,
   getCallSteps, saveCallSteps,
-  getPersistedNotes, getPersistedVariables, getPersistedChecklist,
+  getPersistedVariables, getPersistedChecklist,
 } from '../utils/localStorage';
 
 interface CallState {
@@ -27,6 +27,8 @@ interface CallState {
   callCostReason: string | null;
   visitedSteps: Set<number>;
   showDemoInvite: boolean;
+  demoAccepted: boolean;
+  followUpScheduled: boolean;
   callInterestDecision: CostDecision;
   callVariables: Record<string, string>;
   showVarsPanel: boolean;
@@ -37,10 +39,6 @@ interface CallState {
   completedSpeeches: string[];
   usedResponses: string[];
   expandedSections: string[];
-
-  notes: CallNote[];
-  currentNote: string;
-  showNotesDrawer: boolean;
 
   safeChecklist: SafeCheckItem[];
   profileTags: { trabaja: boolean; tieneHijos: boolean; preocupadoCostos: boolean };
@@ -54,9 +52,6 @@ interface CallState {
   showAddStepModal: boolean;
   addStepForm: { title: string; content: string; objectionCategoryId: string };
   addStepMode: 'text' | 'objection';
-  showNoteModal: boolean;
-  noteContent: string;
-
   goToNextCallStep: () => void;
   goToPrevCallStep: () => void;
   skipCurrentCallStep: () => void;
@@ -73,6 +68,8 @@ interface CallState {
   setCallVariables: (updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
   setShowVarsPanel: (v: boolean | ((prev: boolean) => boolean)) => void;
   setShowDemoInvite: (v: boolean) => void;
+  setDemoAccepted: (v: boolean) => void;
+  setFollowUpScheduled: (v: boolean) => void;
 
   openCreateSpeechModal: (sectionId: string) => void;
   openEditSpeechModal: (sectionId: string, speech: Speech) => void;
@@ -88,13 +85,6 @@ interface CallState {
   setCallCostDecision: (v: CostDecision) => void;
   setCallCostReason: (v: string | null) => void;
   setCallInterestDecision: (v: CostDecision) => void;
-
-  addNote: (content: string) => void;
-  deleteNote: (id: string) => void;
-  setCurrentNote: (v: string) => void;
-  setShowNotesDrawer: (v: boolean) => void;
-  setShowNoteModal: (v: boolean) => void;
-  setNoteContent: (v: string) => void;
 
   toggleSafeCheck: (id: string) => void;
   toggleProfileTag: (key: 'trabaja' | 'tieneHijos' | 'preocupadoCostos') => void;
@@ -157,6 +147,8 @@ export const useCallStore = create<CallState>((set, get) => ({
   callCostReason: null,
   visitedSteps: new Set([0]),
   showDemoInvite: false,
+  demoAccepted: false,
+  followUpScheduled: false,
   callInterestDecision: null,
   callVariables: getPersistedVariables(),
   showVarsPanel: false,
@@ -167,10 +159,6 @@ export const useCallStore = create<CallState>((set, get) => ({
   completedSpeeches: (() => { try { return JSON.parse(localStorage.getItem('completedSpeeches') || '[]'); } catch { return []; } })(),
   usedResponses: (() => { try { return JSON.parse(localStorage.getItem('usedResponses') || '[]'); } catch { return []; } })(),
   expandedSections: [],
-
-  notes: getPersistedNotes(),
-  currentNote: '',
-  showNotesDrawer: false,
 
   safeChecklist: getPersistedChecklist() || DEFAULT_SAFE_CHECKLIST,
   profileTags: { trabaja: false, tieneHijos: false, preocupadoCostos: false },
@@ -184,9 +172,6 @@ export const useCallStore = create<CallState>((set, get) => ({
   showAddStepModal: false,
   addStepForm: { title: '', content: '', objectionCategoryId: '' },
   addStepMode: 'text',
-  showNoteModal: false,
-  noteContent: '',
-
   goToNextCallStep: () => {
     const { currentCallStep, callSteps } = get();
     if (currentCallStep < callSteps.length - 1) {
@@ -343,6 +328,8 @@ export const useCallStore = create<CallState>((set, get) => ({
 
   setShowVarsPanel: (v) => set(s => ({ showVarsPanel: typeof v === 'function' ? v(s.showVarsPanel) : v })),
   setShowDemoInvite: (v) => set({ showDemoInvite: v }),
+  setDemoAccepted: (v) => set({ demoAccepted: v }),
+  setFollowUpScheduled: (v) => set({ followUpScheduled: v }),
 
   openCreateSpeechModal: (sectionId) => {
     set({
@@ -441,28 +428,6 @@ export const useCallStore = create<CallState>((set, get) => ({
   setCallCostReason: (v) => set({ callCostReason: v }),
   setCallInterestDecision: (v) => set({ callInterestDecision: v }),
 
-  addNote: (content) => {
-    const newNote: CallNote = { id: Date.now().toString(), content: content.trim(), timestamp: Date.now() };
-    set(s => {
-      const updated = [newNote, ...s.notes];
-      localStorage.setItem('callNotes', JSON.stringify(updated));
-      return { notes: updated, currentNote: '' };
-    });
-  },
-
-  deleteNote: (id) => {
-    set(s => {
-      const updated = s.notes.filter(n => n.id !== id);
-      localStorage.setItem('callNotes', JSON.stringify(updated));
-      return { notes: updated };
-    });
-  },
-
-  setCurrentNote: (v) => set({ currentNote: v }),
-  setShowNotesDrawer: (v) => set({ showNotesDrawer: v }),
-  setShowNoteModal: (v) => set({ showNoteModal: v }),
-  setNoteContent: (v) => set({ noteContent: v }),
-
   toggleSafeCheck: (id) => {
     set(s => {
       const updated = s.safeChecklist.map(item =>
@@ -488,7 +453,7 @@ export const useCallStore = create<CallState>((set, get) => ({
   setObjectionForm: (v) => set({ objectionForm: v }),
 
   resetAll: () => {
-    set({ completedSpeeches: [], usedResponses: [] });
+    set({ completedSpeeches: [], usedResponses: [], demoAccepted: false, followUpScheduled: false });
     localStorage.setItem('completedSpeeches', '[]');
     localStorage.setItem('usedResponses', '[]');
   },

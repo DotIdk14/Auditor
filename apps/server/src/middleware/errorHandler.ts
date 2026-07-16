@@ -6,7 +6,7 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  console.error(`[ERROR] ${req.method} ${req.originalUrl}: ${err.message}`);
+  console.error(`[ERROR] ${req.method} ${req.originalUrl} — ${err.message}${process.env.NODE_ENV !== "production" && err.stack ? `\n${err.stack}` : ""}`);
   res.status(500).json({
     error: process.env.NODE_ENV === "production"
       ? "Error interno del servidor"

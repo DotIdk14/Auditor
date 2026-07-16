@@ -1,8 +1,7 @@
 import type { Express } from "express";
 import { AssemblyAI } from "assemblyai";
+import { insforge } from "../services/insforge.js";
 import {
-  supabase,
-  supabaseAdmin,
   localCallsMemory,
   pendingTranscripts,
 } from "../config.js";
@@ -81,15 +80,8 @@ export default function (app: Express): void {
       const { callId } = req.params;
 
       try {
-        // ── 1. Fetch from Supabase ────────────────────────────────
-        const client = supabaseAdmin || supabase;
-        if (!client) {
-          return res.status(503).json({
-            error: "Supabase no está configurado. Esta operación requiere base de datos.",
-          });
-        }
-
-        const { data: dbCall, error: dbErr } = await client
+        // ── 1. Fetch from DB ────────────────────────────────
+        const { data: dbCall, error: dbErr } = await insforge.database
           .from("auditorias")
           .select("*")
           .eq("id", callId)
@@ -250,8 +242,8 @@ export default function (app: Express): void {
           timestamp: Date.now(),
         });
 
-        // Save transcriptId to Supabase for future resilience
-        await client
+        // Save transcriptId to DB for future resilience
+        await insforge.database
           .from("auditorias")
           .update({
             metadata: {
@@ -301,11 +293,6 @@ export default function (app: Express): void {
       }
 
       try {
-        const client = supabaseAdmin || supabase;
-        if (!client) {
-          return res.status(503).json({ error: "Supabase no está configurado." });
-        }
-
         // Verify the transcript exists on AssemblyAI
         const apiKey = process.env.ASSEMBLYAI_API_KEY;
         if (!apiKey) {
@@ -322,15 +309,15 @@ export default function (app: Express): void {
           });
         }
 
-        // Store transcriptId in Supabase
-        const { data: dbCall } = await client
+        // Store transcriptId in DB
+        const { data: dbCall } = await insforge.database
           .from("auditorias")
           .select("metadata")
           .eq("id", callId)
           .maybeSingle();
 
         const existingMeta = dbCall?.metadata || {};
-        await client
+        await insforge.database
           .from("auditorias")
           .update({
             metadata: {
@@ -372,12 +359,7 @@ export default function (app: Express): void {
     injectScope,
     async (req: AuthenticatedRequest, res) => {
       try {
-        const client = supabaseAdmin || supabase;
-        if (!client) {
-          return res.status(503).json({ error: "Supabase no está configurado." });
-        }
-
-        const { data, error } = await client
+        const { data, error } = await insforge.database
           .from("auditorias")
           .select("id, created_at, metadata->fileName, metadata->status, metadata->analysisComplete, metadata->transcriptId")
           .order("created_at", { ascending: false })
@@ -457,13 +439,8 @@ export default function (app: Express): void {
     injectScope,
     async (req: AuthenticatedRequest, res) => {
       try {
-        const client = supabaseAdmin || supabase;
-        if (!client) {
-          return res.status(503).json({ error: "Supabase no está configurado." });
-        }
-
         // Find all zombie calls (no analysisComplete)
-        const { data, error } = await client
+        const { data, error } = await insforge.database
           .from("auditorias")
           .select("id, metadata")
           .limit(100);
@@ -487,7 +464,7 @@ export default function (app: Express): void {
         let deleted = 0;
         for (let i = 0; i < zombieIds.length; i += 10) {
           const batch = zombieIds.slice(i, i + 10);
-          const { error: delErr } = await client
+          const { error: delErr } = await insforge.database
             .from("auditorias")
             .delete()
             .in("id", batch);

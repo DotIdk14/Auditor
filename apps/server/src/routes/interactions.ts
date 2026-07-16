@@ -3,15 +3,16 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authenticateToken, requireRole, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
+import { insforge } from "../services/insforge.js";
 import {
-  supabase, supabaseAdmin, upload,
+  upload,
   localInteractionsMemory, prependInteraction, getInteractionsByContact,
 } from "../config.js";
 
 const createInteractionSchema = z.object({
   contactId: z.string().min(1, "ID de contacto requerido"),
-  type: z.enum(["llamada", "correo", "whatsapp"], { required_error: "Tipo de interacción requerido" }),
-  tipificacion: z.enum(["positiva", "negativa"], { required_error: "Tipificación requerida" }),
+  type: z.enum(["llamada", "correo", "whatsapp"], "Tipo de interacción requerido"),
+  tipificacion: z.enum(["positiva", "negativa"], "Tipificación requerida"),
   notes: z.string().max(2000).optional().nullable(),
 });
 
@@ -63,21 +64,18 @@ export default function (app: Express): void {
           created_at: ts,
         };
 
-        // Try Supabase first
-        if (supabase) {
-          const client = supabaseAdmin || supabase;
-          const { error } = await client.from("interactions").insert({
-            id: interaction.id,
-            contact_id: interaction.contact_id,
-            type: interaction.type,
-            tipificacion: interaction.tipificacion,
-            notes: interaction.notes,
-            files: interaction.files,
-            created_by: interaction.created_by,
-            created_by_name: interaction.created_by_name,
-          });
-          if (error) console.warn("[INTERACTIONS] Supabase insert error:", error.message);
-        }
+        // Try DB first
+        const { error } = await insforge.database.from("interactions").insert({
+          id: interaction.id,
+          contact_id: interaction.contact_id,
+          type: interaction.type,
+          tipificacion: interaction.tipificacion,
+          notes: interaction.notes,
+          files: interaction.files,
+          created_by: interaction.created_by,
+          created_by_name: interaction.created_by_name,
+        });
+        if (error) console.warn("[INTERACTIONS] DB insert error:", error.message);
 
         // Always store in local memory as fallback
         prependInteraction(interaction);
@@ -108,19 +106,14 @@ export default function (app: Express): void {
     try {
       const contactId = req.params.id;
 
-      if (supabase) {
-        const client = supabaseAdmin || supabase;
-        const { data, error } = await client
-          .from("interactions")
-          .select("*")
-          .eq("contact_id", contactId)
-          .order("created_at", { ascending: false });
+      const { data, error } = await insforge.database
+        .from("interactions")
+        .select("*")
+        .eq("contact_id", contactId)
+        .order("created_at", { ascending: false });
 
-        if (error) {
-          console.warn("[INTERACTIONS] Supabase query error:", error.message);
-        } else if (data && data.length > 0) {
-          return res.json(data.map(mapInteractionRow));
-        }
+      if (!error && data && data.length > 0) {
+        return res.json(data.map(mapInteractionRow));
       }
 
       // Fallback to local memory

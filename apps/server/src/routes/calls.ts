@@ -1,9 +1,8 @@
+import { randomUUID } from "crypto";
 import type { Express } from "express";
 import axios from "axios";
 import { z } from "zod";
 import {
-  supabase,
-  supabaseAdmin,
   localCallsMemory,
   audioBuffers,
   localNotasMemory,
@@ -12,6 +11,7 @@ import {
   prependAndRemoveCall,
   removeCallById,
 } from "../config.js";
+import { insforge } from "../services/insforge.js";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { saveCallToSupabase, deleteCallFromSupabase } from "../services/supabase.js";
@@ -21,10 +21,10 @@ import * as contactService from "../services/contactService.js";
 
 export default function (app: Express): void {
   // POST /api/cargar-demo — Load a demo/test call
-  app.post("/api/cargar-demo", (req, res) => {
+  app.post("/api/cargar-demo", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const uniqueId = `call_demo_${Date.now()}`;
     const demoCall = generateHighFidelitySimulatedCall(
-      `Llamada_Comercial_Demo_UTEL_${Math.floor(Math.random() * 90 + 10)}.mp3`,
+      `Llamada_Comercial_Demo_UTEL_${randomUUID().split("-")[0]}.mp3`,
       4829310,
       uniqueId,
     );
@@ -58,10 +58,10 @@ export default function (app: Express): void {
       if (memIdx !== -1) {
         call = { ...localCallsMemory[memIdx] };
         console.log(`[ASSIGN_CONTACT] Found call ${id} in memory`);
-      } else if (supabase) {
-        // Fallback: look up in Supabase (Vercel cold start / different instance)
-        console.log(`[ASSIGN_CONTACT] Call ${id} not in memory, searching Supabase...`);
-        const { data: dbCall, error: dbErr } = await (supabaseAdmin || supabase)
+      } else {
+        // Fallback: look up in DB (Vercel cold start / different instance)
+        console.log(`[ASSIGN_CONTACT] Call ${id} not in memory, searching DB...`);
+        const { data: dbCall, error: dbErr } = await insforge.database
           .from("auditorias")
           .select("*")
           .eq("id", id)
@@ -115,8 +115,8 @@ export default function (app: Express): void {
       }
 
       // Verify the contact exists (if using existing contactId)
-      if (input.contactId && supabase) {
-        const { data: contactExists } = await (supabaseAdmin || supabase)
+      if (input.contactId) {
+        const { data: contactExists } = await insforge.database
           .from("contacts")
           .select("id")
           .eq("id", finalContactId)
@@ -165,17 +165,17 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
       console.error("[ASSIGN_CONTACT] Error:", err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "Error al procesar la solicitud" });
     }
   });
 
   // GET /api/llamadas — List all calls
-  app.get("/api/llamadas", (req, res) => {
+  app.get("/api/llamadas", authenticateToken, injectScope, (req: AuthenticatedRequest, res) => {
     return res.json(localCallsMemory);
   });
 
   // DELETE /api/llamadas/:id — Delete a call
-  app.delete("/api/llamadas/:id", (req, res) => {
+  app.delete("/api/llamadas/:id", authenticateToken, injectScope, (req: AuthenticatedRequest, res) => {
     const callId = req.params.id;
     audioBuffers.delete(callId);
     removeCallById(callId);
@@ -184,7 +184,7 @@ export default function (app: Express): void {
   });
 
   // POST /api/drive-import — Import and audit a call from Google Drive
-  app.post("/api/drive-import", async (req, res) => {
+  app.post("/api/drive-import", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { fileId, fileName, accessToken } = req.body;
 
     if (!fileId || !accessToken) {
@@ -240,13 +240,13 @@ export default function (app: Express): void {
     } catch (err: any) {
       console.error("[DRIVE_ERROR] Fallo al procesar archivo de Drive:", err.message);
       res.status(500).json({
-        error: `Error al importar de Drive: ${err.response?.data?.error || err.message}`,
+        error: "Error al importar de Drive",
       });
     }
   });
 
   // POST /api/drive-save — Save audit to Google Drive
-  app.post("/api/drive-save", async (req, res) => {
+  app.post("/api/drive-save", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { callData, accessToken } = req.body;
 
     if (!callData || !accessToken) {
@@ -306,13 +306,13 @@ export default function (app: Express): void {
     } catch (error: any) {
       console.error("Error al guardar en Drive:", error.response?.data || error.message);
       return res.status(500).json({
-        error: `Fallo al guardar en Google Drive: ${error.response?.data?.error?.message || error.message}`,
+        error: "Fallo al guardar en Google Drive",
       });
     }
   });
 
   // GET /api/drive-history — List audit history from Google Drive
-  app.get("/api/drive-history", async (req, res) => {
+  app.get("/api/drive-history", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { accessToken } = req.query;
 
     if (!accessToken) {
@@ -359,16 +359,16 @@ export default function (app: Express): void {
     } catch (error: any) {
       console.error("Error al listar Drive:", error.response?.data || error.message);
       return res.status(500).json({
-        error: `Fallo al recuperar historial de Google Drive: ${error.response?.data?.error?.message || error.message}`,
+        error: "Fallo al recuperar historial de Google Drive",
       });
     }
   });
 
   // GET /api/supervisores/:email/historial — Supervisor activity history
-  app.get("/api/supervisores/:email/historial", async (req, res) => {
+  app.get("/api/supervisores/:email/historial", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const supervisorEmail = req.params.email;
 
-    if (!supabase) {
+    if (!process.env.INSFORGE_BASE_URL) {
       const historial = localCallsMemory
         .filter((call: any) => {
           const notasForCall = localNotasMemory.get(call.id) || [];
@@ -402,8 +402,8 @@ export default function (app: Express): void {
 
     try {
       const [{ data: notasAuditorias }, { data: objecionesAuditorias }] = await Promise.all([
-        (supabaseAdmin || supabase).from("notas").select("auditoria_id").eq("supervisor_email", supervisorEmail),
-        (supabaseAdmin || supabase).from("objeciones").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+        insforge.database.from("notas").select("auditoria_id").eq("supervisor_email", supervisorEmail),
+        insforge.database.from("objeciones").select("auditoria_id").eq("supervisor_email", supervisorEmail),
       ]);
 
       const auditoriaIds = new Set<string>();
@@ -411,7 +411,7 @@ export default function (app: Express): void {
       (objecionesAuditorias || []).forEach((o: any) => auditoriaIds.add(o.auditoria_id));
 
       if (auditoriaIds.size === 0) {
-        const { data: uploadedCalls } = await (supabaseAdmin || supabase)
+        const { data: uploadedCalls } = await insforge.database
           .from("auditorias")
           .select("id")
           .filter("metadata->>uploadedBy", "ilike", `%${supervisorEmail}%`)
@@ -424,18 +424,18 @@ export default function (app: Express): void {
       }
 
       const ids = Array.from(auditoriaIds).slice(0, 50);
-      const { data: auditorias } = await (supabaseAdmin || supabase)
+      const { data: auditorias } = await insforge.database
         .from("auditorias")
         .select("*")
         .in("id", ids)
         .order("created_at", { ascending: false });
 
-      const { data: allNotas } = await (supabaseAdmin || supabase)
+      const { data: allNotas } = await insforge.database
         .from("notas")
         .select("auditoria_id")
         .in("auditoria_id", ids)
         .eq("supervisor_email", supervisorEmail);
-      const { data: allObjeciones } = await (supabaseAdmin || supabase)
+      const { data: allObjeciones } = await insforge.database
         .from("objeciones")
         .select("auditoria_id")
         .in("auditoria_id", ids)

@@ -3,7 +3,8 @@ import { z } from "zod";
 import { authenticateToken, requireRole, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import * as contactService from "../services/contactService.js";
-import { supabase, supabaseAdmin, getInteractionsByContact } from "../config.js";
+import { insforge } from "../services/insforge.js";
+import { getInteractionsByContact } from "../config.js";
 
 const createContactSchema = z.object({
   fullName: z.string().min(1, "El nombre es obligatorio").max(200),
@@ -61,7 +62,7 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Filtros inválidos", details: err.issues });
       }
       console.error("[CONTACTS] Error listing:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al listar contactos" });
     }
   });
 
@@ -75,7 +76,7 @@ export default function (app: Express): void {
       res.json(contact);
     } catch (err: any) {
       console.error("[CONTACTS] Error getting:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al obtener contacto" });
     }
   });
 
@@ -90,7 +91,7 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
       console.error("[CONTACTS] Error creating:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al crear contacto" });
     }
   });
 
@@ -108,7 +109,7 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
       console.error("[CONTACTS] Error updating:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al actualizar contacto" });
     }
   });
 
@@ -126,7 +127,7 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
       console.error("[CONTACTS] Error moving stage:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al mover etapa del contacto" });
     }
   });
 
@@ -140,18 +141,14 @@ export default function (app: Express): void {
       res.json({ success: true, message: "Contacto eliminado" });
     } catch (err: any) {
       console.error("[CONTACTS] Error deleting:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al eliminar contacto" });
     }
   });
 
   // GET /api/contacts/:id/calls — Get calls linked to a contact (from auditorias)
   app.get("/api/contacts/:id/calls", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
-      if (!supabase) {
-        return res.json([]);
-      }
-
-      const { data: audits, error: auditsError } = await (supabaseAdmin || supabase)
+      const { data: audits, error: auditsError } = await insforge.database
         .from("auditorias")
         .select("id, contact_id, metadata, score, analysis, transcription, created_at")
         .eq("contact_id", req.params.id)
@@ -161,7 +158,7 @@ export default function (app: Express): void {
       res.json(audits || []);
     } catch (err: any) {
       console.error("[CONTACTS] Error getting calls:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al obtener llamadas del contacto" });
     }
   });
 
@@ -176,48 +173,46 @@ export default function (app: Express): void {
       let auditItems: any[] = [];
       let taskItems: any[] = [];
 
-      if (supabase) {
-        const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
-          (supabaseAdmin || supabase)
-            .from("auditorias")
-            .select("id, contact_id, metadata, score, analysis, transcription, created_at")
-            .eq("contact_id", contactId)
-            .order("created_at", { ascending: false }),
-          (supabaseAdmin || supabase)
-            .from("tasks")
-            .select("id, contact_id, title, description, type, status, priority, due_date, completed_at, assigned_to, created_at, updated_at")
-            .eq("contact_id", contactId)
-            .order("created_at", { ascending: false }),
-        ]);
+      const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
+        insforge.database
+          .from("auditorias")
+          .select("id, contact_id, metadata, score, analysis, transcription, created_at")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false }),
+        insforge.database
+          .from("tasks")
+          .select("id, contact_id, title, description, type, status, priority, due_date, completed_at, assigned_to, created_at, updated_at")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-        if (auditsError) console.warn("[ACTIVITY] Error fetching audits:", auditsError.message);
-        if (tasksError) console.warn("[ACTIVITY] Error fetching tasks:", tasksError.message);
+      if (auditsError) console.warn("[ACTIVITY] Error fetching audits:", auditsError.message);
+      if (tasksError) console.warn("[ACTIVITY] Error fetching tasks:", tasksError.message);
 
-        auditItems = (audits || []).map((a: any) => ({
-          id: a.id,
-          type: "audit" as const,
-          title: a.metadata?.fileName || "Auditoría",
-          description: a.metadata?.agentName ? `Agente: ${a.metadata.agentName}` : "",
-          created_at: a.created_at,
-          score: a.score != null ? (typeof a.score === "object" ? (a.score as any).global ?? null : a.score) : null,
-          status: a.status || a.metadata?.status || "completada",
-          callId: a.id,
-        }));
+      auditItems = (audits || []).map((a: any) => ({
+        id: a.id,
+        type: "audit" as const,
+        title: a.metadata?.fileName || "Auditoría",
+        description: a.metadata?.agentName ? `Agente: ${a.metadata.agentName}` : "",
+        created_at: a.created_at,
+        score: a.score != null ? (typeof a.score === "object" ? (a.score as any).global ?? null : a.score) : null,
+        status: a.status || a.metadata?.status || "completada",
+        callId: a.id,
+      }));
 
-        taskItems = (tasks || []).map((t: any) => ({
-          id: t.id,
-          type: "task" as const,
-          title: t.title,
-          taskType: t.type || "follow_up",
-          description: t.description || "",
-          created_at: t.created_at,
-          due_date: t.due_date,
-          completed_at: t.completed_at,
-          status: t.status,
-          priority: t.priority,
-          assigned_to: t.assigned_to,
-        }));
-      }
+      taskItems = (tasks || []).map((t: any) => ({
+        id: t.id,
+        type: "task" as const,
+        title: t.title,
+        taskType: t.type || "follow_up",
+        description: t.description || "",
+        created_at: t.created_at,
+        due_date: t.due_date,
+        completed_at: t.completed_at,
+        status: t.status,
+        priority: t.priority,
+        assigned_to: t.assigned_to,
+      }));
 
       const interactionItems = localInteractions.map((i: any) => ({
         id: i.id,
@@ -237,7 +232,7 @@ export default function (app: Express): void {
       res.json({ contactId, items, total: items.length });
     } catch (err: any) {
       console.error("[CONTACTS] Error getting activity:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al obtener actividad del contacto" });
     }
   });
 
@@ -248,7 +243,7 @@ export default function (app: Express): void {
       res.json(audits);
     } catch (err: any) {
       console.error("[AUDITS] Error getting unlinked:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al obtener auditorías no vinculadas" });
     }
   });
 
@@ -257,7 +252,7 @@ export default function (app: Express): void {
     try {
       const { auditId, tipificacion } = z.object({
         auditId: z.string().min(1, "ID de auditoría requerido"),
-        tipificacion: z.enum(["positiva", "negativa"], { required_error: "Tipificación requerida" }),
+        tipificacion: z.enum(["positiva", "negativa"], "Tipificación requerida"),
       }).parse(req.body);
 
       const result = await contactService.linkAuditToContact(
@@ -277,7 +272,7 @@ export default function (app: Express): void {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
       console.error("[CONTACTS] Error linking audit:", err.message);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: "Error al vincular auditoría" });
     }
   });
 }

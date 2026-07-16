@@ -94,9 +94,10 @@ export async function syncSupervisoresFromSupabase(supabase: any, setPassword?: 
 
 function generateSecurePassword(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const uuid = crypto.randomUUID().replace(/-/g, '');
   let pwd = "";
   for (let i = 0; i < 16; i++) {
-    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    pwd += chars.charAt(parseInt(uuid.substring(i * 2, i * 2 + 2), 16) % chars.length);
   }
   return pwd;
 }

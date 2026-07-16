@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
-import { supabase, supabaseAdmin, localContactsMemory, prependContact, updateContactInMemory, removeContactById } from "../config.js";
-import type { Contact, ContactCreate, ContactUpdate, ContactFilters, PaginatedResponse, ServiceScope } from "../types.js";
+import { insforge } from "./insforge.js";
+import { localContactsMemory, prependContact, updateContactInMemory, removeContactById } from "../config.js";
+import type { Contact, ContactCreate, ContactUpdate, ContactFilters, ContactDisposition, PaginatedResponse, ServiceScope } from "../types.js";
 
 const TABLE = "contacts";
 
@@ -176,14 +177,13 @@ export async function listContacts(
   filters: ContactFilters,
   scope: ServiceScope
 ): Promise<PaginatedResponse<Contact>> {
-  if (!supabase) return localList(filters);
+  if (!process.env.INSFORGE_BASE_URL) return localList(filters);
 
-  const client = supabaseAdmin || supabase;
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
   const offset = (page - 1) * pageSize;
 
-  let query = client.from(TABLE).select("*", { count: "exact" });
+  let query = insforge.database.from(TABLE).select("*", { count: "exact" });
   query = buildScopeFilter(query, scope);
 
   if (filters.search) {
@@ -223,10 +223,9 @@ export async function getContact(
   id: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) return localGet(id);
+  if (!process.env.INSFORGE_BASE_URL) return localGet(id);
 
-  const client = supabaseAdmin || supabase;
-  let query = client.from(TABLE).select("*").eq("id", id);
+  let query = insforge.database.from(TABLE).select("*").eq("id", id);
   query = buildScopeFilter(query, scope);
 
   const { data, error } = await query.single();
@@ -242,46 +241,11 @@ export async function createContact(
   userId: string,
   scope: ServiceScope
 ): Promise<Contact> {
-  if (!supabase) return localCreate(input, userId, scope);
+  if (!process.env.INSFORGE_BASE_URL) return localCreate(input, userId, scope);
 
-  const client = supabaseAdmin || supabase;
   const areaId = scope.areaId;
   const teamId = scope.teamId;
-
-  let resolvedUserId = userId;
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
-
-  if (!isUuid && supabaseAdmin) {
-    try {
-      const { data: profile } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .eq("email", userId)
-        .maybeSingle();
-
-      if (profile?.id) {
-        resolvedUserId = profile.id;
-      } else {
-        const { data: authUsers, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
-        if (!authErr && authUsers?.users) {
-          const matched = authUsers.users.find(
-            (u: any) => u.email?.toLowerCase() === userId.toLowerCase()
-          );
-          if (matched?.id) resolvedUserId = matched.id;
-        }
-      }
-    } catch {
-      try {
-        const { data: anyAdmin } = await supabaseAdmin
-          .from("profiles")
-          .select("id")
-          .eq("role", "admin")
-          .limit(1)
-          .maybeSingle();
-        if (anyAdmin?.id) resolvedUserId = anyAdmin.id;
-      } catch { /* ignore */ }
-    }
-  }
+  const resolvedUserId = userId;
 
   const record: Record<string, unknown> = {
     full_name: input.fullName,
@@ -301,7 +265,7 @@ export async function createContact(
     callback_at: input.callbackAt || null,
   };
 
-  const { data, error } = await client
+  const { data, error } = await insforge.database
     .from(TABLE)
     .insert(record)
     .select()
@@ -316,9 +280,8 @@ export async function updateContact(
   input: ContactUpdate,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) return localUpdate(id, input, scope.role);
+  if (!process.env.INSFORGE_BASE_URL) return localUpdate(id, input, scope.role);
 
-  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return null;
 
@@ -353,7 +316,7 @@ export async function updateContact(
     updates.last_activity_at = new Date().toISOString();
   }
 
-  const { data, error } = await client
+  const { data, error } = await insforge.database
     .from(TABLE)
     .update(updates)
     .eq("id", id)
@@ -369,13 +332,12 @@ export async function updateContactStage(
   stageId: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) return localUpdate(id, { stageId });
+  if (!process.env.INSFORGE_BASE_URL) return localUpdate(id, { stageId });
 
-  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return null;
 
-  const { data, error } = await client
+  const { data, error } = await insforge.database
     .from(TABLE)
     .update({
       stage_id: stageId,
@@ -393,13 +355,12 @@ export async function deleteContact(
   id: string,
   scope: ServiceScope
 ): Promise<boolean> {
-  if (!supabase) return localDelete(id);
+  if (!process.env.INSFORGE_BASE_URL) return localDelete(id);
 
-  const client = supabaseAdmin || supabase;
   const existing = await getContact(id, scope);
   if (!existing) return false;
 
-  const { error } = await client.from(TABLE).delete().eq("id", id);
+  const { error } = await insforge.database.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(`Error al eliminar contacto: ${error.message}`);
   return true;
 }
@@ -409,17 +370,16 @@ export async function findContactByPhoneOrEmail(
   email?: string | null,
   scope?: ServiceScope
 ): Promise<Contact | null> {
-  if (!supabase) {
+  if (!process.env.INSFORGE_BASE_URL) {
     const found = localContactsMemory.find(c =>
       (phone && c.phone === phone) || (email && c.email === email)
     );
     return found ? mapRow(found) : null;
   }
 
-  const client = supabaseAdmin || supabase;
   if (!phone && !email) return null;
 
-  let query = client.from(TABLE).select("*");
+  let query = insforge.database.from(TABLE).select("*");
 
   if (phone && email) {
     query = query.or(`phone.eq.${phone},email.eq.${email}`);
@@ -468,9 +428,8 @@ export async function linkAuditToContact(
   }
 
   // Update the audit's contact_id
-  if (supabase) {
-    const client = supabaseAdmin || supabase;
-    const { error: auditErr } = await client
+  if (process.env.INSFORGE_BASE_URL) {
+    const { error: auditErr } = await insforge.database
       .from("auditorias")
       .update({ contact_id: contactId })
       .eq("id", auditId);
@@ -500,7 +459,7 @@ export async function linkAuditToContact(
 }
 
 export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
-  if (!supabase) {
+  if (!process.env.INSFORGE_BASE_URL) {
     // Local: return calls from memory that have no contact_id
     const { localCallsMemory } = await import("../config.js");
     return localCallsMemory
@@ -515,8 +474,7 @@ export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
       }));
   }
 
-  const client = supabaseAdmin || supabase;
-  const { data, error } = await client
+  const { data, error } = await insforge.database
     .from("auditorias")
     .select("id, metadata, score, created_at")
     .is("contact_id", null)

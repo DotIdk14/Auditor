@@ -32,7 +32,7 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
   const generateUniqueId = (fileName: string): string => {
     const timestamp = Date.now();
     const cleanName = fileName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 8);
-    const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const randomSuffix = crypto.randomUUID().split("-")[0];
     return `call_${cleanName}_${timestamp}_${randomSuffix}`;
   };
 

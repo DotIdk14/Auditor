@@ -41,6 +41,8 @@ const TAG_LABELS: Record<ProfileTag, string> = {
   motivacion_emocional: 'Emocional',
   motivacion_laboral: 'Laboral',
   motivacion_personal: 'Personal',
+  dudoso: 'Dudoso',
+  resistente: 'Resistente',
 };
 
 type Version = 'short' | 'medium' | 'long';

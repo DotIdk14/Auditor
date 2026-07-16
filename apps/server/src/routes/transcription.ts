@@ -1,13 +1,14 @@
 import type { Express } from "express";
+import { authenticateToken, injectScope } from "../middleware/auth.js";
+import type { AuthenticatedRequest } from "../middleware/auth.js";
 import axios from "axios";
 import { AssemblyAI } from "assemblyai";
 import { put as blobPut } from "@vercel/blob";
+import { insforge } from "../services/insforge.js";
 import {
   localCallsMemory,
   pendingTranscripts,
   prependAndRemoveCall,
-  supabase,
-  supabaseAdmin,
 } from "../config.js";
 import { assemblyAITranscribe } from "../services/assemblyai.js";
 import { callOpenRouter } from "../services/openrouter.js";
@@ -20,7 +21,7 @@ import { saveCallToSupabase } from "../services/supabase.js";
 
 export default function (app: Express): void {
   // POST /api/whisper — Standalone transcription with AssemblyAI
-  app.post("/api/whisper", async (req, res) => {
+  app.post("/api/whisper", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {
       const { audioBase64, audioUrl, fileName = "audio.mp3" } = req.body;
 
@@ -48,7 +49,7 @@ export default function (app: Express): void {
   });
 
   // GET /api/transcript/:callId — Poll transcript status and get results
-  app.get("/api/transcript/:callId", async (req, res) => {
+  app.get("/api/transcript/:callId", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { callId } = req.params;
     let pending = pendingTranscripts.get(callId);
 
@@ -60,63 +61,57 @@ export default function (app: Express): void {
       const existing = localCallsMemory.find(c => c.id === callId);
       if (existing) return res.json({ status: "completed", call: existing });
 
-      // 2. Try to recover from Supabase (persistent across instances)
-      if (supabase) {
-        try {
-          const client = supabaseAdmin || supabase;
-          const { data: dbCall } = await client
-            .from("auditorias")
-            .select("*")
-            .eq("id", callId)
-            .maybeSingle();
+      // 2. Try to recover from DB (persistent across instances)
+      try {
+        const { data: dbCall } = await insforge.database
+          .from("auditorias")
+          .select("*")
+          .eq("id", callId)
+          .maybeSingle();
 
-          if (!dbCall) {
-            return res.status(404).json({ error: "Transcripción no encontrada", callId });
-          }
-
-          const meta = dbCall?.metadata || {};
-
-          // 2a. If analysis is already complete, restore the full call
-          if (meta.analysisComplete) {
-            const restoredCall = {
-              id: dbCall.id,
-              contact_id: dbCall.contact_id || null,
-              status: meta.status || 'por_auditar',
-              metadata: meta,
-              score: dbCall.score || { global: 0 },
-              analysis: dbCall.analysis || {},
-              transcription: dbCall.transcription || [],
-            };
-            localCallsMemory.unshift(restoredCall);
-            return res.json({ status: "completed", call: restoredCall });
-          }
-
-          // 2b. If transcriptId exists, reconstruct pending entry
-          const transcriptId = meta.transcriptId || meta.transcript_id;
-          if (transcriptId) {
-            pending = {
-              transcriptId,
-              audioBuffer: Buffer.alloc(0), // placeholder — audio will be re-fetched from Blob
-              fileName: meta?.fileName || "audio.mp3",
-              callId,
-              timestamp: Date.now(),
-            };
-            pendingTranscripts.set(callId, pending);
-            console.log(`[TRANSCRIPT] Recovered transcript ${transcriptId} for ${callId} from Supabase`);
-          } else {
-            // 2c. Call exists but no transcriptId and no analysisComplete → upload never completed
-            return res.status(404).json({
-              error: "Transcripción no encontrada",
-              detail: "El audio se recibió pero la transcripción no se inició. El transcriptId no está disponible en la base de datos.",
-              callId,
-            });
-          }
-        } catch (dbErr: any) {
-          console.warn(`[TRANSCRIPT] Supabase recovery failed for ${callId}: ${dbErr.message}`);
+        if (!dbCall) {
           return res.status(404).json({ error: "Transcripción no encontrada", callId });
         }
-      } else {
-        // No Supabase configured — in-memory only
+
+        const meta = dbCall?.metadata || {};
+
+        // 2a. If analysis is already complete, restore the full call
+        if (meta.analysisComplete) {
+          const restoredCall = {
+            id: dbCall.id,
+            contact_id: dbCall.contact_id || null,
+            status: meta.status || 'por_auditar',
+            metadata: meta,
+            score: dbCall.score || { global: 0 },
+            analysis: dbCall.analysis || {},
+            transcription: dbCall.transcription || [],
+          };
+          localCallsMemory.unshift(restoredCall);
+          return res.json({ status: "completed", call: restoredCall });
+        }
+
+        // 2b. If transcriptId exists, reconstruct pending entry
+        const transcriptId = meta.transcriptId || meta.transcript_id;
+        if (transcriptId) {
+          pending = {
+            transcriptId,
+            audioBuffer: Buffer.alloc(0), // placeholder — audio will be re-fetched from Blob
+            fileName: meta?.fileName || "audio.mp3",
+            callId,
+            timestamp: Date.now(),
+          };
+          pendingTranscripts.set(callId, pending);
+          console.log(`[TRANSCRIPT] Recovered transcript ${transcriptId} for ${callId} from DB`);
+        } else {
+          // 2c. Call exists but no transcriptId and no analysisComplete → upload never completed
+          return res.status(404).json({
+            error: "Transcripción no encontrada",
+            detail: "El audio se recibió pero la transcripción no se inició. El transcriptId no está disponible en la base de datos.",
+            callId,
+          });
+        }
+      } catch (dbErr: any) {
+        console.warn(`[TRANSCRIPT] DB recovery failed for ${callId}: ${dbErr.message}`);
         return res.status(404).json({ error: "Transcripción no encontrada", callId });
       }
     }
@@ -396,7 +391,7 @@ ${JSON.stringify(correctedTranscription, null, 2)}
       return res.json({ status: "completed", call: finalCallData });
     } catch (err: any) {
       console.error("[TRANSCRIPT] Error:", err.message);
-      return res.status(500).json({ status: "error", error: err.message });
+      return res.status(500).json({ status: "error", error: "Error interno del servidor" });
     }
   });
 }

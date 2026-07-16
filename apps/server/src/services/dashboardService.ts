@@ -1,4 +1,4 @@
-import { supabase } from "../config.js";
+import { insforge } from "./insforge.js";
 import type { SalesKPIs, UnifiedDashboard } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -6,7 +6,7 @@ import type { ServiceScope } from "../types.js";
  * Get sales KPIs for a given scope.
  */
 export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
-  if (!supabase) {
+  if (!process.env.INSFORGE_BASE_URL) {
     return {
       pipelineValue: 0,
       conversionRate: 0,
@@ -40,7 +40,7 @@ export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
   };
 
   // Get contacts by stage
-  let contactsQuery = supabase.from("contacts").select("id, stage_id, status, pipeline_id, created_at");
+  let contactsQuery = insforge.database.from("contacts").select("id, stage_id, status, pipeline_id, created_at");
   contactsQuery = buildFilter(contactsQuery);
   const { data: contacts } = await contactsQuery;
 
@@ -63,28 +63,27 @@ export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
   }));
 
   // Activity by agent
-  let agentsQuery = supabase.from("contacts")
+  let agentsQuery = insforge.database.from("contacts")
     .select("assigned_to")
     .eq("assigned_to", scope.userId);
   
   if (["admin", "area_manager", "coordinator", "supervisor"].includes(scope.role)) {
-    agentsQuery = supabase.from("contacts").select("assigned_to");
+    agentsQuery = insforge.database.from("contacts").select("assigned_to");
     agentsQuery = buildFilter(agentsQuery);
   }
   
-  const sb = supabase; // local const for type narrowing
   const { data: agentData } = await agentsQuery;
   const agentIds = [...new Set((agentData || []).map(a => a.assigned_to))];
 
   const activityByAgent = await Promise.all(
     agentIds.map(async (agentId) => {
       const [callsRes, tasksRes, contactsRes] = await Promise.all([
-        sb!.from("auditorias").select("id", { count: "exact", head: true }).eq("contact_id", agentId),
-        sb!.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to", agentId),
-        sb!.from("contacts").select("id", { count: "exact", head: true }).eq("assigned_to", agentId),
+        insforge.database.from("auditorias").select("id", { count: "exact", head: true }).eq("contact_id", agentId),
+        insforge.database.from("tasks").select("id", { count: "exact", head: true }).eq("assigned_to", agentId),
+        insforge.database.from("contacts").select("id", { count: "exact", head: true }).eq("assigned_to", agentId),
       ]);
 
-      const profile = await sb!
+      const profile = await insforge.database
         .from("profiles")
         .select("full_name")
         .eq("id", agentId)
@@ -121,9 +120,9 @@ export async function getQAKPIs(scope: ServiceScope): Promise<{
   emotionalTrend: { positive: number; neutral: number; negative: number };
   auditsByAgent: { agentId: string; agentName: string; count: number; avgScore: number }[];
 }> {
-  if (!supabase) return { averagePceScore: 0, totalAudits: 0, complianceRate: 0, emotionalTrend: { positive: 0, neutral: 0, negative: 0 }, auditsByAgent: [] };
+  if (!process.env.INSFORGE_BASE_URL) return { averagePceScore: 0, totalAudits: 0, complianceRate: 0, emotionalTrend: { positive: 0, neutral: 0, negative: 0 }, auditsByAgent: [] };
 
-  let query = supabase.from("auditorias").select("id, score, metadata");
+  let query = insforge.database.from("auditorias").select("id, score, metadata");
   
   switch (scope.role) {
     case "admin":
@@ -139,7 +138,7 @@ export async function getQAKPIs(scope: ServiceScope): Promise<{
       query = query.eq("area_id", scope.areaId);
       break;
     case "agent": {
-      const { data: agentContactIds } = await supabase
+      const { data: agentContactIds } = await insforge.database
         .from("contacts")
         .select("id")
         .eq("assigned_to", scope.userId);

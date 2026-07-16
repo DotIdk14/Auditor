@@ -1,7 +1,8 @@
 import type { Express } from "express";
+import { insforge } from "../services/insforge.js";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase, supabaseAdmin, localCallsMemory } from "../config.js";
+import { localCallsMemory } from "../config.js";
 
 /**
  * Transform a local memory call record into AuditFullResponse format.
@@ -94,13 +95,8 @@ export default function (app: Express): void {
         return res.json(toAuditFullResponse(localCall));
       }
 
-      // ── 2. If Supabase is not configured and not found in memory, return 404 ──
-      if (!supabase) {
-        return res.status(404).json({ error: "Auditoría no encontrada" });
-      }
-
-      // ── 4. Query Supabase with LEFT JOIN (contacts may be null) ──
-      const { data: audit, error } = await (supabaseAdmin || supabase)
+      // ── 2. Query DB with LEFT JOIN (contacts may be null) ──
+      const { data: audit, error } = await insforge.database
         .from("auditorias")
         .select(`
           id, contact_id, score, metadata, analysis, transcription, created_at,

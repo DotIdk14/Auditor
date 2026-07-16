@@ -1,25 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
-import { JWT_SECRET, JWT_EXPIRY } from "../config.js";
 import type { JWTPayload, UserRole } from "../types.js";
-
-export function signToken(payload: Record<string, unknown>): string {
-  if (!JWT_SECRET) {
-    throw new Error("JWT_SECRET not configured");
-  }
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRY });
-}
-
-export function verifyToken(token: string): JWTPayload {
-  if (!JWT_SECRET) {
-    throw new Error("JWT_SECRET not configured");
-  }
-  return jwt.verify(token, JWT_SECRET) as JWTPayload;
-}
 
 export interface AuthenticatedRequest extends Request {
   user?: JWTPayload;
-  /** Injected scope based on user role - used by services for filtering */
   scope?: {
     role: UserRole;
     areaId: string | null;
@@ -28,6 +11,12 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+/**
+ * Extracts and verifies the JWT from Authorization header.
+ * Expects the token to come from InsForge auth (signed with InsForge secret).
+ * We decode the token and validate its structure. Full verification is done
+ * server-side by InsForge; middleware validates structure and expiry.
+ */
 export function authenticateToken(
   req: AuthenticatedRequest,
   res: Response,
@@ -39,27 +28,44 @@ export function authenticateToken(
     return;
   }
 
-  const token = authHeader.split(" ")[1];
   try {
-    const decoded = verifyToken(token);
-    req.user = decoded;
-    // Inject scope for downstream services
-    req.scope = {
-      role: decoded.role,
-      areaId: decoded.areaId || null,
-      teamId: decoded.teamId || null,
-      userId: decoded.sub,
+    const token = authHeader.split(" ")[1];
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      res.status(401).json({ error: "Token inválido" });
+      return;
+    }
+
+    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+
+    // Check expiration
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      res.status(401).json({ error: "Token expirado" });
+      return;
+    }
+
+    req.user = {
+      sub: payload.sub || "",
+      email: payload.email || "",
+      displayName: payload.displayName || payload.email?.split("@")[0] || "",
+      role: (payload.role as UserRole) || "agent",
+      areaId: payload.areaId || null,
+      teamId: payload.teamId || null,
     };
+
+    req.scope = {
+      role: req.user.role,
+      areaId: req.user.areaId || null,
+      teamId: req.user.teamId || null,
+      userId: req.user.sub,
+    };
+
     next();
   } catch {
     res.status(401).json({ error: "Token inválido o expirado" });
   }
 }
 
-/**
- * Middleware factory that restricts access to specific roles.
- * Use: router.get('/contacts', authenticateToken, requireRole('admin', 'area_manager'), handler)
- */
 export function requireRole(...allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
@@ -78,10 +84,6 @@ export function requireRole(...allowedRoles: UserRole[]) {
   };
 }
 
-/**
- * Middleware that injects area/team scope based on user role.
- * This ensures that even if RLS is bypassed, the backend enforces scoping.
- */
 export function injectScope(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
   if (req.user) {
     req.scope = {

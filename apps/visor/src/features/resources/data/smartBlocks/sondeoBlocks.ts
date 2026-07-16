@@ -1,3 +1,28 @@
+/**
+ * ── CÓMO USAR VARIABLES DE PERFIL EN EL SPEECH ──
+ *
+ * Las siguientes variables se auto-pueblan desde el perfil del prospecto
+ * (ProfileBuilder) mediante profileToSpeechVars():
+ *
+ *   [MOTIVACIÓN]   → "Crecer laboralmente, Mejor salario"
+ *   [DOLOR]        → "No tiene tiempo, No tiene dinero"
+ *   [SITUACIÓN_LABORAL] → "trabaja actualmente" | "no trabaja"
+ *   [TIENE_HIJOS]  → "tiene hijos" | "sin hijos"
+ *   [EMOCIÓN]      → "Interesado", "Dudoso", etc.
+ *   [Nombre]       → Nombre del prospecto
+ *   [Carrera]      → Carrera de interés
+ *
+ * Cómo agregar una nueva variable de perfil:
+ *   1. Añadir la entrada en utils/profileToSpeechVars.ts
+ *   2. Usar [MI_VARIABLE] en el texto del block
+ *   3. La variable se resolverá automáticamente cuando el perfil cambie
+ *
+ * Tags: cada block tiene tags que se comparan contra las ProfileTag
+ * generadas desde el perfil (generateTags). Blocks con tags que coinciden
+ * rankean más alto en las recomendaciones. Tags vacías = block siempre
+ * relevante (matchScore = 1).
+ */
+
 import type { SmartBlock } from '../../types';
 
 export const sondeoBlocks: SmartBlock[] = [
@@ -21,7 +46,11 @@ export const sondeoBlocks: SmartBlock[] = [
 
 [Escuchar y responder: "Entiendo."]
 
-¿La idea de estudiar esta carrera va más enfocada a crecer laboralmente, cambiar de área, mejorar tus oportunidades o es principalmente un objetivo personal de obtener tu título?`,
+¿La idea de estudiar esta carrera va más enfocada a crecer laboralmente, cambiar de área, mejorar tus oportunidades o es principalmente un objetivo personal de obtener tu título?
+
+[Escuchar y registrar la motivación principal]
+
+Perfecto, entonces tu motivación principal es [MOTIVACIÓN]. Eso es justo lo que necesito saber para recomendarte la mejor opción.`,
     },
     followUpQuestions: [
       '¿Qué te motivó a buscar una licenciatura?',
@@ -59,7 +88,11 @@ export const sondeoBlocks: SmartBlock[] = [
 
 [Escuchar]
 
-¿Y esta sería la primera universidad que estás revisando o ya habías solicitado información en alguna otra institución?`,
+¿Y esta sería la primera universidad que estás revisando o ya habías solicitado información en alguna otra institución?
+
+[Escuchar]
+
+Gracias por compartirme eso. Veo que [SITUACIÓN_LABORAL] y [TIENE_HIJOS]. Esa información es muy valiosa para encontrar la mejor opción para ti.`,
     },
     followUpQuestions: [
       '¿Trabajas actualmente?',
@@ -70,7 +103,7 @@ export const sondeoBlocks: SmartBlock[] = [
     negativeSignals: ['No quiero responder', '¿Para qué necesitas saber?'],
     nextIfPositive: 'sondeo_dolor',
     nextIfNegative: 'sondeo_dolor',
-    tags: [],
+    tags: ['trabaja', 'tiene_hijos', 'primera_universidad'],
     priority: 5,
   },
   {
@@ -97,7 +130,11 @@ Entiendo. ¿Y pensando a futuro, si en algunos años ya tuvieras tu título prof
 
 [Escuchar]
 
-Justamente por eso quiero conocerte mejor, para ver cómo podemos ayudarte a superar ese obstáculo.`,
+Justamente por eso quiero conocerte mejor, para ver cómo podemos ayudarte a superar ese obstáculo.
+
+[Escuchar y registrar el dolor principal]
+
+Entiendo, entonces el principal obstáculo es [DOLOR]. Es más común de lo que parece, y justamente muchas de nuestras opciones están diseñadas pensando en eso.`,
     },
     followUpQuestions: [
       '¿Cuál ha sido el mayor obstáculo?',
@@ -108,7 +145,7 @@ Justamente por eso quiero conocerte mejor, para ver cómo podemos ayudarte a sup
     negativeSignals: ['No lo sé', 'Simplemente no puedo', 'Es complicado'],
     nextIfPositive: 'sondeo_futuro',
     nextIfNegative: 'sondeo_futuro',
-    tags: [],
+    tags: ['preocupado_tiempo', 'preocupado_costos', 'preocupado_calidad'],
     priority: 5,
   },
   {
@@ -138,7 +175,7 @@ Eso suena muy bien. ¿Y quién sería la persona más orgullosa de verte graduad
     negativeSignals: ['No lo sé', 'No he pensado en eso'],
     nextIfPositive: 'sondeo_perfil_completo',
     nextIfNegative: 'sondeo_perfil_completo',
-    tags: [],
+    tags: ['quiere_crecer', 'quiere_ascenso', 'quiere_emprender', 'motivacion_laboral'],
     priority: 4,
   },
   {
@@ -155,9 +192,9 @@ Eso suena muy bien. ¿Y quién sería la persona más orgullosa de verte graduad
 
 Muy bien, con esa información puedo ayudarte mejor.`,
 
-      long: `Perfecto, entonces me queda claro que [resumen de lo escuchado]. La motivación principal es [MOTIVACIÓN] y el mayor obstáculo es [DOLOR]. ¿Correcto?
+      long: `Perfecto, entonces resumiendo: tu motivación principal es [MOTIVACIÓN] y el mayor obstáculo es [DOLOR]. ¿Correcto?
 
-Muy bien, con esa información puedo ayudarte a ver exactamente cómo UTEL puede resolver lo que buscas.
+Muy bien, con esa información puedo ayudarte a ver exactamente cómo podemos resolver lo que buscas.
 
 ¿Te parece si revisamos juntos cómo funcionaría la carrera para tu caso específico?`,
     },

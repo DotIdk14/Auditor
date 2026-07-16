@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../auth/authStore';
 import Sidebar from './Sidebar';
+import NotesPanel from './NotesPanel';
 import {
   Bell, MessageSquare, Search, Sun, Moon, Plus, X, User, Camera
 } from 'lucide-react';
@@ -16,6 +17,7 @@ export default function Layout() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [notificationCount, setNotificationCount] = useState(3);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
   const [activeAlert, setActiveAlert] = useState<{ title: string; content: string; date: string } | null>(null);
 
   // Sync dark mode
@@ -139,7 +141,7 @@ export default function Layout() {
 
         {/* Dynamic Page Content */}
         <main className="flex-1 overflow-hidden h-full">
-          <Outlet context={{ searchQuery, darkMode }} />
+          <Outlet context={{ searchQuery, darkMode, openNotesPanel: () => setShowNotesPanel(true) }} />
         </main>
       </div>
 
@@ -167,6 +169,13 @@ export default function Layout() {
         )}
       </AnimatePresence>
 
+      {/* Notes Panel (Slide-up) */}
+      <NotesPanel
+        isOpen={showNotesPanel}
+        onClose={() => setShowNotesPanel(false)}
+        darkMode={darkMode}
+      />
+
       {/* Bottom Sidebar (Dock) */}
       <Sidebar
         currentTab={currentTab}
@@ -179,6 +188,8 @@ export default function Layout() {
           };
           if (tab === 'logout') {
             handleLogout();
+          } else if (tab === 'notas') {
+            setShowNotesPanel(true);
           } else if (routes[tab]) {
             navigate(routes[tab]);
           }

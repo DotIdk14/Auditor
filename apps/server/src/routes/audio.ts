@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import axios from "axios";
 import { AssemblyAI } from "assemblyai";
+import { randomUUID } from "crypto";
+import { authenticateToken, injectScope } from "../middleware/auth.js";
+import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { localCallsMemory, audioBuffers, pendingTranscripts, upload } from "../config.js";
 import { assemblyAITranscribe } from "../services/assemblyai.js";
 import { callOpenRouter } from "../services/openrouter.js";
@@ -39,7 +42,7 @@ function serveAudio(res: any, buf: Buffer, range: string | undefined): void {
 
 export default function (app: Express): void {
   // GET /api/audio/:id — Serve audio file with range support
-  app.get("/api/audio/:id", async (req, res) => {
+  app.get("/api/audio/:id", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const callId = req.params.id;
     const buffer = audioBuffers.get(callId);
     if (buffer) {
@@ -62,7 +65,7 @@ export default function (app: Express): void {
   });
 
   // POST /api/upload — Upload audio file, start async transcription
-  app.post("/api/upload", upload.single("audio"), async (req, res) => {
+  app.post("/api/upload", authenticateToken, injectScope, upload.single("audio"), async (req: AuthenticatedRequest, res) => {
     try {
       const file = req.file;
       if (!file) {
@@ -70,7 +73,7 @@ export default function (app: Express): void {
       }
 
       const originalName = file.originalname;
-      const callId = `call_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const callId = `call_${Date.now()}_${randomUUID().split("-")[0]}`;
       console.log(`[UPLOAD] Iniciando transcripción asíncrona: ${originalName} (ID: ${callId})`);
 
       audioBuffers.set(callId, file.buffer);
@@ -144,12 +147,12 @@ export default function (app: Express): void {
       return res.json({ status: "processing", callId, transcriptId: transcript.id });
     } catch (error: any) {
       console.error("[UPLOAD] Error:", error);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: "Error al procesar el audio" });
     }
   });
 
   // POST /api/process-blob — Process audio from Vercel Blob URL (async)
-  app.post("/api/process-blob", async (req, res) => {
+  app.post("/api/process-blob", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     const { blobUrl, fileName } = req.body;
     if (!blobUrl) return res.status(400).json({ error: "blobUrl is required" });
 
@@ -227,7 +230,7 @@ export default function (app: Express): void {
       return res.json({ status: "processing", callId, transcriptId: transcript.id });
     } catch (err: any) {
       console.error("[BLOB_ERROR]", err.message);
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: "Error al procesar el blob" });
     }
   });
 }

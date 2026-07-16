@@ -57,10 +57,6 @@ export function saveCallSteps(data: CallStep[]): void {
   localStorage.setItem(CALL_STEPS_KEY, JSON.stringify(data));
 }
 
-export function getPersistedNotes(): { id: string; content: string; timestamp: number }[] {
-  try { return JSON.parse(localStorage.getItem('callNotes') || '[]'); } catch { return []; }
-}
-
 export function getPersistedVariables(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem('callVariables') || '{}'); } catch { return {}; }
 }

@@ -24,7 +24,7 @@ export function SectionWrapper({ meta, darkMode, currentBlockIndex, totalBlocks,
   return (
     <div className="space-y-4">
       {/* Section header */}
-      <div className={`rounded-2xl border p-4 ${darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'}`}>
+      <div className={`rounded-xl border p-5 ${darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-stone-200'}`}>
         <div className="flex items-center gap-3 mb-3">
           <span className="text-xl">{meta.icon}</span>
           <div className="flex-1">
@@ -63,7 +63,7 @@ export function SectionWrapper({ meta, darkMode, currentBlockIndex, totalBlocks,
 
         {/* Required info */}
         {meta.requiredInfo.length > 0 && (
-          <div className={`p-2 rounded-xl ${darkMode ? 'bg-[#24211e]' : 'bg-stone-50'}`}>
+          <div className={`p-2 rounded-xl ${darkMode ? 'bg-black/30' : 'bg-stone-50'}`}>
             <p className={`text-[8px] font-bold mb-1 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
               <AlertTriangle className="w-3 h-3 inline mr-1" />
               INFORMACIÓN REQUERIDA
@@ -71,7 +71,7 @@ export function SectionWrapper({ meta, darkMode, currentBlockIndex, totalBlocks,
             <div className="flex flex-wrap gap-1">
               {meta.requiredInfo.map((info, i) => (
                 <span key={i} className={`text-[8px] px-2 py-0.5 rounded-full ${
-                  darkMode ? 'bg-stone-800 text-stone-500' : 'bg-stone-100 text-stone-400'
+                  darkMode ? 'bg-white/5 text-stone-500' : 'bg-stone-100 text-stone-400'
                 }`}>
                   {info}
                 </span>
@@ -91,7 +91,7 @@ export function SectionWrapper({ meta, darkMode, currentBlockIndex, totalBlocks,
                 {Math.round(((currentBlockIndex + 1) / totalBlocks) * 100)}%
               </span>
             </div>
-            <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-[#24211e]' : 'bg-stone-100'}`}>
+            <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-black/30' : 'bg-stone-100'}`}>
               <div
                 className="h-full bg-amber-500 rounded-full transition-all"
                 style={{ width: `${((currentBlockIndex + 1) / totalBlocks) * 100}%` }}

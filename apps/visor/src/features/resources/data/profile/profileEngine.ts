@@ -55,6 +55,7 @@ export function generateTags(profile: ProspectProfile): ProfileTag[] {
 
   if (profile.detectedEmotion === 'dudoso' || profile.detectedEmotion === 'resistente') {
     tags.add('motivacion_emocional');
+    tags.add(profile.detectedEmotion as 'dudoso' | 'resistente');
   }
 
   return [...tags];

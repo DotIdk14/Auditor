@@ -251,3 +251,56 @@ export interface TaskFilters {
   page?: number;
   pageSize?: number;
 }
+
+export interface SalesCall {
+  id: string;
+  contact_id: string | null;
+  area_id: string | null;
+  team_id: string | null;
+  status: string;
+  metadata: Record<string, unknown>;
+  score: Record<string, unknown>;
+  analysis: Record<string, unknown>;
+  transcription: TranscriptionUtterance[];
+}
+
+export interface Nota {
+  id: string;
+  auditoriaId: string | null;
+  supervisorEmail: string;
+  supervisorName: string;
+  segmentStart: number | null;
+  segmentEnd: number | null;
+  text: string;
+  createdAt: string;
+  type?: string;
+  callName?: string | null;
+}
+
+export interface Objecion {
+  id: string;
+  auditoriaId: string;
+  supervisorEmail: string;
+  supervisorName: string;
+  segmentStart: number;
+  segmentEnd: number;
+  tipoObjecion: string;
+  severidad: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface ContactRecord {
+  fullName: string;
+  phone?: string | null;
+  email?: string | null;
+  company?: string | null;
+  source?: string;
+  status?: string;
+  disposition?: string;
+  callbackAt?: string | null;
+  pipelineId?: string;
+  stageId?: string;
+  metadata?: Record<string, unknown>;
+  dispositionLocked?: boolean;
+}

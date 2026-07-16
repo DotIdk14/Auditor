@@ -170,7 +170,9 @@ export type ProfileTag =
   | 'ya_tiene_opcion'
   | 'motivacion_emocional'
   | 'motivacion_laboral'
-  | 'motivacion_personal';
+  | 'motivacion_personal'
+  | 'dudoso'
+  | 'resistente';
 
 export type Motivation =
   | 'crecer_laboral'

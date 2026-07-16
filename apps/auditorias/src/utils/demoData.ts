@@ -8,7 +8,7 @@ export function generateDemoCall(): SalesCall {
   return {
     id: uniqueId,
     metadata: {
-      fileName: `Llamada_Comercial_Demo_UTEL_${Math.floor(Math.random() * 90 + 10)}.mp3`,
+      fileName: `Llamada_Comercial_Demo_UTEL_${crypto.randomUUID().split("-")[0]}.mp3`,
       url: '',
       size: 4829310,
       duration: 188,

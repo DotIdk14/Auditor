@@ -7,9 +7,19 @@ interface Props {
   reasonId: string;
   darkMode: boolean;
   callVariables: Record<string, string>;
+  demoAccepted?: boolean;
+  followUpScheduled?: boolean;
+  onAcceptDemo?: () => void;
+  onScheduleFollowUp?: () => void;
+  onRejectDemo?: () => void;
+  onBackFromFollowUp?: () => void;
 }
 
-export function ObjectionDeepCard({ reasonId, darkMode, callVariables }: Props) {
+export function ObjectionDeepCard({
+  reasonId, darkMode, callVariables,
+  demoAccepted = false, followUpScheduled = false,
+  onAcceptDemo, onScheduleFollowUp, onRejectDemo, onBackFromFollowUp,
+}: Props) {
   const reason = objectionReasons.find(r => r.id === reasonId);
   if (!reason) return null;
 
@@ -107,6 +117,61 @@ export function ObjectionDeepCard({ reasonId, darkMode, callVariables }: Props) 
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Demo flow integrated inside objection deep card */}
+      {onAcceptDemo && !demoAccepted && !followUpScheduled && (
+        <div className={`rounded-xl border p-4 ${darkMode ? 'bg-zinc-900 border-blue-500/20' : 'bg-blue-50/50 border-blue-200'}`}>
+          <p className={`text-[10px] font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+            🎓 ¿Aún tiene dudas? Demo de Aula Virtual
+          </p>
+          <p className={`text-[9px] mb-3 ${darkMode ? 'text-stone-400' : 'text-stone-600'}`}>
+            Una demostración en vivo del aula virtual puede resolver todas sus dudas. Un docente le mostrará cómo funciona la plataforma, resolverá sus preguntas en tiempo real y verá por sí mismo la calidad del modelo educativo.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={onAcceptDemo}
+              className="flex-1 py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-bold hover:bg-blue-500/20 transition-all">
+              Sí, agendar demo
+            </button>
+            <button onClick={onRejectDemo}
+              className="py-2 px-3 rounded-xl border text-[10px] font-bold transition-all dark:text-stone-400 dark:hover:text-stone-200 dark:border-white/10 dark:hover:bg-white/5 text-stone-500 hover:text-stone-700 border-stone-200 hover:bg-stone-50">
+              No, gracias
+            </button>
+          </div>
+        </div>
+      )}
+      {onAcceptDemo && demoAccepted && !followUpScheduled && (
+        <div className={`rounded-xl border p-4 ${darkMode ? 'bg-blue-500/5 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
+          <p className={`text-[10px] font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>
+            📅 Agendar Seguimiento
+          </p>
+          <p className={`text-[9px] mb-3 ${darkMode ? 'text-stone-400' : 'text-stone-600'}`}>
+            Un docente te contactará para agendar la demo del aula virtual. Mientras tanto, ¿quieres agendar una llamada de seguimiento para resolver cualquier duda adicional?
+          </p>
+          <div className="flex gap-2">
+            <button onClick={onScheduleFollowUp}
+              className="flex-1 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition-all">
+              Sí, agendar seguimiento
+            </button>
+            <button onClick={onBackFromFollowUp}
+              className="py-2 px-3 rounded-xl border text-[10px] font-bold transition-all dark:text-stone-400 dark:hover:text-stone-200 dark:border-white/10 dark:hover:bg-white/5 text-stone-500 hover:text-stone-700 border-stone-200 hover:bg-stone-50">
+              Atrás
+            </button>
+          </div>
+        </div>
+      )}
+      {onAcceptDemo && followUpScheduled && (
+        <div className={`rounded-xl border p-4 ${darkMode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">✅</span>
+            <p className={`text-[10px] font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+              Demo + Seguimiento agendados
+            </p>
+          </div>
+          <p className={`text-[9px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+            Un docente contactará para la demo. También se agendó una llamada de seguimiento. Se envía confirmación por correo.
+          </p>
         </div>
       )}
     </div>

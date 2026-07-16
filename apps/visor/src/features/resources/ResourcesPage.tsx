@@ -4,7 +4,6 @@ import { NewCallView } from './components/NewCallView';
 import { SpeechCatalog } from './components/SpeechCatalog/SpeechCatalog';
 import { ObjectionManager } from './components/ObjectionManager/ObjectionManager';
 import { QuickObjections } from './components/QuickObjections/QuickObjections';
-import { NotesDrawer } from './components/NotesDrawer/NotesDrawer';
 import { SpeechModal } from './components/modals/SpeechModal';
 import { ObjectionModal } from './components/modals/ObjectionModal';
 import { AddStepModal } from './components/modals/AddStepModal';
@@ -18,8 +17,8 @@ const tabs = [
 ];
 
 export default function ResourcesPage() {
-  const { darkMode } = useOutletContext<{ darkMode: boolean }>();
-  const { activeTab, setActiveTab, setShowNotesDrawer } = useCallStore();
+  const { darkMode, openNotesPanel } = useOutletContext<{ darkMode: boolean; openNotesPanel: () => void }>();
+  const { activeTab, setActiveTab } = useCallStore();
 
   return (
     <div className="h-full overflow-y-auto p-6 pb-32">
@@ -31,7 +30,7 @@ export default function ResourcesPage() {
       <div className={`inline-flex p-1 rounded-2xl mb-8 ${darkMode ? 'bg-[#1c1a18] border border-[#3e382f]' : 'bg-stone-50 border border-stone-200'}`}>
         {tabs.map(tab => (
           <button key={tab.id}
-            onClick={() => tab.id === 'notes' ? setShowNotesDrawer(true) : setActiveTab(tab.id)}
+            onClick={() => tab.id === 'notes' ? openNotesPanel() : setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[10px] font-bold transition-all ${
               activeTab === tab.id
                 ? darkMode ? 'bg-amber-900/40 text-amber-500 shadow-inner' : 'bg-white text-[#b57b54] shadow-md border border-[#dfd9cc]'
@@ -50,7 +49,6 @@ export default function ResourcesPage() {
 
       {/* Global overlays */}
       <QuickObjections darkMode={darkMode} />
-      <NotesDrawer darkMode={darkMode} />
       <SpeechModal darkMode={darkMode} />
       <ObjectionModal darkMode={darkMode} />
       <AddStepModal darkMode={darkMode} />

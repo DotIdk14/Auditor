@@ -1,4 +1,4 @@
-import { supabase } from "../config.js";
+import { insforge } from "./insforge.js";
 import type { Task, TaskCreate, TaskUpdate, TaskFilters, PaginatedResponse } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -49,13 +49,11 @@ export async function listTasks(
   filters: TaskFilters,
   scope: ServiceScope
 ): Promise<PaginatedResponse<Task>> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
   const offset = (page - 1) * pageSize;
 
-  let query = supabase.from(TABLE).select("*", { count: "exact" });
+  let query = insforge.database.from(TABLE).select("*", { count: "exact" });
 
   query = buildScopeFilter(query, scope);
 
@@ -88,9 +86,7 @@ export async function getTask(
   id: string,
   scope: ServiceScope
 ): Promise<Task | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
-  let query = supabase.from(TABLE).select("*").eq("id", id);
+  let query = insforge.database.from(TABLE).select("*").eq("id", id);
   query = buildScopeFilter(query, scope);
 
   const { data, error } = await query.single();
@@ -108,10 +104,8 @@ export async function createTask(
   userId: string,
   scope: ServiceScope
 ): Promise<Task> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   // Get contact's area/team to inherit
-  const { data: contact } = await supabase
+  const { data: contact } = await insforge.database
     .from("contacts")
     .select("area_id, team_id")
     .eq("id", input.contactId)
@@ -131,7 +125,7 @@ export async function createTask(
     team_id: contact?.team_id || scope.teamId,
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await insforge.database
     .from(TABLE)
     .insert(record)
     .select()
@@ -141,7 +135,7 @@ export async function createTask(
 
   // Update contact's last_activity_at so it appears at the top of the list
   try {
-    await supabase
+    await insforge.database
       .from("contacts")
       .update({ last_activity_at: new Date().toISOString() })
       .eq("id", input.contactId);
@@ -158,8 +152,6 @@ export async function updateTask(
   input: TaskUpdate,
   scope: ServiceScope
 ): Promise<Task | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   const existing = await getTask(id, scope);
   if (!existing) return null;
 
@@ -179,7 +171,7 @@ export async function updateTask(
     updates.completed_at = null;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await insforge.database
     .from(TABLE)
     .update(updates)
     .eq("id", id)
@@ -194,12 +186,10 @@ export async function deleteTask(
   id: string,
   scope: ServiceScope
 ): Promise<boolean> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   const existing = await getTask(id, scope);
   if (!existing) return false;
 
-  const { error } = await supabase.from(TABLE).delete().eq("id", id);
+  const { error } = await insforge.database.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(`Error al eliminar tarea: ${error.message}`);
   return true;
 }

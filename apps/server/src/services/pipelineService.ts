@@ -1,4 +1,4 @@
-import { supabase } from "../config.js";
+import { insforge } from "./insforge.js";
 import type { Pipeline, PipelineStage, Contact } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -38,16 +38,11 @@ function mapStage(row: any): PipelineStage {
  * Returns the area-specific pipeline if it exists, otherwise the default global pipeline.
  */
 export async function getPipelineForScope(scope: ServiceScope): Promise<Pipeline | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
-  let query = supabase
-    .from(PIPELINES_TABLE)
-    .select("*")
-    .eq("is_active", true);
+  if (!insforge.database) throw new Error("Base de datos no disponible");
 
   // Try area-specific pipeline first
   if (scope.areaId && scope.role !== "admin") {
-    const { data: areaPipeline } = await supabase
+    const { data: areaPipeline } = await insforge.database
       .from(PIPELINES_TABLE)
       .select("*")
       .eq("area_id", scope.areaId)
@@ -58,6 +53,10 @@ export async function getPipelineForScope(scope: ServiceScope): Promise<Pipeline
   }
 
   // Fallback to default global pipeline
+  const query = insforge.database
+    .from(PIPELINES_TABLE)
+    .select("*")
+    .eq("is_active", true);
   const { data, error } = await query
     .eq("is_default", true)
     .maybeSingle();
@@ -70,9 +69,7 @@ export async function getPipelineForScope(scope: ServiceScope): Promise<Pipeline
  * Get all stages for a pipeline, ordered by display_order.
  */
 export async function getStages(pipelineId: string): Promise<PipelineStage[]> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
-  const { data, error } = await supabase
+  const { data, error } = await insforge.database
     .from(STAGES_TABLE)
     .select("*")
     .eq("pipeline_id", pipelineId)
@@ -110,12 +107,10 @@ export async function createStage(
     probability?: number;
   }
 ): Promise<PipelineStage> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   // Get max display_order if not specified
   let displayOrder = input.displayOrder;
   if (displayOrder === undefined) {
-    const { data: maxStage } = await supabase
+    const { data: maxStage } = await insforge.database
       .from(STAGES_TABLE)
       .select("display_order")
       .eq("pipeline_id", pipelineId)
@@ -126,7 +121,7 @@ export async function createStage(
     displayOrder = (maxStage?.display_order ?? -1) + 1;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await insforge.database
     .from(STAGES_TABLE)
     .insert({
       pipeline_id: pipelineId,
@@ -158,8 +153,6 @@ export async function updateStage(
     probability: number;
   }>
 ): Promise<PipelineStage | null> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name;
   if (input.displayOrder !== undefined) updates.display_order = input.displayOrder;
@@ -168,7 +161,7 @@ export async function updateStage(
   if (input.isClosedLost !== undefined) updates.is_closed_lost = input.isClosedLost;
   if (input.probability !== undefined) updates.probability = input.probability;
 
-  const { data, error } = await supabase
+  const { data, error } = await insforge.database
     .from(STAGES_TABLE)
     .update(updates)
     .eq("id", stageId)
@@ -183,15 +176,13 @@ export async function updateStage(
  * Delete a pipeline stage.
  */
 export async function deleteStage(stageId: string): Promise<boolean> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   // Unlink contacts from this stage first
-  await supabase
+  await insforge.database
     .from("contacts")
     .update({ stage_id: null })
     .eq("stage_id", stageId);
 
-  const { error } = await supabase
+  const { error } = await insforge.database
     .from(STAGES_TABLE)
     .delete()
     .eq("id", stageId);
@@ -206,13 +197,11 @@ export async function deleteStage(stageId: string): Promise<boolean> {
 export async function getContactsByStage(
   scope: ServiceScope
 ): Promise<{ stageId: string; contacts: Contact[] }[]> {
-  if (!supabase) throw new Error("Supabase no disponible");
-
   const { pipeline, stages } = await getPipelineWithStages(scope);
   if (!pipeline || stages.length === 0) return [];
 
   // Get all contacts for this scope
-  let query = supabase
+  let query = insforge.database
     .from("contacts")
     .select("*")
     .in("pipeline_id", [pipeline.id, null]);
@@ -255,6 +244,8 @@ export async function getContactsByStage(
       company: row.company,
       source: row.source,
       status: row.status,
+      disposition: row.disposition || "no_contactado",
+      disposition_locked: row.disposition_locked || false,
       assigned_to: row.assigned_to,
       area_id: row.area_id,
       team_id: row.team_id,
@@ -262,6 +253,7 @@ export async function getContactsByStage(
       stage_id: row.stage_id,
       metadata: row.metadata || {},
       last_activity_at: row.last_activity_at,
+      callback_at: row.callback_at || null,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };

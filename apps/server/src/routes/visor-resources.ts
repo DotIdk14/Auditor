@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { z } from "zod";
+import { insforge } from "../services/insforge.js";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase } from "../config.js";
 
 export default function (app: Express): void {
   // GET /api/visor/resources - List knowledge base resources
@@ -10,12 +10,9 @@ export default function (app: Express): void {
     try {
       const { type } = req.query;
 
-      if (!supabase) return res.json([]);
-
-      let query = supabase
-        .from("profiles") // We'll use profiles as a simple store or create resources table
-        .select("*")
-        .limit(0);
+      // For now, return empty - resources table will be added later
+      res.json([]);
+      return;
 
       // For now, return empty - resources table will be added later
       res.json([]);
@@ -38,10 +35,6 @@ export default function (app: Express): void {
       });
 
       const data = bodySchema.parse(req.body);
-
-      if (!supabase) {
-        return res.status(503).json({ error: "Base de datos no disponible" });
-      }
 
       // Resources table will be created in a future migration
       // For now, return a placeholder response

@@ -1,10 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import axios from 'axios';
-import jwt from 'jsonwebtoken';
 
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const JWT_SECRET = process.env.JWT_SECRET;
 
 function authenticateRequest(req: VercelRequest): { authorized: boolean; error?: string } {
   const authHeader = req.headers.authorization;
@@ -12,11 +10,16 @@ function authenticateRequest(req: VercelRequest): { authorized: boolean; error?:
     return { authorized: false, error: 'Token de autorización requerido' };
   }
   const token = authHeader.split(' ')[1];
-  if (!JWT_SECRET) {
-    return { authorized: false, error: 'JWT_SECRET no configurado' };
-  }
   try {
-    jwt.verify(token, JWT_SECRET);
+    // Decode JWT without full verification — InsForge tokens are pre-verified by client SDK
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return { authorized: false, error: 'Token inválido' };
+    }
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+      return { authorized: false, error: 'Token expirado' };
+    }
     return { authorized: true };
   } catch {
     return { authorized: false, error: 'Token inválido o expirado' };

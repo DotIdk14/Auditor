@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { z } from "zod";
+import { insforge } from "../services/insforge.js";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { supabase, supabaseAdmin, localCallsMemory } from "../config.js";
+import { localCallsMemory } from "../config.js";
 
 export default function (app: Express): void {
   // GET /api/visor/calls - List calls with RBAC scope for Visor Kanban
@@ -14,8 +15,8 @@ export default function (app: Express): void {
       const { status, search, page = "1", limit = "50" } = req.query;
       const scope = req.scope!;
 
-      // ── Serve from localCallsMemory ONLY when Supabase is not available ──
-      if (!supabase) {
+      // ── Serve from localCallsMemory ONLY when DB is not available ──
+      if (!process.env.INSFORGE_BASE_URL) {
         let filtered = [...localCallsMemory];
 
         if (scope.role === "agent") {
@@ -39,7 +40,7 @@ export default function (app: Express): void {
 
       // La tabla auditorias NO tiene columna status — se lee de metadata->>'status'
       // Se usa LEFT JOIN para calls sin contacto asignado
-      let query = supabase
+      let query = insforge.database
         .from("auditorias")
         .select(`
           id, contact_id, score, metadata, created_at,
@@ -114,8 +115,8 @@ export default function (app: Express): void {
       const { id } = req.params;
 
       // ── Demo/local mode: update in memory ──
-      // Works for demo call IDs (starts with "demo-") or when Supabase is not available
-      if (!supabase || id.startsWith("demo-")) {
+      // Works for demo call IDs (starts with "demo-") or when DB is not available
+      if (!process.env.INSFORGE_BASE_URL || id.startsWith("demo-")) {
         const idx = localCallsMemory.findIndex((c: any) => c.id === id);
         if (idx !== -1) {
           const currentStatus = localCallsMemory[idx].status;
@@ -136,7 +137,7 @@ export default function (app: Express): void {
       }
 
       // Get current record from DB
-      const { data: current, error: fetchErr } = await (supabaseAdmin || supabase)
+      const { data: current, error: fetchErr } = await insforge.database
         .from("auditorias")
         .select("id, metadata")
         .eq("id", id)
@@ -169,7 +170,7 @@ export default function (app: Express): void {
         status,
       };
 
-      const { error: updateErr } = await (supabaseAdmin || supabase)
+      const { error: updateErr } = await insforge.database
         .from("auditorias")
         .update({
           metadata: updatedMeta,
@@ -239,25 +240,23 @@ export default function (app: Express): void {
       const data = bodySchema.parse(req.body);
       const userId = req.scope?.userId || "unknown";
 
-      if (supabase) {
-        const { error } = await supabase.from("call_guides").insert({
-          user_id: userId,
-          client_name: data.clientName || null,
-          career: data.career || null,
-          call_steps: data.callSteps || [],
-          current_step: data.currentStep || 0,
-          final_decision: data.finalDecision || null,
-          notes: data.notes || [],
-          safe_checklist: data.safeChecklist || [],
-          profile_tags: data.profileTags || { trabaja: false, tieneHijos: false, preocupadoCostos: false },
-          variables: data.variables || {},
-          created_at: new Date().toISOString(),
-        });
+      const { error } = await insforge.database.from("call_guides").insert({
+        user_id: userId,
+        client_name: data.clientName || null,
+        career: data.career || null,
+        call_steps: data.callSteps || [],
+        current_step: data.currentStep || 0,
+        final_decision: data.finalDecision || null,
+        notes: data.notes || [],
+        safe_checklist: data.safeChecklist || [],
+        profile_tags: data.profileTags || { trabaja: false, tieneHijos: false, preocupadoCostos: false },
+        variables: data.variables || {},
+        created_at: new Date().toISOString(),
+      });
 
-        if (error) {
-          console.error("[VISOR_CALLS] Error saving guide:", error.message);
-          return res.status(500).json({ error: error.message });
-        }
+      if (error) {
+        console.error("[VISOR_CALLS] Error saving guide:", error.message);
+        return res.status(500).json({ error: error.message });
       }
 
       res.status(201).json({
