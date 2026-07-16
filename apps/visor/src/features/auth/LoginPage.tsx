@@ -1,56 +1,30 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Shield, Coffee } from 'lucide-react';
+import { Shield, Coffee, Mail, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../../auth/authStore';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 export default function LoginPage() {
   const { login, loading, error } = useAuthStore();
   const navigate = useNavigate();
-  const btnRef = useRef<HTMLDivElement>(null);
+  const [email, setEmail] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
-  const [gisLoaded, setGisLoaded] = useState(false);
 
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    const check = () => {
-      if (window.google?.accounts) {
-        setGisLoaded(true);
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: async (res: google.accounts.id.CredentialResponse) => {
-            try {
-              const resp = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + res.credential, { method: 'GET' });
-              const info = await resp.json() as { email?: string; name?: string };
-              if (info.email) {
-                await login(info.email, info.name || info.email.split('@')[0]);
-                await new Promise(r => setTimeout(r, 50));
-                navigate('/', { replace: true });
-              } else {
-                setLocalError('No se pudo obtener tu correo electrónico.');
-              }
-            } catch {
-              setLocalError('Error al verificar la identidad de Google.');
-            }
-          },
-        });
-        if (btnRef.current) {
-          window.google.accounts.id.renderButton(btnRef.current, {
-            theme: 'outline',
-            size: 'large',
-            width: 320,
-            text: 'signin_with',
-            shape: 'pill',
-          });
-        }
-      } else {
-        setTimeout(check, 300);
-      }
-    };
-    check();
-  }, [login, navigate]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    if (!email) {
+      setLocalError('Ingresa tu correo electrónico.');
+      return;
+    }
+    try {
+      await login(email.trim(), email.trim().split('@')[0]);
+      await new Promise(r => setTimeout(r, 50));
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      setLocalError(err.message || 'Error de autenticación');
+    }
+  };
 
   return (
     <main className="min-h-screen w-screen flex items-center justify-center p-4 relative overflow-hidden font-sans bg-[#11100e] text-[#ebe5da] transition-colors duration-300">
@@ -86,33 +60,47 @@ export default function LoginPage() {
               <h3 className="text-2xl font-bold text-white mb-2">
                 Ingresa
               </h3>
-              <p className="text-stone-400 text-sm">Inicia sesión con tu cuenta de Google</p>
+              <p className="text-stone-400 text-sm">Ingresa tu correo electrónico</p>
             </div>
 
-            {(localError || error) && (
-              <div className="mb-5 p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-xs flex gap-2">
-                <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{localError || error}</span>
-              </div>
-            )}
-
-            <div className="flex flex-col items-center gap-4">
-              {GOOGLE_CLIENT_ID ? (
-                <div ref={btnRef} className="min-h-[44px]" />
-              ) : (
-                <p className="text-stone-500 text-xs text-center">
-                  Google Sign-In no está configurado.<br />
-                  Contacta al administrador.
-                </p>
-              )}
-
-              {loading && !gisLoaded && (
-                <div className="flex items-center gap-2 text-stone-400 text-xs">
-                  <div className="w-4 h-4 border-2 border-stone-400/30 border-t-stone-400 rounded-full animate-spin" />
-                  Cargando...
+            <form onSubmit={handleSubmit} className="space-y-5 text-left">
+              {(localError || error) && (
+                <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-xs flex gap-2">
+                  <Shield className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{localError || error}</span>
                 </div>
               )}
-            </div>
+
+              <div className="space-y-2">
+                <label htmlFor="login-email" className="text-sm font-semibold flex items-center gap-2 text-stone-300">
+                  <Mail className="w-4 h-4" />
+                  <span>Correo electrónico</span>
+                </label>
+                <input
+                  id="login-email"
+                  type="email"
+                  placeholder="ej. usuario@correo.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setLocalError(null); }}
+                  className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 bg-[#faedcd] hover:bg-[#fff3d6] text-[#4a3219] font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 mt-8 cursor-pointer"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-[#4a3219]/30 border-t-[#4a3219] rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Ingresar</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
           </motion.div>
         </div>
       </div>
