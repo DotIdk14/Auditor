@@ -6,6 +6,9 @@ import rateLimit from "express-rate-limit";
 
 export const PORT = parseInt(process.env.PORT || "3000", 10);
 
+export const JWT_SECRET = process.env.JWT_SECRET;
+export const JWT_EXPIRY = "24h";
+
 // AI Provider
 export const AI_PROVIDER = process.env.AI_PROVIDER || "gemini";
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
