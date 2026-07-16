@@ -34,6 +34,7 @@ export default function (app: Express): void {
     };
 
     localQuickNotesMemory.push(nota);
+    saveNotaToSupabase(nota);
     return res.status(201).json(nota);
   });
 

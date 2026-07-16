@@ -2,135 +2,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Contact, ContactDisposition } from '@auditor/shared-types';
 
-const DEMO_CONTACTS: Contact[] = [
-  {
-    id: 'demo-contact-001',
-    full_name: 'María García López',
-    phone: '+52 55 1234 5678',
-    email: 'maria.garcia@empresa.com',
-    company: 'Tech Solutions SA',
-    source: 'web',
-    status: 'lead',
-    disposition: 'no_contactado',
-    disposition_locked: false,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: {},
-    last_activity_at: null,
-    callback_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-contact-002',
-    full_name: 'Roberto Díaz Sánchez',
-    phone: '+52 55 8765 4321',
-    email: 'roberto.diaz@negocios.com',
-    company: 'Negocios Globales',
-    source: 'outbound',
-    status: 'lead',
-    disposition: 'no_contactado',
-    disposition_locked: false,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: {},
-    last_activity_at: null,
-    callback_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-contact-003',
-    full_name: 'Carlos Rodríguez Martínez',
-    phone: '+52 33 9876 5432',
-    email: 'carlos.rodriguez@firma.mx',
-    company: 'Consultoría Moderna',
-    source: 'referral',
-    status: 'lead',
-    disposition: 'cuelgue',
-    disposition_locked: false,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: { notes: 'Se le marcó pero no contestó. Pide que le llamemos mañana por la tarde.' },
-    last_activity_at: new Date().toISOString(),
-    callback_at: new Date(Date.now() + 86400000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-contact-004',
-    full_name: 'Laura Hernández Ruiz',
-    phone: '+52 81 5555 9999',
-    email: 'laura.hernandez@corp.com',
-    company: 'Corporativo del Norte',
-    source: 'inbound',
-    status: 'lead',
-    disposition: 'cuelgue',
-    disposition_locked: false,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: { notes: 'En reunión, pide volver a llamar a las 3pm' },
-    last_activity_at: new Date().toISOString(),
-    callback_at: new Date(Date.now() + 7 * 86400000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-contact-005',
-    full_name: 'Ana Martínez Fernández',
-    phone: '+52 81 5555 1234',
-    email: 'ana.martinez@corporativo.com',
-    company: 'Corporativo del Norte',
-    source: 'outbound',
-    status: 'prospect',
-    disposition: 'evaluando',
-    disposition_locked: true,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: { notes: 'Se le envió catálogo de servicios. Está comparando precios con la competencia.' },
-    last_activity_at: new Date().toISOString(),
-    callback_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'demo-contact-006',
-    full_name: 'Pedro López Gutiérrez',
-    phone: '+52 55 1111 2222',
-    email: 'pedro.lopez@startup.io',
-    company: 'StartupTech',
-    source: 'event',
-    status: 'prospect',
-    disposition: 'evaluando',
-    disposition_locked: true,
-    assigned_to: 'admin@test.com',
-    area_id: null,
-    team_id: null,
-    pipeline_id: null,
-    stage_id: null,
-    metadata: { notes: 'Conocido en el evento de tecnología. Le interesó el módulo de auditoría.' },
-    last_activity_at: new Date().toISOString(),
-    callback_at: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
-
 interface ContactsState {
   contacts: Contact[];
   initialized: boolean;
@@ -159,15 +30,14 @@ export const useContactsStore = create<ContactsState>()(
       init: () => {
         if (get().initialized) return;
         const stored = get().contacts;
-        if (stored.length === 0) {
-          set({ contacts: DEMO_CONTACTS, initialized: true });
-        } else {
-          // Migrate existing contacts: add disposition_locked if missing
+        if (stored.length > 0) {
           const migrated = stored.map(c => ({
             ...c,
             disposition_locked: c.disposition_locked ?? (c.disposition === 'evaluando'),
           }));
           set({ contacts: migrated, initialized: true });
+        } else {
+          set({ initialized: true });
         }
       },
 

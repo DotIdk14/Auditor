@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { StickyNote, X, ExternalLink, Clock, User, Plus } from 'lucide-react';
 import { useAuthStore } from '../../auth/authStore';
+import { api } from '../../lib/api';
 
 interface Nota {
   id: string;
@@ -70,9 +71,7 @@ export default function NotesPanel({ isOpen, onClose, darkMode }: NotesPanelProp
     setError(null);
     setUsingLocal(false);
     try {
-      const res = await fetch('/api/notas');
-      if (!res.ok) throw new Error('API no disponible');
-      const data = await res.json();
+      const { data } = await api.get('/notas');
       const apiNotas = Array.isArray(data) ? data : [];
       setNotas(apiNotas);
       saveLocalNotes(apiNotas);
@@ -108,14 +107,10 @@ export default function NotesPanel({ isOpen, onClose, darkMode }: NotesPanelProp
     };
 
     try {
-      await fetch('/api/notas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          supervisorEmail: newNota.supervisorEmail,
-          supervisorName: newNota.supervisorName,
-          text: newNota.text,
-        }),
+      await api.post('/notas', {
+        supervisorEmail: newNota.supervisorEmail,
+        supervisorName: newNota.supervisorName,
+        text: newNota.text,
       });
     } catch {
       // API fallback — save locally
