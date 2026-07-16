@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, MessageSquare, Flag } from 'lucide-react';
+﻿import React, { useState } from 'react';
+import { MessageSquare, Flag } from 'lucide-react';
 import { TipoObjecion, Severidad } from '../types';
+import FloatingWindow from './FloatingWindow';
 
 interface AnnotationModalProps {
   isOpen: boolean;
@@ -21,11 +22,11 @@ export default function AnnotationModal({
 
   if (!isOpen) return null;
 
-  const formatTime = (timeInSeconds: number) => {
-    if (timeInSeconds === undefined || timeInSeconds === null || isNaN(timeInSeconds)) return "0:00";
-    const mins = Math.floor(timeInSeconds / 60);
-    const secs = Math.floor(timeInSeconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const formatTime = (t: number) => {
+    if (t === undefined || t === null || isNaN(t)) return "0:00";
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return m + ":" + s.toString().padStart(2, '0');
   };
 
   const handleSave = () => {
@@ -40,21 +41,17 @@ export default function AnnotationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#181818] border border-[#333333] rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            {type === 'nota' ? (
-              <><MessageSquare className="w-4 h-4 text-blue-400" /> Agregar Nota</>
-            ) : (
-              <><Flag className="w-4 h-4 text-rose-400" /> Marcar Objeción</>
-            )}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
+    <FloatingWindow
+      isOpen={isOpen}
+      onClose={onClose}
+      title={type === 'nota' ? 'Agregar Nota' : 'Marcar Objeción'}
+      icon={type === 'nota'
+        ? <MessageSquare className="w-4 h-4 text-blue-400" />
+        : <Flag className="w-4 h-4 text-rose-400" />
+      }
+      defaultWidth={400}
+    >
+      <div className="p-5">
         <div className="text-[10px] text-gray-500 font-mono mb-4">
           Segmento: {formatTime(segmentStart)} – {formatTime(segmentEnd)}
         </div>
@@ -99,25 +96,18 @@ export default function AnnotationModal({
         />
 
         <div className="flex justify-end gap-2 mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white border border-zinc-700 rounded-lg"
-          >
+          <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white border border-zinc-700 rounded-lg">
             Cancelar
           </button>
           <button
             onClick={handleSave}
             disabled={type === 'nota' ? !notaText.trim() : !objecionText.trim()}
-            className={`px-4 py-2 text-xs font-bold rounded-lg disabled:opacity-40 ${
-              type === 'nota'
-                ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-rose-600 hover:bg-rose-500 text-white'
-            }`}
+            className={'px-4 py-2 text-xs font-bold rounded-lg disabled:opacity-40 ' + (type === 'nota' ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-rose-600 hover:bg-rose-500 text-white')}
           >
             Guardar
           </button>
         </div>
       </div>
-    </div>
+    </FloatingWindow>
   );
 }

@@ -1,20 +1,22 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { getAudioFromDB } from '../utils/audioCache';
 import { Sparkles, Award, ThumbsUp, ThumbsDown, Calendar, CheckCircle2, GraduationCap } from 'lucide-react';
-import { SalesCall, Nota, Objecion, TipoObjecion, Severidad } from '../types';
+import { SalesCall, Nota, Objecion } from '../types';
 import { downloadPDFReport, downloadCSVReport, downloadTranscriptionPDF } from '../utils/reportGenerator';
 import { API_URL } from '../config';
 import AudioPlayer, { AudioPlayerHandle } from './AudioPlayer';
 import PceChecklistCard from './PceChecklistCard';
 import EmotionalAnalysisCard from './EmotionalAnalysisCard';
 import TranscriptionViewer from './TranscriptionViewer';
-import AnnotationModal from './AnnotationModal';
 
 interface AuditorDashboardProps {
   activeCall: SalesCall;
+  onNotaClick: (start: number, end: number) => void;
+  onObjecionClick: (start: number, end: number) => void;
+  refreshKey: number;
 }
 
-export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) {
+export default function AuditorDashboard({ activeCall, onNotaClick, onObjecionClick, refreshKey }: AuditorDashboardProps) {
   const audioPlayerRef = useRef<AudioPlayerHandle>(null);
 
   const [audioUrl, setAudioUrl] = useState<string>(activeCall.metadata.url || '');
@@ -53,12 +55,6 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
 
   const [notas, setNotas] = useState<Nota[]>([]);
   const [objeciones, setObjeciones] = useState<Objecion[]>([]);
-  const [showAnnotationModal, setShowAnnotationModal] = useState(false);
-  const [annotationType, setAnnotationType] = useState<'nota' | 'objecion'>('nota');
-  const [annotationSegment, setAnnotationSegment] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
-
-  const supervisorEmail = localStorage.getItem('utel_supervisor_user') || 'supervisor@utel.mx';
-  const supervisorName = localStorage.getItem('utel_supervisor_user') || 'Supervisor';
 
   useEffect(() => {
     fetch(`${API_URL}/api/llamadas/${activeCall.id}/notas`)
@@ -69,39 +65,7 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
       .then(r => r.json())
       .then(data => setObjeciones(Array.isArray(data) ? data : []))
       .catch(() => {});
-  }, [activeCall.id]);
-
-  const handleSaveAnnotation = async (data: { text: string; tipoObjecion?: TipoObjecion; severidad?: Severidad }) => {
-    const endpoint = annotationType === 'nota' ? 'notas' : 'objeciones';
-    const body: any = {
-      supervisorEmail,
-      supervisorName,
-      segmentStart: annotationSegment.start,
-      segmentEnd: annotationSegment.end,
-    };
-    body.text = data.text;
-    if (annotationType === 'objecion') {
-      body.tipoObjecion = data.tipoObjecion;
-      body.severidad = data.severidad;
-    }
-
-    try {
-      const res = await fetch(`${API_URL}/api/llamadas/${activeCall.id}/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const created = await res.json();
-        if (annotationType === 'nota') setNotas(prev => [...prev, created]);
-        else setObjeciones(prev => [...prev, created]);
-      }
-    } catch (e) {
-      console.error(`Error adding ${annotationType}:`, e);
-    }
-
-    setShowAnnotationModal(false);
-  };
+  }, [activeCall.id, refreshKey]);
 
   const handleDeleteNota = async (notaId: string) => {
     try {
@@ -119,18 +83,6 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
     } catch (e) {
       console.error('Error deleting objecion:', e);
     }
-  };
-
-  const openNotaModal = (start: number, end: number) => {
-    setAnnotationType('nota');
-    setAnnotationSegment({ start, end });
-    setShowAnnotationModal(true);
-  };
-
-  const openObjecionModal = (start: number, end: number) => {
-    setAnnotationType('objecion');
-    setAnnotationSegment({ start, end });
-    setShowAnnotationModal(true);
   };
 
   const handleSeekToSentence = (seconds: number) => {
@@ -232,8 +184,8 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
             objeciones={objeciones}
             playbackTime={playbackTime}
             onSeekTo={handleSeekToSentence}
-            onNotaClick={openNotaModal}
-            onObjecionClick={openObjecionModal}
+            onNotaClick={onNotaClick}
+            onObjecionClick={onObjecionClick}
             onDeleteNota={handleDeleteNota}
             onDeleteObjecion={handleDeleteObjecion}
             onDownloadTranscript={() => downloadTranscriptionPDF(activeCall)}
@@ -381,15 +333,6 @@ export default function AuditorDashboard({ activeCall }: AuditorDashboardProps) 
         </div>
       </div>
 
-      {/* Annotation Modal */}
-      <AnnotationModal
-        isOpen={showAnnotationModal}
-        type={annotationType}
-        segmentStart={annotationSegment.start}
-        segmentEnd={annotationSegment.end}
-        onClose={() => setShowAnnotationModal(false)}
-        onSave={handleSaveAnnotation}
-      />
 
     </div>
   );

@@ -7,6 +7,7 @@ import {
   Users,
   Kanban,
   CheckSquare,
+  StickyNote,
   Shield,
   X,
 } from "lucide-react";
@@ -20,6 +21,7 @@ interface SidebarProps {
   open: boolean;
   /** Callback fired when the sidebar should close (mobile overlay) */
   onClose: () => void;
+  onNotesClick?: () => void;
 }
 
 // ─── Navigation items ───────────────────────────────────────────────────────
@@ -74,7 +76,7 @@ function SidebarNavItem({ item, onClose }: { item: NavItem; onClose: () => void 
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, onClose, onNotesClick }: SidebarProps) {
   return (
     <>
       {/* Mobile overlay */}
@@ -116,6 +118,15 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           {mainNav.map((item) => (
             <SidebarNavItem key={item.href} item={item} onClose={onClose} />
           ))}
+
+          {/* Notes button */}
+          <button
+            onClick={() => { onNotesClick?.(); onClose(); }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+          >
+            <StickyNote className="h-4 w-4 shrink-0" />
+            <span>Notas</span>
+          </button>
 
           {/* Admin section */}
           {adminNav.some((item) => item.roles) && (

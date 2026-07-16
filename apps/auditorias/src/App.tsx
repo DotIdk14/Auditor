@@ -14,10 +14,11 @@ import {
   BookOpen,
   RefreshCw,
 } from 'lucide-react'
-import type { SalesCall } from './types'
+import type { SalesCall, TipoObjecion, Severidad } from './types'
 import type { AuditoriasMainProps } from './types'
 import AudioUpload from './components/AudioUpload'
 import AuditorDashboard from './components/AuditorDashboard'
+import AnnotationModal from './components/AnnotationModal'
 import { deleteAudioFromDB, clearAllAudiosFromDB } from './utils/audioCache'
 import { initAuth, getAccessToken } from './lib/firebase'
 import { generateDemoCall } from './utils/demoData'
@@ -37,6 +38,57 @@ export default function App({ session, apiUrl, onLogout }: AuditoriasMainProps) 
   }, [])
 
   const [driveRecordings, setDriveRecordings] = useState<any[]>([]);
+
+  // --- Modal state (persists across call changes) ---
+  const [showAnnotationModal, setShowAnnotationModal] = useState(false);
+  const [annotationType, setAnnotationType] = useState<'nota' | 'objecion'>('nota');
+  const [annotationSegment, setAnnotationSegment] = useState<{ start: number; end: number }>({ start: 0, end: 0 });
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const openNotaModal = (start: number, end: number) => {
+    setAnnotationType('nota');
+    setAnnotationSegment({ start, end });
+    setShowAnnotationModal(true);
+  };
+
+  const openObjecionModal = (start: number, end: number) => {
+    setAnnotationType('objecion');
+    setAnnotationSegment({ start, end });
+    setShowAnnotationModal(true);
+  };
+
+  const handleSaveAnnotation = async (data: { text: string; tipoObjecion?: TipoObjecion; severidad?: Severidad }) => {
+    const endpoint = annotationType === 'nota' ? 'notas' : 'objeciones';
+    const supervisorEmail = localStorage.getItem('utel_supervisor_user') || 'supervisor@utel.mx';
+    const supervisorName = localStorage.getItem('utel_supervisor_user') || 'Supervisor';
+    const body: any = {
+      supervisorEmail,
+      supervisorName,
+      segmentStart: annotationSegment.start,
+      segmentEnd: annotationSegment.end,
+    };
+    body.text = data.text;
+    if (annotationType === 'objecion') {
+      body.tipoObjecion = data.tipoObjecion;
+      body.severidad = data.severidad;
+    }
+
+    try {
+      const res = await fetch(apiUrl + '/api/llamadas/' + activeCall.id + '/' + endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setRefreshKey(k => k + 1);
+      }
+    } catch (e) {
+      console.error('Error adding ' + annotationType + ':', e);
+    }
+
+    setShowAnnotationModal(false);
+  };
+  // --- end modal state ---
 
   // Sincronizar con Google Drive
   const syncWithDrive = async () => {
@@ -568,7 +620,12 @@ export default function App({ session, apiUrl, onLogout }: AuditoriasMainProps) 
         {/* Dashboard Workspace - 100% full-width to prevent visual wear and tear */}
         <div className="w-full">
           {activeCall ? (
-            <AuditorDashboard activeCall={activeCall} />
+            <AuditorDashboard
+              activeCall={activeCall}
+              onNotaClick={openNotaModal}
+              onObjecionClick={openObjecionModal}
+              refreshKey={refreshKey}
+            />
           ) : (
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 animate-fadeIn">
               {/* Left Side: Empty State / Intro */}
@@ -737,6 +794,16 @@ export default function App({ session, apiUrl, onLogout }: AuditoriasMainProps) 
         </div>
 
       </main>
+
+      <AnnotationModal
+        isOpen={showAnnotationModal}
+        type={annotationType}
+        segmentStart={annotationSegment.start}
+        segmentEnd={annotationSegment.end}
+        onClose={() => setShowAnnotationModal(false)}
+        onSave={handleSaveAnnotation}
+      />
+
     </div>
   );
 }
