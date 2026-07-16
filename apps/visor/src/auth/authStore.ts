@@ -3,7 +3,6 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { publicApi } from '../lib/api';
 import type { JWTPayload, UserRole } from '@auditor/shared-types';
 
-// Map Visor's legacy deviceId concept to email for compatibility
 const DEVICE_ID_KEY = 'visor_device_id';
 
 interface AuthState {
@@ -13,7 +12,6 @@ interface AuthState {
   error: string | null;
 
   login: (email: string, displayName?: string) => Promise<void>;
-  loginWithPassword: (username: string, password: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
   checkSession: () => Promise<void>;
@@ -21,7 +19,6 @@ interface AuthState {
   canViewRole: (targetRole: string) => boolean;
   canViewAgent: (agentHierarchy?: { areaId?: string; teamId?: string; supervisorId?: string }) => boolean;
 
-  // Role conversion helpers
   visorRole: () => string;
   roleLabel: () => string;
 }
@@ -91,42 +88,6 @@ export const useAuthStore = create<AuthState>()(
       localStorage.setItem(DEVICE_ID_KEY, email);
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || 'Error de inicio de sesión';
-      set({ error: msg, loading: false });
-      throw new Error(msg);
-    }
-  },
-
-  loginWithPassword: async (username, password) => {
-    set({ loading: true, error: null });
-    try {
-      const res: any = await publicApi.post('/login', {
-        username,
-        password,
-        email: username,
-      });
-
-      const body = res.data;
-      const token = body.token;
-      const user: JWTPayload = {
-        sub: body.sub || username,
-        email: username,
-        displayName: body.username || username,
-        role: body.role || 'supervisor',
-        areaId: body.areaId || null,
-        teamId: body.teamId || null,
-      };
-
-      set({
-        user: {
-          ...user,
-          hierarchy: { areaId: user.areaId || null, teamId: user.teamId || null },
-          permissions: [],
-        },
-        accessToken: token,
-        loading: false,
-      });
-    } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'Credenciales inválidas';
       set({ error: msg, loading: false });
       throw new Error(msg);
     }
