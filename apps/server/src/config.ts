@@ -1,12 +1,16 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
+import crypto from "crypto";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 
 export const PORT = parseInt(process.env.PORT || "3000", 10);
 
-export const JWT_SECRET = process.env.JWT_SECRET;
+const DERIVED_SECRET = crypto.createHash('sha256')
+  .update(process.env.INSFORGE_ANON_KEY || 'visor-local-dev-only')
+  .digest('hex');
+export const JWT_SECRET = process.env.JWT_SECRET || DERIVED_SECRET;
 export const JWT_EXPIRY = "24h";
 
 // AI Provider
