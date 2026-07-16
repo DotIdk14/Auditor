@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
-import { StickyNote, X, ExternalLink, Clock, User, Plus } from 'lucide-react';
+import { StickyNote, ExternalLink, Clock, User, Plus, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../../auth/authStore';
 import { api } from '../../lib/api';
+import FloatingWindow from './FloatingWindow';
 
 interface Nota {
   id: string;
@@ -136,55 +136,24 @@ export default function NotesPanel({ isOpen, onClose, darkMode }: NotesPanelProp
 
   const isDark = darkMode;
 
+  const handleDeleteNote = async (nota: Nota) => {
+    if (!window.confirm('¿Eliminar esta nota?')) return;
+    const updated = notas.filter((n) => n.id !== nota.id);
+    setNotas(updated);
+    saveLocalNotes(updated);
+    try { await api.delete(`/notas/${nota.id}`); } catch {}
+  };
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-
-          <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 260 }}
-            className={`fixed bottom-0 left-0 right-0 z-[9999] max-h-[80vh] rounded-t-[24px] overflow-hidden ${
-              isDark ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-[#fdfbf7] border-[#dfd9cc]'
-            } border shadow-2xl`}
-          >
-            <div className={`px-6 py-4 flex items-center justify-between border-b ${
-              isDark ? 'border-[#3e382f]' : 'border-[#dfd9cc]'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <StickyNote className={`w-5 h-5 ${isDark ? 'text-[#d4a373]' : 'text-[#b57b54]'}`} />
-                <h2 className={`text-sm font-bold ${isDark ? 'text-[#f4f1eb]' : 'text-stone-800'}`}>
-                  Notas
-                </h2>
-                {!loading && (
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                    isDark ? 'bg-[#24211e] text-stone-400' : 'bg-[#efebe4] text-stone-500'
-                  }`}>
-                    {notas.length}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={onClose}
-                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isDark ? 'hover:bg-[#24211e] text-stone-400 hover:text-white' : 'hover:bg-[#efebe4] text-stone-500 hover:text-stone-800'
-                }`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto p-6" style={{ maxHeight: 'calc(80vh - 60px)' }}>
+    <FloatingWindow
+      title="Notas"
+      isOpen={isOpen}
+      onClose={onClose}
+      icon={<StickyNote className={`w-4 h-4 ${isDark ? 'text-[#d4a373]' : 'text-[#b57b54]'}`} />}
+      darkMode={darkMode}
+      defaultWidth={440}
+    >
+      <div className="overflow-y-auto p-4" style={{ maxHeight: '70vh' }}>
               {/* Local storage indicator */}
               {usingLocal && (
                 <div className={`mb-4 p-3 rounded-xl text-[9px] font-bold text-center ${
@@ -277,12 +246,20 @@ export default function NotesPanel({ isOpen, onClose, darkMode }: NotesPanelProp
                         {quickNotas.map((nota) => (
                           <div
                             key={nota.id}
-                            className={`rounded-xl border-l-[5px] p-4 shadow-sm ${
+                            className={`group relative rounded-xl border-l-[5px] p-4 shadow-sm ${
                               isDark
                                 ? 'bg-[#24211e] border-l-sky-600'
                                 : 'bg-white border-l-sky-500'
                             }`}
                           >
+                            <button
+                              onClick={() => handleDeleteNote(nota)}
+                              className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded transition-all cursor-pointer ${
+                                isDark ? 'text-stone-400 hover:text-red-400 hover:bg-red-900/20' : 'text-stone-400 hover:text-red-600 hover:bg-red-50'
+                              }`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                             <p className={`text-xs leading-relaxed line-clamp-3 mb-3 ${
                               isDark ? 'text-[#ebe5da]' : 'text-stone-700'
                             }`}>
@@ -367,10 +344,7 @@ export default function NotesPanel({ isOpen, onClose, darkMode }: NotesPanelProp
                   )}
                 </div>
               )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+      </div>
+    </FloatingWindow>
   );
 }
