@@ -267,11 +267,15 @@ export async function createContact(
 
   const { data, error } = await insforge.database
     .from(TABLE)
-    .insert([record])
+    .insert(record)
     .select()
     .single();
 
-  if (error) throw new Error(`Error al crear contacto: ${error.message}`);
+  if (error) {
+    console.error("[CONTACTS] InsForge insert error:", JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint }));
+    return localCreate(input, userId, scope);
+  }
+
   return mapRow(data);
 }
 

@@ -127,11 +127,14 @@ export async function createTask(
 
   const { data, error } = await insforge.database
     .from(TABLE)
-    .insert([record])
+    .insert(record)
     .select()
     .single();
 
-  if (error) throw new Error(`Error al crear tarea: ${error.message}`);
+  if (error) {
+    console.error("[TASKS] InsForge insert error:", JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint }));
+    throw new Error(`Error al crear tarea: ${error.message}`);
+  }
 
   // Update contact's last_activity_at so it appears at the top of the list
   try {

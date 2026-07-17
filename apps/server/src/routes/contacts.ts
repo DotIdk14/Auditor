@@ -91,7 +91,7 @@ export default function (app: Express): void {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ error: "Datos inválidos", details: err.issues });
       }
-      console.error("[CONTACTS] Error creating:", err.message);
+      console.error("[CONTACTS] Error creating:", err.message, JSON.stringify(err));
       res.status(500).json({ error: "Error al crear contacto" });
     }
   });
