@@ -147,13 +147,17 @@ export const useAuthStore = create<AuthState>()(
       return;
     }
     try {
-      const res: any = await publicApi.post('/verify-session', { token });
-      if (res.success && res.user) {
+      const { data } = await publicApi.post<{ success: boolean; user: JWTPayload }>(
+        '/verify-session',
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.success && data.user) {
         set({
           user: {
-            ...res.user,
-            role: res.user.role || currentUser?.role || 'agent',
-            hierarchy: { areaId: res.user.areaId || null, teamId: res.user.teamId || null },
+            ...data.user,
+            role: data.user.role || currentUser?.role || 'agent',
+            hierarchy: { areaId: data.user.areaId || null, teamId: data.user.teamId || null },
             permissions: [],
           },
         });
