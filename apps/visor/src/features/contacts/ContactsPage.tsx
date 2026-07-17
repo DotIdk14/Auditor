@@ -190,6 +190,7 @@ export default function ContactsPage() {
           contactId={selectedContactId}
           darkMode={darkMode}
           onClose={() => setSelectedContactId(null)}
+          onTipificacion={(tip) => setActiveTab(tip === 'positiva' ? 'evaluando' : 'cuelgue')}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">

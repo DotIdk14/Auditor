@@ -354,6 +354,15 @@ export function useCreateInteraction() {
       qc.invalidateQueries({ queryKey: ['contact', variables.contactId] });
       qc.invalidateQueries({ queryKey: ['contacts'] });
       qc.invalidateQueries({ queryKey: ['contact-activity', variables.contactId] });
+
+      // Sync Zustand store on API success
+      const store = useContactsStore.getState();
+      if (variables.tipificacion === 'positiva') {
+        const current = store.get(variables.contactId);
+        if (current && !current.disposition_locked) {
+          store.update(variables.contactId, { disposition: 'evaluando', disposition_locked: true });
+        }
+      }
     },
   });
 }

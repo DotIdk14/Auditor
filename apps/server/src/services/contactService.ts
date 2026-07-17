@@ -222,6 +222,9 @@ export async function listContacts(
 
   // Merge with local memory (local takes precedence for same IDs)
   const seenIds = new Set<string>();
+  for (const c of localContactsMemory) {
+    seenIds.add(c.id);
+  }
   const merged = [...localContactsMemory];
 
   for (const row of dbRows) {

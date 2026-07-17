@@ -18,6 +18,7 @@ interface Props {
   contactId: string | null;
   darkMode: boolean;
   onClose: () => void;
+  onTipificacion?: (tipificacion: 'positiva' | 'negativa') => void;
 }
 
 export default function ContactDetailPanel({ contactId, darkMode, onClose }: Props) {
@@ -341,6 +342,7 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose }: Pro
           contactName={contact.full_name}
           darkMode={darkMode}
           onClose={() => setShowInteractionModal(false)}
+          onTipificacion={onTipificacion}
         />
       )}
     </div>
@@ -449,11 +451,12 @@ const INTERACTION_TYPES: { key: InteractionType; label: string; icon: typeof Pho
   { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle, color: 'emerald' },
 ];
 
-function AddInteractionModal({ contactId, contactName, darkMode, onClose }: {
+function AddInteractionModal({ contactId, contactName, darkMode, onClose, onTipificacion }: {
   contactId: string;
   contactName: string;
   darkMode: boolean;
   onClose: () => void;
+  onTipificacion?: (tipificacion: 'positiva' | 'negativa') => void;
 }) {
   const [type, setType] = useState<InteractionType>('llamada');
   const [tipificacion, setTipificacion] = useState<InteractionTipificacion>('positiva');
@@ -480,6 +483,7 @@ function AddInteractionModal({ contactId, contactName, darkMode, onClose }: {
         notes: notes.trim() || undefined,
         files: files.length > 0 ? files : undefined,
       });
+      onTipificacion?.(tipificacion);
       onClose();
     } catch (err) {
       console.error('[ADD_INTERACTION] Error:', err);
