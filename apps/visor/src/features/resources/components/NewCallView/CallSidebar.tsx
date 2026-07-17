@@ -1,62 +1,76 @@
 import { useState } from 'react';
 import { useCallStore } from '../../store/useCallStore';
-import { StepItem } from './StepItem';
-import { RotateCcw, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { defaultSpeechSections } from '../../data/defaultSpeeches';
+import { CheckCircle2, ChevronDown, ChevronUp, Plus, RotateCcw } from 'lucide-react';
 
 interface Props { darkMode: boolean; }
 
 export function CallSidebar({ darkMode }: Props) {
-  const { callSteps, resetCall, getCallProgress, setShowAddStepModal } = useCallStore();
+  const { callSteps, currentCallStep, visitedSteps, getCallProgress, resetCall, setShowAddStepModal } = useCallStore();
   const progress = getCallProgress();
   const [collapsed, setCollapsed] = useState(false);
 
-  if (collapsed) {
-    return (
-      <div className="w-10 shrink-0">
-        <button onClick={() => setCollapsed(false)}
-          className={`w-full flex items-center justify-center p-2 rounded-2xl border transition-all ${
-            darkMode ? 'bg-[#1c1a18] border-[#3e382f] text-stone-400 hover:text-stone-200' : 'bg-white border-[#dfd9cc] text-stone-500 hover:text-stone-700'
-          }`} title="Expandir mapa">
-          <PanelLeftOpen className="w-4 h-4" />
+  return (
+    <div className={`rounded-xl border ${darkMode ? 'bg-zinc-900/50 border-white/5' : 'bg-white/50 border-stone-200'}`}>
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className={`text-[9px] font-bold shrink-0 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+          Mapa
+        </span>
+        <div className="flex-1 h-1 rounded-full overflow-hidden bg-black/20">
+          <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+        </div>
+        <span className={`text-[8px] font-bold shrink-0 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>{progress}%</span>
+        <button onClick={resetCall}
+          className={`p-1 rounded-lg transition-all ${darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'}`}
+          title="Reiniciar">
+          <RotateCcw className="w-3 h-3" />
+        </button>
+        <button onClick={() => setCollapsed(!collapsed)}
+          className={`p-1 rounded-lg transition-all ${darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'}`}>
+          {collapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
         </button>
       </div>
-    );
-  }
 
-  return (
-    <div className="w-full lg:w-72 shrink-0">
-      <div className={`rounded-2xl border p-3 ${darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'}`}>
-        <div className="flex items-center justify-between mb-3">
-          <p className={`text-[10px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-            Mapa de la llamada
-          </p>
-          <div className="flex items-center gap-2">
-            <span className={`text-[9px] font-bold ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>{progress}%</span>
-            <button onClick={resetCall} className={`p-1 rounded-lg transition-all hover:scale-110 ${
-              darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
-            }`} title="Reiniciar llamada"><RotateCcw className="w-3.5 h-3.5" /></button>
-            <button onClick={() => setCollapsed(true)} className={`p-1 rounded-lg transition-all hover:scale-110 ${
-              darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'
-            }`} title="Minimizar mapa"><PanelLeftClose className="w-3.5 h-3.5" /></button>
+      {!collapsed && (
+        <div className="px-3 pb-3 overflow-x-auto">
+          <div className="flex gap-1 min-w-max">
+            {callSteps.map((_, idx) => {
+              const step = callSteps[idx];
+              const isCurrent = idx === currentCallStep;
+              const isCompleted = step.skipped || visitedSteps.has(idx) || idx < currentCallStep;
+              const section = step.type === 'section'
+                ? defaultSpeechSections.find(s => s.id === step.sectionId)
+                : null;
+              const icon = step.type === 'custom' ? '✏️' : (section?.icon || '📋');
+              const title = step.type === 'custom' ? (step.title || 'Paso') : (section?.title || step.sectionId || '');
+
+              return (
+                <button key={step.id} onClick={() => {
+                  useCallStore.setState(s => ({ visitedSteps: new Set([...s.visitedSteps, s.currentCallStep]), currentCallStep: idx }));
+                }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[9px] font-bold whitespace-nowrap transition-all ${
+                    isCurrent
+                      ? darkMode ? 'bg-amber-900/30 text-amber-400 border border-amber-800/40' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : isCompleted
+                        ? darkMode ? 'text-emerald-400' : 'text-emerald-600'
+                        : darkMode ? 'text-stone-500' : 'text-stone-400'
+                  }`}>
+                  <span className="text-sm">{icon}</span>
+                  <span className="truncate max-w-[80px]">{title}</span>
+                  {isCompleted && <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />}
+                </button>
+              );
+            })}
+            <button onClick={() => setShowAddStepModal(true)}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border-2 border-dashed text-[9px] font-bold whitespace-nowrap transition-all ${
+                darkMode ? 'border-[#4a4036] text-stone-500 hover:border-amber-800/40 hover:text-amber-400'
+                : 'border-stone-200 text-stone-400 hover:border-amber-300 hover:text-amber-600'
+              }`}>
+              <Plus className="w-3 h-3" /> Agregar
+            </button>
           </div>
         </div>
-        <div className={`w-full h-1.5 rounded-full overflow-hidden mb-3 ${darkMode ? 'bg-[#24211e]' : 'bg-stone-100'}`}>
-          <div className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }} />
-        </div>
-        <div className="space-y-1">
-          {callSteps.map((_, idx) => (
-            <StepItem key={callSteps[idx].id} idx={idx} darkMode={darkMode} />
-          ))}
-        </div>
-        <button onClick={() => setShowAddStepModal(true)}
-          className={`w-full mt-2 flex items-center justify-center gap-1.5 p-2 rounded-xl border-2 border-dashed text-[9px] font-bold transition-all ${
-            darkMode ? 'border-[#4a4036] text-stone-500 hover:border-amber-800/40 hover:text-amber-400'
-            : 'border-stone-200 text-stone-400 hover:border-amber-300 hover:text-amber-600'
-          }`}>
-          <Plus className="w-3 h-3" /> Agregar paso
-        </button>
-      </div>
+      )}
     </div>
   );
 }
