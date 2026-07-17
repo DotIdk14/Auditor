@@ -336,51 +336,40 @@ export async function updateContact(
   input: ContactUpdate,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!process.env.INSFORGE_BASE_URL) return localUpdate(id, input, scope.role);
+  // Update local memory first
+  const local = localUpdate(id, input, scope.role);
+  if (!local) return null;
 
-  const existing = await getContact(id, scope);
-  if (!existing) return null;
+  // Also persist in InsForge DB via admin client
+  if (process.env.INSFORGE_BASE_URL && insforgeAdmin) {
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (input.fullName !== undefined) updates.full_name = input.fullName;
+    if (input.phone !== undefined) updates.phone = input.phone;
+    if (input.email !== undefined) updates.email = input.email;
+    if (input.company !== undefined) updates.company = input.company;
+    if (input.source !== undefined) updates.source = input.source;
+    if (input.status !== undefined) updates.status = input.status;
+    if (input.callbackAt !== undefined) updates.callback_at = input.callbackAt;
+    if (input.metadata !== undefined) updates.metadata = input.metadata;
+    if (input.stageId !== undefined) updates.stage_id = input.stageId;
+    if (input.disposition !== undefined) updates.disposition = input.disposition;
+    if (input.dispositionLocked !== undefined) updates.disposition_locked = input.dispositionLocked;
+    if (input.stageId !== undefined || input.status !== undefined || input.disposition !== undefined) {
+      updates.last_activity_at = new Date().toISOString();
+    }
 
-  const updates: Record<string, unknown> = {};
-  if (input.fullName !== undefined) updates.full_name = input.fullName;
-  if (input.phone !== undefined) updates.phone = input.phone;
-  if (input.email !== undefined) updates.email = input.email;
-  if (input.company !== undefined) updates.company = input.company;
-  if (input.source !== undefined) updates.source = input.source;
-  if (input.status !== undefined) updates.status = input.status;
-  if (input.callbackAt !== undefined) updates.callback_at = input.callbackAt;
-  if (input.metadata !== undefined) updates.metadata = input.metadata;
-  if (input.stageId !== undefined) updates.stage_id = input.stageId;
-  if (input.dispositionLocked !== undefined) updates.disposition_locked = input.dispositionLocked;
+    const { error } = await insforgeAdmin.database
+      .from(TABLE)
+      .update(updates)
+      .eq("id", id)
+      .select();
 
-  if (input.disposition !== undefined) {
-    const currentDisposition = existing.disposition || "no_contactado";
-    const isLocked = existing.disposition_locked || currentDisposition === "evaluando";
-    const isAdmin = scope.role === "admin";
-
-    if (isLocked && !isAdmin && input.disposition !== currentDisposition) {
-      console.warn(`[CONTACTS] Disposition locked for ${id}. Cannot change from evaluando without admin role.`);
-    } else {
-      updates.disposition = input.disposition;
-      if (input.disposition === "evaluando") {
-        updates.disposition_locked = true;
-      }
+    if (error) {
+      console.error("[CONTACTS] DB update error (non-blocking):", JSON.stringify({ code: error.code, message: error.message }));
     }
   }
 
-  if (input.stageId !== undefined || input.status !== undefined || input.disposition !== undefined) {
-    updates.last_activity_at = new Date().toISOString();
-  }
-
-  const { data, error } = await insforge.database
-    .from(TABLE)
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw new Error(`Error al actualizar contacto: ${error.message}`);
-  return mapRow(data);
+  return local;
 }
 
 export async function updateContactStage(
@@ -388,36 +377,45 @@ export async function updateContactStage(
   stageId: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!process.env.INSFORGE_BASE_URL) return localUpdate(id, { stageId });
+  // Update local memory first
+  const local = localUpdate(id, { stageId });
+  if (!local) return null;
 
-  const existing = await getContact(id, scope);
-  if (!existing) return null;
+  // Also persist in InsForge DB via admin client
+  if (process.env.INSFORGE_BASE_URL && insforgeAdmin) {
+    const { error } = await insforgeAdmin.database
+      .from(TABLE)
+      .update({
+        stage_id: stageId,
+        last_activity_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select();
 
-  const { data, error } = await insforge.database
-    .from(TABLE)
-    .update({
-      stage_id: stageId,
-      last_activity_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .select()
-    .single();
+    if (error) {
+      console.error("[CONTACTS] DB stage update error (non-blocking):", JSON.stringify({ code: error.code, message: error.message }));
+    }
+  }
 
-  if (error) throw new Error(`Error al mover contacto: ${error.message}`);
-  return mapRow(data);
+  return local;
 }
 
 export async function deleteContact(
   id: string,
   scope: ServiceScope
 ): Promise<boolean> {
-  if (!process.env.INSFORGE_BASE_URL) return localDelete(id);
+  // Delete from local memory first
+  const local = localDelete(id);
+  if (!local) return false;
 
-  const existing = await getContact(id, scope);
-  if (!existing) return false;
+  // Also delete from InsForge DB via admin client
+  if (process.env.INSFORGE_BASE_URL && insforgeAdmin) {
+    const { error } = await insforgeAdmin.database.from(TABLE).delete().eq("id", id);
+    if (error) {
+      console.error("[CONTACTS] DB delete error (non-blocking):", JSON.stringify({ code: error.code, message: error.message }));
+    }
+  }
 
-  const { error } = await insforge.database.from(TABLE).delete().eq("id", id);
-  if (error) throw new Error(`Error al eliminar contacto: ${error.message}`);
   return true;
 }
 
@@ -483,21 +481,21 @@ export async function linkAuditToContact(
     }
   }
 
-  // Update the audit's contact_id
-  if (process.env.INSFORGE_BASE_URL) {
-    const { error: auditErr } = await insforge.database
-      .from("auditorias")
-      .update({ contact_id: contactId })
-      .eq("id", auditId);
-    if (auditErr) console.warn("[LINK_AUDIT] Error updating audit:", auditErr.message);
-  } else {
-    // Local: update in-memory calls
+  // Update the audit's contact_id (always in local, best-effort in DB)
+  {
     const { localCallsMemory } = await import("../config.js");
     const call = localCallsMemory.find((c: any) => c.id === auditId);
     if (call) {
       call.contact_id = contactId;
       if (call.metadata) call.metadata.contactId = contactId;
     }
+  }
+  if (process.env.INSFORGE_BASE_URL && insforgeAdmin) {
+    const { error: auditErr } = await insforgeAdmin.database
+      .from("auditorias")
+      .update({ contact_id: contactId })
+      .eq("id", auditId);
+    if (auditErr) console.warn("[LINK_AUDIT] Error updating audit:", auditErr.message);
   }
 
   // Update contact disposition
