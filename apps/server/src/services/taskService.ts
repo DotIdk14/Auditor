@@ -127,7 +127,7 @@ export async function createTask(
 
   const { data, error } = await insforge.database
     .from(TABLE)
-    .insert(record)
+    .insert([record])
     .select()
     .single();
 

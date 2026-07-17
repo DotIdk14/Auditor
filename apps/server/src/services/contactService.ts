@@ -267,7 +267,7 @@ export async function createContact(
 
   const { data, error } = await insforge.database
     .from(TABLE)
-    .insert(record)
+    .insert([record])
     .select()
     .single();
 
