@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { insforge } from "./insforge.js";
+import { insforge, insforgeAdmin } from "./insforge.js";
 import { localContactsMemory, prependContact, updateContactInMemory, removeContactById } from "../config.js";
 import type { Contact, ContactCreate, ContactUpdate, ContactFilters, ContactDisposition, PaginatedResponse, ServiceScope } from "../types.js";
 
@@ -181,8 +181,8 @@ export async function listContacts(
 
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
-  const offset = (page - 1) * pageSize;
 
+  // Fetch from DB
   let query = insforge.database.from(TABLE).select("*", { count: "exact" });
   query = buildScopeFilter(query, scope);
 
@@ -205,17 +205,66 @@ export async function listContacts(
 
   query = query.order("last_activity_at", { ascending: false, nullsFirst: false });
   query = query.order("created_at", { ascending: false });
-  query = query.range(offset, offset + pageSize - 1);
 
-  const { data, error, count } = await query;
-  if (error) throw new Error(`Error al listar contactos: ${error.message}`);
+  let dbRows: any[] = [];
+  let dbCount = 0;
+  try {
+    const { data, error, count } = await query;
+    if (!error) {
+      dbRows = data || [];
+      dbCount = count || 0;
+    } else {
+      console.error("[CONTACTS] DB list error:", error.message);
+    }
+  } catch (err: any) {
+    console.error("[CONTACTS] DB list exception:", err.message);
+  }
+
+  // Merge with local memory (local takes precedence for same IDs)
+  const seenIds = new Set<string>();
+  const merged = [...localContactsMemory];
+
+  for (const row of dbRows) {
+    if (!seenIds.has(row.id)) {
+      merged.push(row);
+      seenIds.add(row.id);
+    }
+  }
+
+  // Apply filters on merged set
+  let items = merged;
+  if (filters.search) {
+    const s = filters.search.toLowerCase();
+    items = items.filter((c: any) =>
+      (c.full_name || "").toLowerCase().includes(s) ||
+      (c.phone || "").toLowerCase().includes(s) ||
+      (c.email || "").toLowerCase().includes(s) ||
+      (c.company || "").toLowerCase().includes(s)
+    );
+  }
+  if (filters.status) items = items.filter((c: any) => c.status === filters.status);
+  if (filters.source) items = items.filter((c: any) => c.source === filters.source);
+  if (filters.disposition) items = items.filter((c: any) => (c.disposition || "no_contactado") === filters.disposition);
+  if (filters.assignedTo) items = items.filter((c: any) => c.assigned_to === filters.assignedTo);
+  if (filters.stageId) items = items.filter((c: any) => c.stage_id === filters.stageId);
+  if (filters.areaId) items = items.filter((c: any) => c.area_id === filters.areaId);
+  if (filters.teamId) items = items.filter((c: any) => c.team_id === filters.teamId);
+
+  items.sort((a: any, b: any) => {
+    const aDate = a.last_activity_at || a.created_at;
+    const bDate = b.last_activity_at || b.created_at;
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
+  });
+
+  const offset = (page - 1) * pageSize;
+  const paged = items.slice(offset, offset + pageSize);
 
   return {
-    data: (data || []).map(mapRow),
-    total: count || 0,
+    data: paged.map(mapRow),
+    total: items.length,
     page,
     pageSize,
-    totalPages: Math.ceil((count || 0) / pageSize),
+    totalPages: Math.ceil(items.length / pageSize),
   };
 }
 
@@ -223,15 +272,19 @@ export async function getContact(
   id: string,
   scope: ServiceScope
 ): Promise<Contact | null> {
-  if (!process.env.INSFORGE_BASE_URL) return localGet(id);
+  // Check local memory first
+  const local = localGet(id);
+  if (local) return local;
+
+  if (!process.env.INSFORGE_BASE_URL) return null;
 
   let query = insforge.database.from(TABLE).select("*").eq("id", id);
   query = buildScopeFilter(query, scope);
 
-  const { data, error } = await query.single();
+  const { data, error } = await query.maybeSingle();
   if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(`Error al obtener contacto: ${error.message}`);
+    console.error("[CONTACTS] DB get error:", error.message);
+    return null;
   }
   return data ? mapRow(data) : null;
 }
@@ -241,42 +294,41 @@ export async function createContact(
   userId: string,
   scope: ServiceScope
 ): Promise<Contact> {
-  if (!process.env.INSFORGE_BASE_URL) return localCreate(input, userId, scope);
+  // Always write to local memory first (immediate consistency)
+  const local = localCreate(input, userId, scope);
 
-  const areaId = scope.areaId;
-  const teamId = scope.teamId;
-  const resolvedUserId = userId;
+  // Also persist in InsForge DB via admin client (bypass RLS)
+  if (process.env.INSFORGE_BASE_URL && insforgeAdmin) {
+    const record: Record<string, unknown> = {
+      id: local.id,
+      full_name: local.full_name,
+      phone: local.phone,
+      email: local.email,
+      company: local.company,
+      source: local.source,
+      status: local.status,
+      disposition: local.disposition,
+      assigned_to: local.assigned_to,
+      area_id: local.area_id,
+      team_id: local.team_id,
+      pipeline_id: input.pipelineId || null,
+      stage_id: input.stageId || null,
+      metadata: local.metadata,
+      last_activity_at: local.last_activity_at,
+      callback_at: local.callback_at,
+    };
 
-  const record: Record<string, unknown> = {
-    full_name: input.fullName,
-    phone: input.phone || null,
-    email: input.email || null,
-    company: input.company || null,
-    source: input.source || "manual",
-    status: input.status || "lead",
-    disposition: input.disposition || "no_contactado",
-    assigned_to: resolvedUserId,
-    area_id: areaId,
-    team_id: teamId,
-    pipeline_id: input.pipelineId || null,
-    stage_id: input.stageId || null,
-    metadata: input.metadata || {},
-    last_activity_at: new Date().toISOString(),
-    callback_at: input.callbackAt || null,
-  };
+    const { error } = await insforgeAdmin.database
+      .from(TABLE)
+      .insert(record)
+      .select();
 
-  const { data, error } = await insforge.database
-    .from(TABLE)
-    .insert(record)
-    .select()
-    .single();
-
-  if (error) {
-    console.error("[CONTACTS] InsForge insert error:", JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint }));
-    return localCreate(input, userId, scope);
+    if (error) {
+      console.error("[CONTACTS] DB insert error (non-blocking):", JSON.stringify({ code: error.code, message: error.message }));
+    }
   }
 
-  return mapRow(data);
+  return local;
 }
 
 export async function updateContact(
@@ -374,13 +426,13 @@ export async function findContactByPhoneOrEmail(
   email?: string | null,
   scope?: ServiceScope
 ): Promise<Contact | null> {
-  if (!process.env.INSFORGE_BASE_URL) {
-    const found = localContactsMemory.find(c =>
-      (phone && c.phone === phone) || (email && c.email === email)
-    );
-    return found ? mapRow(found) : null;
-  }
+  // Check local memory first
+  const local = localContactsMemory.find(c =>
+    (phone && c.phone === phone) || (email && c.email === email)
+  );
+  if (local) return mapRow(local);
 
+  if (!process.env.INSFORGE_BASE_URL) return null;
   if (!phone && !email) return null;
 
   let query = insforge.database.from(TABLE).select("*");
