@@ -549,3 +549,53 @@ export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
     created_at: a.created_at,
   }));
 }
+
+// ─── Startup rehydration ──────────────────────────────────────────
+
+export async function loadContactsFromDB(): Promise<Contact[]> {
+  if (!process.env.INSFORGE_BASE_URL) return [];
+  try {
+    const { data, error } = await insforge.database
+      .from("contacts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      console.warn("[DB] Could not load contacts:", error.message);
+      return [];
+    }
+    return (data || []).map(mapRow);
+  } catch (err: any) {
+    console.warn("[DB] Connection error loading contacts:", err.message);
+    return [];
+  }
+}
+
+export async function loadInteractionsFromDB(): Promise<any[]> {
+  if (!process.env.INSFORGE_BASE_URL) return [];
+  try {
+    const { data, error } = await insforge.database
+      .from("interactions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      console.warn("[DB] Could not load interactions:", error.message);
+      return [];
+    }
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      contact_id: row.contact_id,
+      type: row.type,
+      tipificacion: row.tipificacion,
+      notes: row.notes || null,
+      files: row.files || [],
+      created_by: row.created_by || null,
+      created_by_name: row.created_by_name || "Usuario",
+      created_at: row.created_at,
+    }));
+  } catch (err: any) {
+    console.warn("[DB] Connection error loading interactions:", err.message);
+    return [];
+  }
+}

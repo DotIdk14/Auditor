@@ -3,8 +3,9 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { PORT, setLocalCallsMemory } from "./src/config.js";
+import { PORT, setLocalCallsMemory, setLocalContactsMemory, localInteractionsMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
+import { loadContactsFromDB, loadInteractionsFromDB } from "./src/services/contactService.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
 import mountAuthRoutes from "./src/routes/auth.js";
@@ -110,7 +111,7 @@ app.use((req, res, _next) => {
 // Global error handler (last middleware)
 app.use(errorHandler);
 
-// ── Startup: load calls from DB ──────────────────────────────────
+// ── Startup: rehydrate memory from DB ────────────────────────────
 loadCallsFromSupabase().then((calls) => {
   if (calls.length > 0) {
     setLocalCallsMemory(calls);
@@ -119,6 +120,27 @@ loadCallsFromSupabase().then((calls) => {
 }).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
   console.warn("[DB] Failed to load calls on startup:", message);
+});
+
+loadContactsFromDB().then((contacts) => {
+  if (contacts.length > 0) {
+    setLocalContactsMemory(contacts);
+    console.log(`[DB] Restored ${contacts.length} contacts from database to memory.`);
+  }
+}).catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn("[DB] Failed to load contacts on startup:", message);
+});
+
+loadInteractionsFromDB().then((interactions) => {
+  if (interactions.length > 0) {
+    localInteractionsMemory.length = 0;
+    localInteractionsMemory.push(...interactions);
+    console.log(`[DB] Restored ${interactions.length} interactions from database to memory.`);
+  }
+}).catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn("[DB] Failed to load interactions on startup:", message);
 });
 
 // ── Start server ────────────────────────────────────────────────
