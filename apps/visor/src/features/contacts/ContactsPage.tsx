@@ -219,6 +219,7 @@ function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreate
   const [company, setCompany] = useState('');
   const [disposition, setDisposition] = useState<ContactDisposition>('no_contactado');
   const [callbackAt, setCallbackAt] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const createContact = useCreateContact();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,6 +228,7 @@ function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreate
     const { accessToken, logout } = useAuthStore.getState();
     if (!accessToken) { logout(); return; }
     try {
+      setFieldErrors({});
       await createContact.mutateAsync({
         fullName: fullName.trim(),
         phone: phone.trim() || undefined,
@@ -236,18 +238,32 @@ function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreate
         callbackAt: callbackAt ? new Date(callbackAt).toISOString() : undefined,
       });
       setFullName(''); setPhone(''); setEmail(''); setCompany('');
-      setDisposition('no_contactado'); setCallbackAt('');
+      setDisposition('no_contactado'); setCallbackAt(''); setFieldErrors({});
       onCreated();
-    } catch (err) {
-      console.error('[CREATE_CONTACT] Error:', err);
+    } catch (err: any) {
+      if (err?.response?.data?.details) {
+        const errors: Record<string, string> = {};
+        for (const issue of err.response.data.details) {
+          errors[issue.path[0]] = issue.message;
+        }
+        setFieldErrors(errors);
+      } else {
+        console.error('[CREATE_CONTACT] Error:', err);
+      }
     }
   };
 
-  const inputClass = `w-full border rounded-xl py-2 px-3 text-xs focus:outline-none transition-all ${
-    darkMode
-      ? 'bg-[#24211e] border-[#3e382f] text-stone-200 placeholder-stone-600 focus:border-[#d4a373]'
-      : 'bg-[#fcfbf9] border-[#dfd9cc] text-stone-800 placeholder-stone-400 focus:border-[#d4a373]'
+  const inputClass = (field?: string) => `w-full border rounded-xl py-2 px-3 text-xs focus:outline-none transition-all ${
+    field && fieldErrors[field]
+      ? 'border-rose-500 focus:border-rose-500'
+      : darkMode
+        ? 'border-[#3e382f] focus:border-[#d4a373]'
+        : 'border-[#dfd9cc] focus:border-[#d4a373]'
+  } ${
+    darkMode ? 'bg-[#24211e] text-stone-200 placeholder-stone-600' : 'bg-[#fcfbf9] text-stone-800 placeholder-stone-400'
   }`;
+
+  const errorClass = 'text-[9px] text-rose-500 mt-0.5';
 
   return (
     <form onSubmit={handleSubmit} className={`p-3 rounded-xl border space-y-3 ${
@@ -257,20 +273,38 @@ function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreate
         <UserPlus className={`w-3.5 h-3.5 ${darkMode ? 'text-[#d4a373]' : 'text-[#b57b54]'}`} />
         <span className={`text-[10px] font-bold ${darkMode ? 'text-stone-300' : 'text-stone-700'}`}>Nuevo Contacto</span>
       </div>
-      <input type="text" placeholder="Nombre completo *" value={fullName} onChange={(e) => setFullName(e.target.value)} required className={inputClass} />
-      <div className="grid grid-cols-2 gap-2">
-        <input type="tel" placeholder="Teléfono" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
-        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+      <div>
+        <input type="text" placeholder="Nombre completo *" value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.fullName; return n; }); }} required className={inputClass('fullName')} />
+        {fieldErrors.fullName && <p className={errorClass}>{fieldErrors.fullName}</p>}
       </div>
-      <input type="text" placeholder="Empresa" value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass} />
       <div className="grid grid-cols-2 gap-2">
-        <select value={disposition} onChange={(e) => setDisposition(e.target.value as ContactDisposition)} className={inputClass}>
-          <option value="no_contactado">No contactado</option>
-          <option value="cuelgue">Cuelgue</option>
-          <option value="evaluando">Evaluando</option>
-        </select>
+        <div>
+          <input type="tel" placeholder="Teléfono" value={phone} onChange={(e) => { setPhone(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.phone; return n; }); }} className={inputClass('phone')} />
+          {fieldErrors.phone && <p className={errorClass}>{fieldErrors.phone}</p>}
+        </div>
+        <div>
+          <input type="email" placeholder="Email" value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.email; return n; }); }} className={inputClass('email')} />
+          {fieldErrors.email && <p className={errorClass}>{fieldErrors.email}</p>}
+        </div>
+      </div>
+      <div>
+        <input type="text" placeholder="Empresa" value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass('company')} />
+        {fieldErrors.company && <p className={errorClass}>{fieldErrors.company}</p>}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <select value={disposition} onChange={(e) => setDisposition(e.target.value as ContactDisposition)} className={inputClass()}>
+            <option value="no_contactado">No contactado</option>
+            <option value="cuelgue">Cuelgue</option>
+            <option value="evaluando">Evaluando</option>
+          </select>
+          {fieldErrors.disposition && <p className={errorClass}>{fieldErrors.disposition}</p>}
+        </div>
         {disposition === 'cuelgue' && (
-          <input type="datetime-local" placeholder="Callback" value={callbackAt} onChange={(e) => setCallbackAt(e.target.value)} className={inputClass} />
+          <div>
+            <input type="datetime-local" placeholder="Callback" value={callbackAt} onChange={(e) => { setCallbackAt(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.callbackAt; return n; }); }} className={inputClass('callbackAt')} />
+            {fieldErrors.callbackAt && <p className={errorClass}>{fieldErrors.callbackAt}</p>}
+          </div>
         )}
       </div>
       <button
@@ -285,9 +319,6 @@ function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreate
         )}
         {createContact.isPending ? 'Guardando...' : 'Guardar'}
       </button>
-      {createContact.isError && (
-        <p className="text-[10px] text-rose-500">Error al guardar. Intenta de nuevo.</p>
-      )}
     </form>
   );
 }

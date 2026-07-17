@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import { apiClient } from '../lib/api';
 import { useAuthStore } from '../auth/authStore';
 import { useContactsStore } from '../stores/contactsStore';
@@ -111,7 +112,7 @@ export function useCreateContact() {
   const store = useContactsStore();
 
   return useMutation({
-    mutationFn: (data: {
+    mutationFn: async (data: {
       fullName: string;
       phone?: string;
       email?: string;
@@ -121,11 +122,14 @@ export function useCreateContact() {
       disposition?: string;
       callbackAt?: string;
     }) => {
-      // Try API first
-      return apiClient.post<Contact>('/contacts', data).catch(() => {
-        // Fallback: create locally
+      try {
+        return await apiClient.post<Contact>('/contacts', data);
+      } catch (err) {
+        if (isAxiosError(err) && err.response?.status === 400) {
+          throw err;
+        }
         return store.create(data);
-      });
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contacts'] });

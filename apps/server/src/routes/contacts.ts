@@ -8,13 +8,13 @@ import { getInteractionsByContact } from "../config.js";
 
 const createContactSchema = z.object({
   fullName: z.string().min(1, "El nombre es obligatorio").max(200),
-  phone: z.string().regex(/^[\d\s\-+()]{4,}$/, "Teléfono inválido (mín. 4 dígitos)").optional().nullable(),
-  email: z.string().email("Email inválido").optional().nullable(),
+  phone: z.string().regex(/^[\d\s\-+()]{7,}$/, "Teléfono inválido (mín. 7 dígitos)").optional().nullable().or(z.literal('')),
+  email: z.string().email("Email inválido").optional().nullable().or(z.literal('')),
   company: z.string().max(200).optional().nullable(),
   source: z.enum(["inbound", "outbound", "referral", "web", "event", "other", "manual"]).optional().default("manual"),
   status: z.enum(["lead", "prospect", "customer", "churned"]).optional().default("lead"),
   disposition: z.enum(["no_contactado", "cuelgue", "evaluando"]).optional().default("no_contactado"),
-  callbackAt: z.string().datetime().optional().nullable(),
+  callbackAt: z.string().datetime().optional().nullable().or(z.literal('')),
   pipelineId: z.string().uuid().optional(),
   stageId: z.string().uuid().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
@@ -83,6 +83,7 @@ export default function (app: Express): void {
   // POST /api/contacts — Create contact
   app.post("/api/contacts", authenticateToken, injectScope, requireRole("admin", "area_manager", "coordinator", "supervisor", "agent"), async (req: AuthenticatedRequest, res) => {
     try {
+      console.log("[CONTACTS] POST body:", JSON.stringify(req.body));
       const input = createContactSchema.parse(req.body);
       const contact = await contactService.createContact(input, req.scope!.userId, req.scope!);
       res.status(201).json(contact);
