@@ -13,6 +13,7 @@ import {
   Image, FileText, Trash2,
 } from 'lucide-react';
 import type { Contact, ContactDisposition } from '@auditor/shared-types';
+import { useAuthStore } from '../../auth/authStore';
 
 interface Props {
   contactId: string | null;
@@ -26,6 +27,8 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose }: Pro
   const [activeTab, setActiveTab] = useState<'activity' | 'audits' | 'notes'>('activity');
   const [showInteractionModal, setShowInteractionModal] = useState(false);
 
+  const user = useAuthStore(s => s.user);
+  const isAdmin = user?.role === 'admin';
   const { data: contact, isLoading: contactLoading } = useContact(contactId || '');
   const { data: contactCalls = [] } = useContactCalls(contactId || '');
   const { data: activityData } = useContactActivity(contactId || '');
@@ -145,6 +148,12 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose }: Pro
             <Clock className="w-3.5 h-3.5 text-stone-400" />
             {new Date(contact.created_at).toLocaleDateString()}
           </div>
+          {isAdmin && contact.assigned_to && (
+            <div className={`flex items-center gap-2 text-[11px] ${textSub}`}>
+              <Users className="w-3.5 h-3.5 text-stone-400" />
+              Asignado a: {contact.assignedToName || contact.assigned_to.slice(0, 8)}
+            </div>
+          )}
           {contact.callback_at && (
             <div className={`flex items-center gap-2 text-[11px] ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
               <CalendarClock className="w-3.5 h-3.5" />

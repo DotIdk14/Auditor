@@ -17,6 +17,7 @@ function mapRow(row: any): Contact {
     disposition: row.disposition || "no_contactado",
     disposition_locked: row.disposition_locked || false,
     assigned_to: row.assigned_to,
+    assignedToName: row.assigned_to_name || undefined,
     area_id: row.area_id,
     team_id: row.team_id,
     pipeline_id: row.pipeline_id,
@@ -192,6 +193,34 @@ function buildScopeFilter(query: any, scope: ServiceScope) {
   return query;
 }
 
+// ─── Enrich contacts with assigned user names ─────────────────────────────
+
+let profilesCache: Map<string, string> | null = null;
+
+export async function loadProfilesCache(): Promise<void> {
+  if (!process.env.INSFORGE_BASE_URL) return;
+  try {
+    const db = insforgeAdmin?.database || insforge.database;
+    const { data, error } = await db.from("profiles").select("id, email, display_name");
+    if (!error && data) {
+      profilesCache = new Map();
+      for (const p of data) {
+        profilesCache.set(p.id, p.display_name || p.email || p.id);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+async function enrichWithAssignedName(contacts: Contact[]): Promise<Contact[]> {
+  if (!process.env.INSFORGE_BASE_URL) return contacts;
+  if (!profilesCache) await loadProfilesCache();
+  if (!profilesCache) return contacts;
+  return contacts.map(c => ({
+    ...c,
+    assignedToName: c.assignedToName || profilesCache?.get(c.assigned_to) || undefined,
+  }));
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────
 
 export async function listContacts(
@@ -282,9 +311,10 @@ export async function listContacts(
 
   const offset = (page - 1) * pageSize;
   const paged = items.slice(offset, offset + pageSize);
+  const enriched = await enrichWithAssignedName(paged.map(mapRow));
 
   return {
-    data: paged.map(mapRow),
+    data: enriched,
     total: items.length,
     page,
     pageSize,
@@ -310,7 +340,9 @@ export async function getContact(
     console.error("[CONTACTS] DB get error:", error.message);
     return null;
   }
-  return data ? mapRow(data) : null;
+  if (!data) return null;
+  const enriched = await enrichWithAssignedName([mapRow(data)]);
+  return enriched[0] || null;
 }
 
 export async function createContact(

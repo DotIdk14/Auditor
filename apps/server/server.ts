@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 
 import { PORT, setLocalCallsMemory, setLocalContactsMemory, localInteractionsMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
-import { loadContactsFromDB, loadInteractionsFromDB } from "./src/services/contactService.js";
+import { loadContactsFromDB, loadInteractionsFromDB, loadProfilesCache } from "./src/services/contactService.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
 import mountAuthRoutes from "./src/routes/auth.js";
@@ -121,6 +121,8 @@ loadCallsFromSupabase().then((calls) => {
   const message = err instanceof Error ? err.message : String(err);
   console.warn("[DB] Failed to load calls on startup:", message);
 });
+
+loadProfilesCache().then(() => console.log("[DB] Profiles cache loaded.")).catch(() => {});
 
 loadContactsFromDB().then((contacts) => {
   if (contacts.length > 0) {
