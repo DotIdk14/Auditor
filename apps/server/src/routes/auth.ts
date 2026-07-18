@@ -74,15 +74,15 @@ export default function (app: Express): void {
               console.log(`[AUTH] Nuevo perfil creado: ${searchEmail} (agent)`);
             } else {
               console.warn("[AUTH] Error al crear perfil:", insertError.message);
-              userId = searchEmail;
+              userId = randomUUID();
             }
           }
         } catch (err: any) {
           console.warn("[AUTH] InsForge lookup failed, allowing as agent:", err.message);
-          userId = searchEmail;
+          userId = randomUUID();
         }
       } else {
-        userId = searchEmail;
+        userId = randomUUID();
       }
 
       const token = signToken({

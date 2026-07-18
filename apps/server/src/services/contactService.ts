@@ -35,8 +35,29 @@ function now() {
 
 // ─── Local memory helpers ──────────────────────────────────────────────────
 
-function localList(filters: ContactFilters): PaginatedResponse<Contact> {
+function localList(filters: ContactFilters, scope?: ServiceScope): PaginatedResponse<Contact> {
   let items = [...localContactsMemory];
+
+  // Apply scope filter (same logic as buildScopeFilter)
+  if (scope) {
+    switch (scope.role) {
+      case "admin":
+        break;
+      case "area_manager":
+      case "coordinator":
+        items = items.filter(c => c.area_id === scope.areaId);
+        break;
+      case "supervisor":
+        items = items.filter(c => c.team_id === scope.teamId);
+        break;
+      case "agent":
+        items = items.filter(c => c.assigned_to === scope.userId);
+        break;
+      case "qa":
+        items = items.filter(c => c.area_id === scope.areaId);
+        break;
+    }
+  }
 
   if (filters.search) {
     const s = filters.search.toLowerCase();
@@ -52,8 +73,8 @@ function localList(filters: ContactFilters): PaginatedResponse<Contact> {
   if (filters.disposition) items = items.filter(c => (c.disposition || "no_contactado") === filters.disposition);
   if (filters.assignedTo) items = items.filter(c => c.assigned_to === filters.assignedTo);
   if (filters.stageId) items = items.filter(c => c.stage_id === filters.stageId);
-  if (filters.areaId) items = items.filter(c => c.area_id === filters.areaId);
-  if (filters.teamId) items = items.filter(c => c.team_id === filters.teamId);
+  if (filters.areaId && scope?.role === "admin") items = items.filter(c => c.area_id === filters.areaId);
+  if (filters.teamId && (scope?.role === "admin" || scope?.role === "area_manager" || scope?.role === "coordinator")) items = items.filter(c => c.team_id === filters.teamId);
 
   items.sort((a, b) => {
     const aDate = a.last_activity_at || a.created_at;
@@ -177,7 +198,7 @@ export async function listContacts(
   filters: ContactFilters,
   scope: ServiceScope
 ): Promise<PaginatedResponse<Contact>> {
-  if (!process.env.INSFORGE_BASE_URL) return localList(filters);
+  if (!process.env.INSFORGE_BASE_URL) return localList(filters, scope);
 
   const page = filters.page || 1;
   const pageSize = filters.pageSize || 25;
@@ -554,8 +575,9 @@ export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
 
 export async function loadContactsFromDB(): Promise<Contact[]> {
   if (!process.env.INSFORGE_BASE_URL) return [];
+  const client = insforgeAdmin || insforge.database;
   try {
-    const { data, error } = await insforge.database
+    const { data, error } = await client
       .from("contacts")
       .select("*")
       .order("created_at", { ascending: false })
@@ -573,8 +595,9 @@ export async function loadContactsFromDB(): Promise<Contact[]> {
 
 export async function loadInteractionsFromDB(): Promise<any[]> {
   if (!process.env.INSFORGE_BASE_URL) return [];
+  const client = insforgeAdmin || insforge.database;
   try {
-    const { data, error } = await insforge.database
+    const { data, error } = await client
       .from("interactions")
       .select("*")
       .order("created_at", { ascending: false })
