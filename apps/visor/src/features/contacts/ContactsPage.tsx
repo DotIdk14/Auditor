@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useContacts, useCreateContact } from '../../hooks/useContacts';
-import { useAuthStore } from '../../auth/authStore';
+import { useContacts } from '../../hooks/useContacts';
 import {
   Search, Plus, User, ChevronRight, AlertCircle,
-  X, Check, CalendarClock, UserPlus, PhoneOff, PhoneCall, FlaskConical, Lock,
+  X, CalendarClock, PhoneOff, PhoneCall, FlaskConical, Lock,
 } from 'lucide-react';
 import type { Contact, ContactDisposition } from '@auditor/shared-types';
 import ContactDetailPanel from './ContactDetailPanel';
+import ContactFormFields from './ContactFormFields';
 
 const DISPOSITION_TABS: { key: ContactDisposition | 'all'; label: string; icon: typeof User }[] = [
   { key: 'all', label: 'Todos', icon: User },
@@ -80,7 +80,13 @@ export default function ContactsPage() {
             </button>
           </div>
 
-          {showCreateForm && <InlineCreateForm darkMode={darkMode} onCreated={() => setShowCreateForm(false)} />}
+          {showCreateForm && (
+            <div className={`p-3 rounded-xl border ${
+              darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-[#dfd9cc]'
+            }`}>
+              <ContactFormFields darkMode={darkMode} onSuccess={() => setShowCreateForm(false)} />
+            </div>
+          )}
 
           <div className="flex gap-1 p-1 rounded-xl overflow-x-auto">
             {DISPOSITION_TABS.map(tab => {
@@ -211,115 +217,4 @@ export default function ContactsPage() {
   );
 }
 
-// ── Inline Create Form ──────────────────────────────────────────────
 
-function InlineCreateForm({ darkMode, onCreated }: { darkMode: boolean; onCreated: () => void }) {
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [company, setCompany] = useState('');
-  const [disposition, setDisposition] = useState<ContactDisposition>('no_contactado');
-  const [callbackAt, setCallbackAt] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const createContact = useCreateContact();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) return;
-    const { accessToken, logout } = useAuthStore.getState();
-    if (!accessToken) { logout(); return; }
-    try {
-      setFieldErrors({});
-      await createContact.mutateAsync({
-        fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
-        email: email.trim() || undefined,
-        company: company.trim() || undefined,
-        disposition,
-        callbackAt: callbackAt ? new Date(callbackAt).toISOString() : undefined,
-      });
-      setFullName(''); setPhone(''); setEmail(''); setCompany('');
-      setDisposition('no_contactado'); setCallbackAt(''); setFieldErrors({});
-      onCreated();
-    } catch (err: any) {
-      if (err?.response?.data?.details) {
-        const errors: Record<string, string> = {};
-        for (const issue of err.response.data.details) {
-          errors[issue.path[0]] = issue.message;
-        }
-        setFieldErrors(errors);
-      } else {
-        console.error('[CREATE_CONTACT] Error:', err);
-      }
-    }
-  };
-
-  const inputClass = (field?: string) => `w-full border rounded-xl py-2 px-3 text-xs focus:outline-none transition-all ${
-    field && fieldErrors[field]
-      ? 'border-rose-500 focus:border-rose-500'
-      : darkMode
-        ? 'border-[#3e382f] focus:border-[#d4a373]'
-        : 'border-[#dfd9cc] focus:border-[#d4a373]'
-  } ${
-    darkMode ? 'bg-[#24211e] text-stone-200 placeholder-stone-600' : 'bg-[#fcfbf9] text-stone-800 placeholder-stone-400'
-  }`;
-
-  const errorClass = 'text-[9px] text-rose-500 mt-0.5';
-
-  return (
-    <form onSubmit={handleSubmit} className={`p-3 rounded-xl border space-y-3 ${
-      darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-[#dfd9cc]'
-    }`}>
-      <div className="flex items-center gap-1.5 mb-1">
-        <UserPlus className={`w-3.5 h-3.5 ${darkMode ? 'text-[#d4a373]' : 'text-[#b57b54]'}`} />
-        <span className={`text-[10px] font-bold ${darkMode ? 'text-stone-300' : 'text-stone-700'}`}>Nuevo Contacto</span>
-      </div>
-      <div>
-        <input type="text" placeholder="Nombre completo *" value={fullName} onChange={(e) => { setFullName(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.fullName; return n; }); }} required className={inputClass('fullName')} />
-        {fieldErrors.fullName && <p className={errorClass}>{fieldErrors.fullName}</p>}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <input type="tel" placeholder="Teléfono" value={phone} onChange={(e) => { setPhone(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.phone; return n; }); }} className={inputClass('phone')} />
-          {fieldErrors.phone && <p className={errorClass}>{fieldErrors.phone}</p>}
-        </div>
-        <div>
-          <input type="email" placeholder="Email" value={email} onChange={(e) => { setEmail(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.email; return n; }); }} className={inputClass('email')} />
-          {fieldErrors.email && <p className={errorClass}>{fieldErrors.email}</p>}
-        </div>
-      </div>
-      <div>
-        <input type="text" placeholder="Empresa" value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass('company')} />
-        {fieldErrors.company && <p className={errorClass}>{fieldErrors.company}</p>}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <select value={disposition} onChange={(e) => setDisposition(e.target.value as ContactDisposition)} className={inputClass()}>
-            <option value="no_contactado">No contactado</option>
-            <option value="cuelgue">Cuelgue</option>
-            <option value="evaluando">Evaluando</option>
-          </select>
-          {fieldErrors.disposition && <p className={errorClass}>{fieldErrors.disposition}</p>}
-        </div>
-        {disposition === 'cuelgue' && (
-          <div>
-            <input type="datetime-local" placeholder="Callback" value={callbackAt} onChange={(e) => { setCallbackAt(e.target.value); setFieldErrors(prev => { const n = { ...prev }; delete n.callbackAt; return n; }); }} className={inputClass('callbackAt')} />
-            {fieldErrors.callbackAt && <p className={errorClass}>{fieldErrors.callbackAt}</p>}
-          </div>
-        )}
-      </div>
-      <button
-        type="submit"
-        disabled={createContact.isPending || !fullName.trim()}
-        className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-[#faedcd] border border-[#d4a373] text-[#b57b54] hover:bg-[#ffeec2] font-bold rounded-xl transition-all text-xs cursor-pointer disabled:opacity-50"
-      >
-        {createContact.isPending ? (
-          <div className="w-3.5 h-3.5 border-2 border-[#b57b54]/30 border-t-[#b57b54] rounded-full animate-spin" />
-        ) : (
-          <Check className="w-3.5 h-3.5" />
-        )}
-        {createContact.isPending ? 'Guardando...' : 'Guardar'}
-      </button>
-    </form>
-  );
-}
