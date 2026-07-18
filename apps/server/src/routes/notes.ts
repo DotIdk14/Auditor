@@ -3,7 +3,7 @@ import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { localNotasMemory, localQuickNotesMemory, localCallsMemory } from "../config.js";
-import { insforge } from "../services/insforge.js";
+import { insforge, insforgeAdmin } from "../services/insforge.js";
 import {
   saveNotaToSupabase,
   loadNotasFromSupabase,
@@ -57,7 +57,8 @@ export default function (app: Express): void {
 
     // Audit notes from DB
     try {
-      const { data, error } = await insforge.database.from("notas").select("*");
+      const db = insforgeAdmin?.database || insforge.database;
+      const { data, error } = await db.from("notas").select("*");
       if (!error && data) {
         const existingIds = new Set(allNotas.map((n: any) => n.id));
         data.forEach((row: any) => {

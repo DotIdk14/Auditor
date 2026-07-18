@@ -1,5 +1,9 @@
-import { insforge } from "./insforge.js";
+import { insforge, insforgeAdmin } from "./insforge.js";
 import type { SalesCall, Nota, Objecion } from "../types.js";
+
+function db() {
+  return (insforgeAdmin?.database || insforge.database);
+}
 
 export async function loadCallsFromSupabase(): Promise<any[]> {
   try {
@@ -62,7 +66,7 @@ export async function deleteCallFromSupabase(id: string): Promise<void> {
 
 export async function saveNotaToSupabase(nota: any): Promise<void> {
   try {
-    const { error } = await insforge.database.from("notas").upsert({
+    const { error } = await db().from("notas").upsert({
       id: nota.id,
       auditoria_id: nota.auditoriaId,
       supervisor_email: nota.supervisorEmail,
@@ -79,7 +83,7 @@ export async function saveNotaToSupabase(nota: any): Promise<void> {
 
 export async function loadNotasFromSupabase(auditoriaId: string): Promise<any[]> {
   try {
-    const { data, error } = await insforge.database
+    const { data, error } = await db()
       .from("notas")
       .select("*")
       .eq("auditoria_id", auditoriaId)
@@ -102,7 +106,7 @@ export async function loadNotasFromSupabase(auditoriaId: string): Promise<any[]>
 
 export async function deleteNotaFromSupabase(notaId: string): Promise<void> {
   try {
-    const { error } = await insforge.database.from("notas").delete().eq("id", notaId);
+    const { error } = await db().from("notas").delete().eq("id", notaId);
     if (error) console.warn("[DB] Could not delete nota:", error.message);
   } catch (err: any) {
     console.warn("[DB] Connection error deleting nota:", err.message);
@@ -111,7 +115,7 @@ export async function deleteNotaFromSupabase(notaId: string): Promise<void> {
 
 export async function saveObjecionToSupabase(objecion: any): Promise<void> {
   try {
-    const { error } = await insforge.database.from("objeciones").upsert({
+    const { error } = await db().from("objeciones").upsert({
       id: objecion.id,
       auditoria_id: objecion.auditoriaId,
       supervisor_email: objecion.supervisorEmail,
@@ -130,7 +134,7 @@ export async function saveObjecionToSupabase(objecion: any): Promise<void> {
 
 export async function loadObjecionesFromSupabase(auditoriaId: string): Promise<any[]> {
   try {
-    const { data, error } = await insforge.database
+    const { data, error } = await db()
       .from("objeciones")
       .select("*")
       .eq("auditoria_id", auditoriaId)
@@ -155,7 +159,7 @@ export async function loadObjecionesFromSupabase(auditoriaId: string): Promise<a
 
 export async function deleteObjecionFromSupabase(objecionId: string): Promise<void> {
   try {
-    const { error } = await insforge.database.from("objeciones").delete().eq("id", objecionId);
+    const { error } = await db().from("objeciones").delete().eq("id", objecionId);
     if (error) console.warn("[DB] Could not delete objecion:", error.message);
   } catch (err: any) {
     console.warn("[DB] Connection error deleting objecion:", err.message);
