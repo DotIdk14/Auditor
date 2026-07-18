@@ -575,9 +575,9 @@ export async function getUnlinkedAudits(scope: ServiceScope): Promise<any[]> {
 
 export async function loadContactsFromDB(): Promise<Contact[]> {
   if (!process.env.INSFORGE_BASE_URL) return [];
-  const client = insforgeAdmin || insforge.database;
+  const db = insforgeAdmin?.database || insforge.database;
   try {
-    const { data, error } = await client
+    const { data, error } = await db
       .from("contacts")
       .select("*")
       .order("created_at", { ascending: false })
@@ -595,9 +595,9 @@ export async function loadContactsFromDB(): Promise<Contact[]> {
 
 export async function loadInteractionsFromDB(): Promise<any[]> {
   if (!process.env.INSFORGE_BASE_URL) return [];
-  const client = insforgeAdmin || insforge.database;
+  const db = insforgeAdmin?.database || insforge.database;
   try {
-    const { data, error } = await client
+    const { data, error } = await db
       .from("interactions")
       .select("*")
       .order("created_at", { ascending: false })
