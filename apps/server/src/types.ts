@@ -81,6 +81,7 @@ export interface Contact {
   disposition: ContactDisposition;
   disposition_locked: boolean;
   assigned_to: string;
+  assignedToName?: string;
   area_id: string | null;
   team_id: string | null;
   pipeline_id: string | null;
