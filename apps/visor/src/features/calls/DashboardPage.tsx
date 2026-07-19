@@ -181,7 +181,7 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect, posi
   return (
     <div className="space-y-6">
       <div className={`inline-flex p-1.5 rounded-2xl ${darkMode ? 'bg-[#1c1a18] border border-[#3e382f]' : 'bg-stone-50 border border-stone-200 shadow-sm'}`}>
-        {['seguimientos', 'llamadas', 'completadas', 'positivas'].map((tab) => (
+        {['seguimientos', 'llamadas', 'completadas'].map((tab) => (
           <button key={tab}
             onClick={() => setAgentTab(tab)}
             className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -189,27 +189,44 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect, posi
                 ? darkMode ? 'bg-amber-900/40 text-amber-500 shadow-inner' : 'bg-white text-[#b57b54] shadow-md border border-[#dfd9cc]'
                 : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-500 hover:text-stone-800'
             }`}>
-            {tab === 'seguimientos' ? 'Mis Seguimientos' : tab === 'llamadas' ? 'En Proceso' : tab === 'completadas' ? 'Completadas' : 'Positivas'}
+            {tab === 'seguimientos' ? 'Mis Seguimientos' : tab === 'llamadas' ? 'En Proceso' : 'Completadas'}
           </button>
         ))}
       </div>
 
       {agentTab === 'seguimientos' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {calls.filter((c: any) => c.status !== 'completada').length === 0 ? (
-            <div className="col-span-full py-16 text-center text-xs font-black uppercase tracking-widest opacity-40">
-              Sin llamadas asignadas
+        <div className="space-y-8">
+          <div>
+            <h3 className={`text-xs font-bold mb-4 uppercase tracking-wider ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+              Pendientes
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {calls.filter((c: any) => c.status !== 'completada').length === 0 ? (
+                <div className="col-span-full py-12 text-center text-xs font-black uppercase tracking-widest opacity-40">
+                  Sin llamadas asignadas
+                </div>
+              ) : (
+                calls.filter((c: any) => c.status !== 'completada').map((call: any) => (
+                  <div key={call.id} className={`p-6 rounded-[5px] border-[3px] ${darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'}`}>
+                    <h3 className="font-black font-display text-sm">{call.title}</h3>
+                    <p className={`text-[11px] mt-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                      {call.status === 'en_revision' ? 'En revisión' : 'Pendiente de auditoría'}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
-          ) : (
-            calls.filter((c: any) => c.status !== 'completada').map((call: any) => (
-              <div key={call.id} className={`p-6 rounded-[5px] border-[3px] ${darkMode ? 'bg-[#24211e] border-[#4a4036] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#2d2d2d] shadow-[4px_4px_0px_#2d2d2d]'}`}>
-                <h3 className="font-black font-display text-sm">{call.title}</h3>
-                <p className={`text-[11px] mt-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                  {call.status === 'en_revision' ? 'En revisión' : 'Pendiente de auditoría'}
-                </p>
-              </div>
-            ))
-          )}
+          </div>
+
+          <div>
+            <h3 className={`text-xs font-bold mb-4 uppercase tracking-wider flex items-center gap-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+              Tipificaciones Positivas
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                {positiveTipificaciones.length}
+              </span>
+            </h3>
+            <PositiveTipificacionesGrid items={positiveTipificaciones} darkMode={darkMode} />
+          </div>
         </div>
       )}
       {agentTab === 'llamadas' && (
@@ -225,9 +242,6 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect, posi
             <CallCard key={call.id} call={call} darkMode={darkMode} onClick={() => onAuditSelect(call.id)} />
           ))}
         </div>
-      )}
-      {agentTab === 'positivas' && (
-        <PositiveTipificacionesGrid items={positiveTipificaciones} darkMode={darkMode} />
       )}
     </div>
   );
