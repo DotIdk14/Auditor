@@ -4,7 +4,7 @@ import { loginLimiter } from "../config.js";
 import { authenticateToken, signToken } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import type { UserRole } from "../types.js";
-import { insforge } from "../services/insforge.js";
+import { insforge, insforgeAdmin } from "../services/insforge.js";
 
 function mapRole(role: string | null | undefined): UserRole {
   if (!role) return "agent";
@@ -45,10 +45,11 @@ export default function (app: Express): void {
         console.log(`[AUTH] Admin granted via ALLOWED_EMAILS: ${searchEmail}`);
       }
 
-      // 2. Buscar o crear perfil en InsForge (puede sobreescribir el rol si existe en DB)
-      if (insforge) {
+      // 2. Buscar o crear perfil en InsForge (intenta con admin client primero para evitar RLS)
+      const db = insforgeAdmin?.database || insforge?.database;
+      if (db) {
         try {
-          const { data: profile, error } = await insforge.database
+          const { data: profile, error } = await db
             .from("profiles")
             .select("id, full_name, role, area_id, team_id, is_active")
             .eq("email", searchEmail)
@@ -72,7 +73,7 @@ export default function (app: Express): void {
           } else {
             // Auto-registro: crear perfil
             const newId = randomUUID();
-            const { error: insertError } = await insforge.database.from("profiles").insert([{
+            const { error: insertError } = await db.from("profiles").insert([{
               id: newId,
               email: searchEmail,
               full_name: userName,
