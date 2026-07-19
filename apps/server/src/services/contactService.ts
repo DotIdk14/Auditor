@@ -66,7 +66,8 @@ function localList(filters: ContactFilters, scope?: ServiceScope): PaginatedResp
       c.full_name?.toLowerCase().includes(s) ||
       c.phone?.toLowerCase().includes(s) ||
       c.email?.toLowerCase().includes(s) ||
-      c.company?.toLowerCase().includes(s)
+      c.company?.toLowerCase().includes(s) ||
+      (typeof c.metadata?.educationProgram === 'string' && c.metadata.educationProgram.toLowerCase().includes(s))
     );
   }
   if (filters.status) items = items.filter(c => c.status === filters.status);

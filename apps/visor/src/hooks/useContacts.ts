@@ -122,6 +122,7 @@ export function useCreateContact() {
       source?: string;
       disposition?: string;
       callbackAt?: string;
+      metadata?: Record<string, unknown>;
     }) => {
       try {
         return await apiClient.post<Contact>('/contacts', data);

@@ -9,7 +9,7 @@ import type { InteractionType, InteractionTipificacion, InteractionTipo, Interac
 import { POSITIVE_TIPOS, NEGATIVE_TIPOS, getTipificacionFromTipo } from '@auditor/shared-types';
 import {
   Phone, Mail, Clock, Star, MessageSquare, AlertCircle, Activity, Send, PhoneCall,
-  MailPlus, Users, FileCheck, Building, ArrowUpRight, CalendarClock, X, Link,
+  MailPlus, Users, FileCheck, GraduationCap, BookOpen, ArrowUpRight, CalendarClock, X, Link,
   ThumbsUp, ThumbsDown, Lock, Loader2, MessageCircle, Paperclip, File,
   Image, FileText, Trash2,
 } from 'lucide-react';
@@ -23,7 +23,7 @@ interface Props {
   onTipificacion?: (tipificacion: 'positiva' | 'negativa') => void;
 }
 
-export default function ContactDetailPanel({ contactId, darkMode, onClose }: Props) {
+export default function ContactDetailPanel({ contactId, darkMode, onClose, onTipificacion }: Props) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'activity' | 'audits' | 'notes'>('activity');
   const [showInteractionModal, setShowInteractionModal] = useState(false);
@@ -77,6 +77,7 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose }: Pro
     );
   }
 
+  const meta = contact.metadata as Record<string, string> | undefined;
   const textMain = darkMode ? 'text-stone-100' : 'text-stone-900';
   const textSub = darkMode ? 'text-stone-300' : 'text-stone-700';
   const textMuted = darkMode ? 'text-stone-500' : 'text-stone-400';
@@ -139,12 +140,27 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose }: Pro
               {contact.email}
             </div>
           )}
-          {contact.company && (
-            <div className={`flex items-center gap-2 text-[11px] ${textSub}`}>
-              <Building className="w-3.5 h-3.5 text-stone-400" />
+          {meta?.educationLevel || meta?.educationProgram ? (
+            <div className="space-y-1">
+              {meta?.educationLevel && (
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  <GraduationCap className="w-3.5 h-3.5 text-stone-400" />
+                  <span className="capitalize">{meta.educationLevel}</span>
+                </div>
+              )}
+              {meta?.educationProgram && (
+                <div className="flex items-center gap-1.5 text-[10px]">
+                  <BookOpen className="w-3.5 h-3.5 text-stone-400" />
+                  {meta.educationProgram}
+                </div>
+              )}
+            </div>
+          ) : contact.company ? (
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <GraduationCap className="w-3.5 h-3.5 text-stone-400" />
               {contact.company}
             </div>
-          )}
+          ) : null}
           <div className={`flex items-center gap-2 text-[11px] ${textSub}`}>
             <Clock className="w-3.5 h-3.5 text-stone-400" />
             {new Date(contact.created_at).toLocaleDateString()}

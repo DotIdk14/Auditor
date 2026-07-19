@@ -16,6 +16,7 @@ interface ContactsState {
     status?: string;
     disposition?: string;
     callbackAt?: string;
+    metadata?: Record<string, unknown>;
   }) => Contact;
   update: (id: string, data: Partial<Contact>) => Contact | undefined;
   remove: (id: string) => boolean;
@@ -46,10 +47,11 @@ export const useContactsStore = create<ContactsState>()(
         if (filters?.search) {
           const s = filters.search.toLowerCase();
           items = items.filter(c =>
-            c.full_name.toLowerCase().includes(s) ||
+            c.full_name?.toLowerCase().includes(s) ||
             c.phone?.toLowerCase().includes(s) ||
             c.email?.toLowerCase().includes(s) ||
-            c.company?.toLowerCase().includes(s)
+            c.company?.toLowerCase().includes(s) ||
+            (typeof c.metadata?.educationProgram === 'string' && c.metadata.educationProgram.toLowerCase().includes(s))
           );
         }
         if (filters?.disposition) {
@@ -72,7 +74,7 @@ export const useContactsStore = create<ContactsState>()(
           full_name: data.fullName,
           phone: data.phone || null,
           email: data.email || null,
-          company: data.company || null,
+          company: (data.metadata as any)?.educationProgram || data.company || null,
           source: 'manual',
           status: (data.status as any) || 'lead',
           disposition: (data.disposition as ContactDisposition) || 'no_contactado',
@@ -82,7 +84,7 @@ export const useContactsStore = create<ContactsState>()(
           team_id: null,
           pipeline_id: null,
           stage_id: null,
-          metadata: {},
+          metadata: data.metadata || {},
           last_activity_at: now,
           callback_at: data.callbackAt || null,
           created_at: now,
