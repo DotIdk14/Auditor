@@ -397,13 +397,19 @@ export interface DegreeResource {
   url: string;
 }
 
+export interface DegreeProgramModality {
+  label: string;
+  duration: string;
+}
+
 export interface DegreeProgram {
   id: string;
   name: string;
   level: DegreeLevelType;
   description: string;
-  duration: string;
-  modality: string;
+  duration?: string;
+  modality?: string;
+  modalities: DegreeProgramModality[];
   imageUrl: string;
   studyPlan: string;
   costs: string;

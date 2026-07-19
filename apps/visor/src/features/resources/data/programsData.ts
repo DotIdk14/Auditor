@@ -2,13 +2,11 @@ import type { DegreeProgram, DegreeLevel } from '../types';
 
 type ProgLevel = DegreeProgram['level'];
 
-const DEFAULT_DURATION: Record<ProgLevel, string> = {
-  licenciatura: '2 años 10 meses',
-  maestria: '2 años',
-  doctorado: '2 años',
+const MODALITIES = {
+  completa: '3 años 8 meses',
+  intensiva: '2 años 10 meses',
+  superintensiva: '2 años 2 meses',
 };
-
-const ALIANZA_DURATION = '3 años 8 meses';
 
 const ALIANZAS = new Set([
   'Licenciatura en Psicología',
@@ -20,13 +18,20 @@ const ALIANZAS = new Set([
 ]);
 
 function prog(name: string, level: ProgLevel, studyPlan: string, duration?: string): DegreeProgram {
+  const isAlianza = ALIANZAS.has(name);
+  const defaultModality = isAlianza ? 'completa' : 'intensiva';
+  const modalities = [
+    { label: 'Completa', duration: MODALITIES.completa },
+    { label: 'Intensiva', duration: MODALITIES.intensiva },
+    { label: 'Superintensiva', duration: MODALITIES.superintensiva },
+  ];
   return {
     id: genId(name, level),
     name,
     level,
     description: '',
-    duration: duration || (ALIANZAS.has(name) ? ALIANZA_DURATION : DEFAULT_DURATION[level]),
-    modality: 'En línea',
+    duration: duration || MODALITIES[defaultModality],
+    modalities,
     imageUrl: '',
     studyPlan,
     costs: '',
@@ -123,8 +128,8 @@ const licenciaturas: DegreeProgram[] = [
   prog(`Licenciatura en Derecho Internacional`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Internacional_36b609aa99.pdf`),
   prog(`Licenciatura en Derecho Empresarial`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Empresarial_ca1006342e.pdf`),
   prog(`Licenciatura en Ciencias Políticas y Administración Pública`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ciencias_Politicasy_Administracion_Publica_a4c8141bf7.pdf`),
-  prog(`Licenciatura en Psicología`, 'licenciatura', ``, `${ALIANZA_DURATION}`),
-  prog(`Licenciatura en Psicología Organizacional`, 'licenciatura', ``, `${ALIANZA_DURATION}`),
+  prog(`Licenciatura en Psicología`, 'licenciatura', ``),
+  prog(`Licenciatura en Psicología Organizacional`, 'licenciatura', ``),
 ];
 
 const maestrias: DegreeProgram[] = [

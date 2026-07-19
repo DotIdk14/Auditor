@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import type { DegreeProgram, DegreeResource } from '../../types';
+import type { DegreeProgram, DegreeResource, DegreeProgramModality } from '../../types';
 
 interface Props {
   darkMode: boolean;
@@ -20,8 +20,11 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
   const [name, setName] = useState('');
   const [level, setLevel] = useState<DegreeProgram['level']>('licenciatura');
   const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState('');
-  const [modality, setModality] = useState('En línea');
+  const [modalities, setModalities] = useState<DegreeProgramModality[]>([
+    { label: 'Completa', duration: '3 años 8 meses' },
+    { label: 'Intensiva', duration: '2 años 10 meses' },
+    { label: 'Superintensiva', duration: '2 años 2 meses' },
+  ]);
   const [imageUrl, setImageUrl] = useState('');
   const [studyPlan, setStudyPlan] = useState('');
   const [costs, setCosts] = useState('');
@@ -39,8 +42,11 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
       setName(program.name);
       setLevel(program.level);
       setDescription(program.description);
-      setDuration(program.duration);
-      setModality(program.modality);
+      setModalities(program.modalities && program.modalities.length > 0 ? program.modalities : [
+        { label: 'Completa', duration: '3 años 8 meses' },
+        { label: 'Intensiva', duration: '2 años 10 meses' },
+        { label: 'Superintensiva', duration: '2 años 2 meses' },
+      ]);
       setImageUrl(program.imageUrl);
       setStudyPlan(program.studyPlan);
       setCosts(program.costs);
@@ -64,8 +70,8 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
       name: name.trim(),
       level,
       description: description.trim(),
-      duration: duration.trim(),
-      modality: modality.trim(),
+      duration: modalities[0]?.duration || '',
+      modalities: modalities.filter(m => m.duration.trim()),
       imageUrl: imageUrl.trim(),
       studyPlan: studyPlan.trim(),
       costs: costs.trim(),
@@ -141,23 +147,30 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
               placeholder="Ej. Administración de Empresas" required className={inputClass(darkMode)} />
           </div>
 
-          {/* Level + Duration + Modality */}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Nivel</label>
-              <select value={level} onChange={e => setLevel(e.target.value as DegreeProgram['level'])} className={inputClass(darkMode)}>
-                {LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Duración</label>
-              <input type="text" value={duration} onChange={e => setDuration(e.target.value)}
-                placeholder="Ej. 3.5 años" className={inputClass(darkMode)} />
-            </div>
-            <div>
-              <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Modalidad</label>
-              <input type="text" value={modality} onChange={e => setModality(e.target.value)}
-                placeholder="En línea" className={inputClass(darkMode)} />
+          {/* Level */}
+          <div>
+            <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Nivel</label>
+            <select value={level} onChange={e => setLevel(e.target.value as DegreeProgram['level'])} className={inputClass(darkMode)}>
+              {LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
+          </div>
+
+          {/* Modalities & Durations */}
+          <div>
+            <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Duración por Modalidad</label>
+            <div className="space-y-1.5">
+              {modalities.map((m, i) => (
+                <div key={m.label} className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold w-28 shrink-0 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>{m.label}</span>
+                  <input type="text" value={m.duration}
+                    onChange={e => {
+                      const next = [...modalities];
+                      next[i] = { ...next[i], duration: e.target.value };
+                      setModalities(next);
+                    }}
+                    placeholder="Ej. 3 años 8 meses" className={inputClass(darkMode)} />
+                </div>
+              ))}
             </div>
           </div>
 

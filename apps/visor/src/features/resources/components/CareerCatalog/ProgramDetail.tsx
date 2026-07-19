@@ -61,8 +61,6 @@ export default function ProgramDetail({ program, darkMode, isAdmin, onClose, onE
                 <h2 className={`text-sm font-bold font-display truncate ${textMain}`}>{program.name}</h2>
                 <p className={`text-[10px] ${textSub}`}>
                   {program.level === 'licenciatura' ? 'Licenciatura' : program.level === 'maestria' ? 'Maestría' : 'Doctorado'}
-                  {program.duration ? ` · ${program.duration}` : ''}
-                  {program.modality ? ` · ${program.modality}` : ''}
                 </p>
               </div>
             </div>
@@ -116,6 +114,26 @@ export default function ProgramDetail({ program, darkMode, isAdmin, onClose, onE
             {/* Description */}
             {program.description && (
               <p className={`text-[11px] leading-relaxed ${textMain}`}>{program.description}</p>
+            )}
+
+            {/* Modalities & Durations */}
+            {program.modalities && program.modalities.length > 0 && (
+              <div className={`p-4 ${sectionBox}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <GraduationCap className={`w-4 h-4 ${textSub}`} />
+                  <h3 className={`text-[11px] font-bold ${textMain}`}>Duración por Modalidad</h3>
+                </div>
+                <div className="space-y-1.5">
+                  {program.modalities.map((m) => (
+                    <div key={m.label} className={`flex items-center justify-between px-3 py-2 rounded-xl border text-[10px] ${
+                      darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-stone-200'
+                    }`}>
+                      <span className={`font-bold ${textMain}`}>{m.label}</span>
+                      <span className={`font-mono ${textSub}`}>{m.duration}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Study Plan (PDF download) */}
