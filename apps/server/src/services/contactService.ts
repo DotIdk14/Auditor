@@ -663,6 +663,7 @@ export async function loadInteractionsFromDB(): Promise<any[]> {
       contact_id: row.contact_id,
       type: row.type,
       tipificacion: row.tipificacion,
+      tipo: row.tipo || null,
       notes: row.notes || null,
       files: row.files || [],
       created_by: row.created_by || null,

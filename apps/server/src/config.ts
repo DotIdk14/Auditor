@@ -79,7 +79,7 @@ export function removeContactById(id: string): boolean {
 }
 
 export function prependInteraction(interaction: any): void {
-  localInteractionsMemory = [interaction, ...localInteractionsMemory];
+  localInteractionsMemory.unshift(interaction);
 }
 
 export function getInteractionsByContact(contactId: string): any[] {

@@ -239,6 +239,10 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                     <div className={`absolute -left-[23px] top-1 w-2.5 h-2.5 rounded-full border-2 ${
                       item.type === 'audit'
                         ? darkMode ? 'bg-emerald-900 border-emerald-500' : 'bg-emerald-100 border-emerald-500'
+                        : item.type === 'interaction'
+                        ? item.tipificacion === 'positiva'
+                          ? darkMode ? 'bg-amber-900 border-amber-500' : 'bg-amber-100 border-amber-500'
+                          : darkMode ? 'bg-rose-900 border-rose-500' : 'bg-rose-100 border-rose-500'
                         : darkMode ? 'bg-indigo-900 border-indigo-500' : 'bg-indigo-100 border-indigo-500'
                     }`} />
                     <div
@@ -252,6 +256,14 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                       <div className="flex items-center gap-2 mb-1">
                         {item.type === 'audit' ? (
                           <FileCheck className={`w-3 h-3 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                        ) : item.type === 'interaction' ? (
+                          item.interactionType === 'llamada' ? (
+                            <PhoneCall className={`w-3 h-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                          ) : item.interactionType === 'correo' ? (
+                            <MailPlus className={`w-3 h-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                          ) : (
+                            <MessageSquare className={`w-3 h-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                          )
                         ) : item.taskType === 'call' ? (
                           <PhoneCall className={`w-3 h-3 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
                         ) : item.taskType === 'email' ? (
@@ -262,9 +274,15 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                           <Activity className={`w-3 h-3 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
                         )}
                         <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded ${
-                          item.type === 'audit' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-indigo-900/30 text-indigo-400'
+                          item.type === 'audit' ? 'bg-emerald-900/30 text-emerald-400'
+                          : item.type === 'interaction'
+                          ? item.tipificacion === 'positiva' ? 'bg-amber-900/30 text-amber-400' : 'bg-rose-900/30 text-rose-400'
+                          : 'bg-indigo-900/30 text-indigo-400'
                         }`}>
-                          {item.type === 'audit' ? 'Auditoría' : item.taskType || 'Tarea'}
+                          {item.type === 'audit' ? 'Auditoría'
+                          : item.type === 'interaction'
+                          ? item.interactionType || 'Interacción'
+                          : item.taskType || 'Tarea'}
                         </span>
                         {item.type === 'audit' && item.score != null && (
                           <span className={`text-[10px] font-bold ml-auto ${

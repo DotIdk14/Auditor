@@ -138,9 +138,12 @@ loadContactsFromDB().then((contacts) => {
 
 loadInteractionsFromDB().then((interactions) => {
   if (interactions.length > 0) {
-    localInteractionsMemory.length = 0;
-    localInteractionsMemory.push(...interactions);
-    console.log(`[DB] Restored ${interactions.length} interactions from database to memory.`);
+    const existingIds = new Set(localInteractionsMemory.map(i => i.id));
+    const newFromDb = interactions.filter(i => !existingIds.has(i.id));
+    if (newFromDb.length > 0) {
+      localInteractionsMemory.push(...newFromDb);
+    }
+    console.log(`[DB] Restored ${interactions.length} interactions (${newFromDb.length} new) from database to memory.`);
   }
 }).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);

@@ -94,7 +94,7 @@ export function useContactActivity(id: string) {
 
 export interface ActivityItem {
   id: string;
-  type: 'audit' | 'task';
+  type: 'audit' | 'task' | 'interaction';
   title: string;
   description?: string;
   created_at: string;
@@ -106,6 +106,10 @@ export interface ActivityItem {
   completed_at?: string;
   priority?: string;
   assigned_to?: string;
+  interactionType?: string;
+  titulo?: string;
+  files?: any[];
+  tipificacion?: string;
 }
 
 export function useCreateContact() {

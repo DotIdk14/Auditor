@@ -169,8 +169,33 @@ export default function (app: Express): void {
     try {
       const contactId = req.params.id;
 
-      // Always get interactions from local memory
-      const localInteractions = getInteractionsByContact(contactId);
+      // Get interactions from local memory, fallback to DB
+      let interactions = getInteractionsByContact(contactId);
+      if (interactions.length === 0 && process.env.INSFORGE_BASE_URL) {
+        try {
+          const { data, error } = await insforge.database
+            .from("interactions")
+            .select("*")
+            .eq("contact_id", contactId)
+            .order("created_at", { ascending: false });
+          if (!error && data && data.length > 0) {
+            interactions = data.map((row: any) => ({
+              id: row.id,
+              contact_id: row.contact_id,
+              type: row.type,
+              tipificacion: row.tipificacion,
+              tipo: row.tipo,
+              notes: row.notes || null,
+              files: row.files || [],
+              created_by: row.created_by || null,
+              created_by_name: row.created_by_name || "Usuario",
+              created_at: row.created_at,
+            }));
+          }
+        } catch (dbErr: any) {
+          console.warn("[ACTIVITY] DB interactions fallback error:", dbErr.message);
+        }
+      }
 
       let auditItems: any[] = [];
       let taskItems: any[] = [];
@@ -216,20 +241,20 @@ export default function (app: Express): void {
         assigned_to: t.assigned_to,
       }));
 
-      const interactionItems = localInteractions.map((i: any) => ({
+      const interactionItems = interactions.map((i: any) => ({
         id: i.id,
         type: "interaction" as const,
         interactionType: i.type,
-        title: `${i.type === "llamada" ? "Llamada" : i.type === "correo" ? "Correo" : "WhatsApp"} — ${i.tipificacion === "positiva" ? "Positiva" : "Negativa"}`,
+        titulo: i.tipo || (i.tipificacion === "positiva" ? "Positiva" : "Negativa"),
         description: i.notes || "",
-        created_at: i.created_at,
+        created_at: i.created_at || "",
         files: i.files || [],
         tipificacion: i.tipificacion,
         assigned_to: i.created_by_name,
       }));
 
       const items = [...auditItems, ...taskItems, ...interactionItems]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        .sort((a, b) => new Date(b.created_at || "").getTime() - new Date(a.created_at || "").getTime());
 
       res.json({ contactId, items, total: items.length });
     } catch (err: any) {
