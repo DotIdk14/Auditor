@@ -72,7 +72,7 @@ export interface CallNote {
   timestamp: number;
 }
 
-export type ActiveTab = 'speeches' | 'newcall' | 'objections' | 'notes';
+export type ActiveTab = 'speeches' | 'newcall' | 'objections' | 'notes' | 'carreras';
 
 export type CostDecision = 'yes' | 'no' | null;
 
@@ -385,3 +385,36 @@ export const DEFAULT_VALUE_CHECKLIST: ValueCheckItem[] = [
   { id: 'acompanamiento', label: 'Acompañamiento explicado', checked: false },
   { id: 'beneficio_personalizado', label: 'Beneficio personalizado según perfil', checked: false },
 ];
+
+// ─── DEGREE CATALOG ──────────────────────────────────────────────
+
+export type DegreeLevelType = 'licenciatura' | 'maestria' | 'doctorado';
+
+export interface DegreeResource {
+  id: string;
+  type: 'image' | 'pdf' | 'link';
+  label: string;
+  url: string;
+}
+
+export interface DegreeProgram {
+  id: string;
+  name: string;
+  level: DegreeLevelType;
+  description: string;
+  duration: string;
+  modality: string;
+  imageUrl: string;
+  studyPlan: string;
+  costs: string;
+  requirements: string;
+  benefits: string;
+  resources: DegreeResource[];
+}
+
+export interface DegreeLevel {
+  id: DegreeLevelType;
+  label: string;
+  icon: string;
+  programs: DegreeProgram[];
+}

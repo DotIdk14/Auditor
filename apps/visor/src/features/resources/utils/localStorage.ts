@@ -1,4 +1,4 @@
-import type { Speech, ObjectionResponse, CallStep } from '../types';
+import type { Speech, ObjectionResponse, CallStep, DegreeProgram } from '../types';
 
 const CUSTOM_SPEECHES_KEY = 'customSpeeches';
 const CUSTOM_OBJECTIONS_KEY = 'customObjections';
@@ -67,4 +67,16 @@ export function getPersistedChecklist(): { id: string; label: string; checked: b
     if (!raw) return null;
     return JSON.parse(raw);
   } catch { return null; }
+}
+
+const DEGREE_CATALOG_KEY = 'degreeCatalog';
+
+export function getDegreeCatalog(): Record<string, DegreeProgram> {
+  try {
+    return JSON.parse(localStorage.getItem(DEGREE_CATALOG_KEY) || '{}');
+  } catch { return {}; }
+}
+
+export function saveDegreeCatalog(data: Record<string, DegreeProgram>): void {
+  localStorage.setItem(DEGREE_CATALOG_KEY, JSON.stringify(data));
 }
