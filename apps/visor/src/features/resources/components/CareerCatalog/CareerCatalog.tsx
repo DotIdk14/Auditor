@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Plus, GraduationCap } from 'lucide-react';
+import { Plus, GraduationCap, Search } from 'lucide-react';
 import { DEFAULT_DEGREE_LEVELS } from '../../data/programsData';
 import { getDegreeCatalog, saveDegreeCatalog } from '../../utils/localStorage';
+import { useAuthStore } from '../../../../auth/authStore';
 import type { DegreeProgram } from '../../types';
 import ProgramCard from './ProgramCard';
 import ProgramDetail from './ProgramDetail';
@@ -18,6 +19,9 @@ export default function CareerCatalog({ darkMode }: Props) {
   const [selectedProgram, setSelectedProgram] = useState<DegreeProgram | null>(null);
   const [editingProgram, setEditingProgram] = useState<DegreeProgram | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const isAdmin = useAuthStore(s => s.user?.role === 'admin');
 
   const allLevels = useMemo(() => {
     return DEFAULT_DEGREE_LEVELS.map(level => {
@@ -38,6 +42,15 @@ export default function CareerCatalog({ darkMode }: Props) {
     }
     return map;
   }, [allLevels]);
+
+  const filteredLevels = useMemo(() => {
+    if (!searchTerm.trim()) return allLevels;
+    const s = searchTerm.toLowerCase();
+    return allLevels.map(level => ({
+      ...level,
+      programs: level.programs.filter(p => p.name.toLowerCase().includes(s)),
+    })).filter(level => level.programs.length > 0);
+  }, [allLevels, searchTerm]);
 
   const handleSave = (program: DegreeProgram) => {
     const updated = { ...customPrograms, [program.id]: program };
@@ -60,6 +73,9 @@ export default function CareerCatalog({ darkMode }: Props) {
   const filledCount = Object.values(mergedPrograms).filter(p => p.description || p.studyPlan || p.imageUrl).length;
 
   const textMuted = darkMode ? 'text-stone-500' : 'text-stone-400';
+  const inputClass = `w-full pl-8 pr-3 py-2 rounded-xl border text-xs focus:outline-none transition-all ${
+    darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-200 placeholder-stone-500 focus:border-[#d4a373]' : 'bg-white border-[#dfd9cc] text-stone-800 placeholder-stone-400 focus:border-[#d4a373]'
+  }`;
 
   return (
     <div className="space-y-6">
@@ -76,18 +92,32 @@ export default function CareerCatalog({ darkMode }: Props) {
             {filledCount} / {totalPrograms} carreras con información
           </p>
         </div>
-        <button onClick={() => { setEditingProgram(null); setShowForm(true); }}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold transition-all ${
-            darkMode
-              ? 'bg-[#24211e] text-[#d4a373] hover:bg-[#2e2a24] border border-[#3e382f]'
-              : 'bg-[#faedcd] text-[#b57b54] hover:bg-[#ffeec2] border border-[#dfd9cc]'
-          }`}>
-          <Plus className="w-3 h-3" /> Agregar
-        </button>
+        {isAdmin && (
+          <button onClick={() => { setEditingProgram(null); setShowForm(true); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[10px] font-bold transition-all ${
+              darkMode
+                ? 'bg-[#24211e] text-[#d4a373] hover:bg-[#2e2a24] border border-[#3e382f]'
+                : 'bg-[#faedcd] text-[#b57b54] hover:bg-[#ffeec2] border border-[#dfd9cc]'
+            }`}>
+            <Plus className="w-3 h-3" /> Agregar
+          </button>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`} />
+        <input
+          type="text"
+          placeholder="Buscar carrera por nombre..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className={inputClass}
+        />
       </div>
 
       {/* Levels */}
-      {allLevels
+      {filteredLevels
         .sort((a, b) => LEVEL_ORDER[a.id] - LEVEL_ORDER[b.id])
         .map((level) => (
         <div key={level.id}>
@@ -111,10 +141,17 @@ export default function CareerCatalog({ darkMode }: Props) {
         </div>
       ))}
 
+      {filteredLevels.length === 0 && (
+        <div className="py-12 text-center">
+          <p className={`text-[11px] ${textMuted}`}>Sin resultados para "{searchTerm}"</p>
+        </div>
+      )}
+
       {/* Detail modal */}
       <ProgramDetail
         program={selectedProgram}
         darkMode={darkMode}
+        isAdmin={isAdmin}
         onClose={() => setSelectedProgram(null)}
         onEdit={(p) => { setEditingProgram(p); setShowForm(true); setSelectedProgram(null); }}
         onDelete={handleDelete}

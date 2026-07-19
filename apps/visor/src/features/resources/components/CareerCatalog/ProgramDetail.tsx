@@ -9,12 +9,13 @@ import type { DegreeProgram } from '../../types';
 interface Props {
   program: DegreeProgram | null;
   darkMode: boolean;
+  isAdmin: boolean;
   onClose: () => void;
   onEdit: (program: DegreeProgram) => void;
   onDelete: (id: string) => void;
 }
 
-export default function ProgramDetail({ program, darkMode, onClose, onEdit, onDelete }: Props) {
+export default function ProgramDetail({ program, darkMode, isAdmin, onClose, onEdit, onDelete }: Props) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,18 +67,22 @@ export default function ProgramDetail({ program, darkMode, onClose, onEdit, onDe
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => onEdit(program)}
-                className={`p-2 rounded-xl transition-all hover:scale-110 ${
-                  darkMode ? 'text-stone-400 hover:text-amber-400' : 'text-stone-500 hover:text-amber-600'
-                }`}>
-                <Pencil className="w-4 h-4" />
-              </button>
-              <button onClick={() => onDelete(program.id)}
-                className={`p-2 rounded-xl transition-all hover:scale-110 ${
-                  darkMode ? 'text-stone-400 hover:text-red-400' : 'text-stone-500 hover:text-red-600'
-                }`}>
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {isAdmin && (
+                <>
+                  <button onClick={() => onEdit(program)}
+                    className={`p-2 rounded-xl transition-all hover:scale-110 ${
+                      darkMode ? 'text-stone-400 hover:text-amber-400' : 'text-stone-500 hover:text-amber-600'
+                    }`}>
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => onDelete(program.id)}
+                    className={`p-2 rounded-xl transition-all hover:scale-110 ${
+                      darkMode ? 'text-stone-400 hover:text-red-400' : 'text-stone-500 hover:text-red-600'
+                    }`}>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
               <button onClick={onClose}
                 className={`p-2 rounded-xl transition-all hover:scale-110 ${
                   darkMode ? 'text-stone-400 hover:text-stone-200' : 'text-stone-500 hover:text-stone-800'
@@ -100,14 +105,27 @@ export default function ProgramDetail({ program, darkMode, onClose, onEdit, onDe
               <p className={`text-[11px] leading-relaxed ${textMain}`}>{program.description}</p>
             )}
 
-            {/* Study Plan */}
+            {/* Study Plan (PDF) */}
             {program.studyPlan && (
               <div className={`p-4 ${sectionBox}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <BookOpen className={`w-4 h-4 ${textSub}`} />
                   <h3 className={`text-[11px] font-bold ${textMain}`}>Plan de Estudios</h3>
                 </div>
-                <p className="text-[10px] leading-relaxed whitespace-pre-line">{program.studyPlan}</p>
+                <a
+                  href={program.studyPlan}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[10px] font-bold transition-all ${
+                    darkMode
+                      ? 'bg-[#1c1a18] border-[#3e382f] text-stone-300 hover:bg-[#24211e] hover:border-[#d4a373]'
+                      : 'bg-white border-stone-200 text-stone-600 hover:bg-stone-50 hover:border-[#b57b54]'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-red-400" />
+                  Descargar plan de estudios (PDF)
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                </a>
               </div>
             )}
 

@@ -175,11 +175,11 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
               placeholder="https://..." className={inputClass(darkMode)} />
           </div>
 
-          {/* Study Plan */}
+          {/* Study Plan (PDF URL) */}
           <div>
-            <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Plan de Estudios</label>
-            <textarea value={studyPlan} onChange={e => setStudyPlan(e.target.value)}
-              rows={4} className={`${inputClass(darkMode)} resize-none`} />
+            <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Plan de Estudios (URL del PDF)</label>
+            <input type="url" value={studyPlan} onChange={e => setStudyPlan(e.target.value)}
+              placeholder="https://..." className={inputClass(darkMode)} />
           </div>
 
           {/* Costs */}
