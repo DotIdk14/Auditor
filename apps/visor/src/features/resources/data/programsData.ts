@@ -1,12 +1,31 @@
 import type { DegreeProgram, DegreeLevel } from '../types';
 
-function prog(name: string, level: DegreeProgram['level'], studyPlan: string): DegreeProgram {
+type ProgLevel = DegreeProgram['level'];
+
+const DEFAULT_DURATION: Record<ProgLevel, string> = {
+  licenciatura: '2 años 10 meses',
+  maestria: '2 años',
+  doctorado: '2 años',
+};
+
+const ALIANZA_DURATION = '3 años 8 meses';
+
+const ALIANZAS = new Set([
+  'Licenciatura en Psicología',
+  'Licenciatura en Desarrollo Humano',
+  'Licenciatura en Medios Digitales',
+  'Licenciatura en Arte Digital y Multimedia',
+  'Licenciatura en Marketing y Publicidad',
+  'Licenciatura en Comunicación Organizacional',
+]);
+
+function prog(name: string, level: ProgLevel, studyPlan: string, duration?: string): DegreeProgram {
   return {
     id: genId(name, level),
     name,
     level,
     description: '',
-    duration: '',
+    duration: duration || (ALIANZAS.has(name) ? ALIANZA_DURATION : DEFAULT_DURATION[level]),
     modality: 'En línea',
     imageUrl: '',
     studyPlan,
@@ -104,6 +123,8 @@ const licenciaturas: DegreeProgram[] = [
   prog(`Licenciatura en Derecho Internacional`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Internacional_36b609aa99.pdf`),
   prog(`Licenciatura en Derecho Empresarial`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Empresarial_ca1006342e.pdf`),
   prog(`Licenciatura en Ciencias Políticas y Administración Pública`, 'licenciatura', `https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ciencias_Politicasy_Administracion_Publica_a4c8141bf7.pdf`),
+  prog(`Licenciatura en Psicología`, 'licenciatura', ``, `${ALIANZA_DURATION}`),
+  prog(`Licenciatura en Psicología Organizacional`, 'licenciatura', ``, `${ALIANZA_DURATION}`),
 ];
 
 const maestrias: DegreeProgram[] = [
