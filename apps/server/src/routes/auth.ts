@@ -38,7 +38,14 @@ export default function (app: Express): void {
       let teamId: string | null = null;
       let userId: string | null = null;
 
-      // Buscar o crear perfil en InsForge
+      // 1. Check if email is in ALLOWED_EMAILS (env var override for admin access)
+      const allowedEmails = (process.env.ALLOWED_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
+      if (allowedEmails.includes(searchEmail)) {
+        userRole = "admin";
+        console.log(`[AUTH] Admin granted via ALLOWED_EMAILS: ${searchEmail}`);
+      }
+
+      // 2. Buscar o crear perfil en InsForge (puede sobreescribir el rol si existe en DB)
       if (insforge) {
         try {
           const { data: profile, error } = await insforge.database
@@ -56,22 +63,25 @@ export default function (app: Express): void {
             }
             userId = profile.id;
             if (profile.full_name) userName = profile.full_name;
-            userRole = mapRole(profile.role);
+            // ALLOWED_EMAILS siempre tiene prioridad; si no está en la lista, usamos el rol de DB
+            if (!allowedEmails.includes(searchEmail)) {
+              userRole = mapRole(profile.role);
+            }
             areaId = profile.area_id || null;
             teamId = profile.team_id || null;
           } else {
-            // Auto-registro: crear perfil como agente
+            // Auto-registro: crear perfil
             const newId = randomUUID();
             const { error: insertError } = await insforge.database.from("profiles").insert([{
               id: newId,
               email: searchEmail,
               full_name: userName,
-              role: "agent",
+              role: userRole,
               is_active: true,
             }]);
             if (!insertError) {
               userId = newId;
-              console.log(`[AUTH] Nuevo perfil creado: ${searchEmail} (agent)`);
+              console.log(`[AUTH] Nuevo perfil creado: ${searchEmail} (${userRole})`);
             } else {
               console.warn("[AUTH] Error al crear perfil:", insertError.message);
               userId = randomUUID();
@@ -79,14 +89,14 @@ export default function (app: Express): void {
           }
         } catch (err: any) {
           console.warn("[AUTH] InsForge lookup failed, allowing as agent:", err.message);
-          userId = randomUUID();
+          if (!userId) userId = randomUUID();
         }
       } else {
         userId = randomUUID();
       }
 
       const token = signToken({
-        sub: userId,
+        sub: userId!,
         email: searchEmail,
         displayName: userName,
         role: userRole,
