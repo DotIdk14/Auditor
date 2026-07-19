@@ -12,9 +12,11 @@ import { motion } from 'motion/react';
 import { 
   Plus, MoreVertical, CheckCircle2, ArrowUpRight, Search,
   ChevronLeft, ChevronRight, Star, BarChart, Headphones,
-  PhoneForwarded, UserPlus, FolderHeart
+  PhoneForwarded, UserPlus, FolderHeart, Mail, MessageSquare, ThumbsUp
 } from 'lucide-react';
 import type { CallItem, CallStatus } from '@auditor/shared-types';
+import { usePositiveTipificaciones } from '../../hooks/usePositiveTipificaciones';
+import type { PositiveTipificacion } from '../../hooks/usePositiveTipificaciones';
 
 export default function DashboardPage() {
   const { searchQuery, darkMode } = useOutletContext<{ searchQuery: string; darkMode: boolean }>();
@@ -46,6 +48,7 @@ export default function DashboardPage() {
   }, [activeCardMenuId]);
 
   const { data: calls = [], isLoading, error } = useCalls({ search: searchQuery || undefined });
+  const { data: positiveTipificaciones = [] } = usePositiveTipificaciones();
   const moveCall = useMoveCall();
 
   const filteredCalls = calls.filter((call: CallItem) => {
@@ -94,20 +97,28 @@ export default function DashboardPage() {
             agentTab={agentTab}
             setAgentTab={setAgentTab}
             onAuditSelect={handleAuditSelect}
+            positiveTipificaciones={positiveTipificaciones}
           />
         ) : (
-          <KanbanBoard
-            calls={filteredCalls}
-            darkMode={darkMode}
-            getCallsByStatus={getCallsByStatus}
-            activeCardMenuId={activeCardMenuId}
-            setActiveCardMenuId={setActiveCardMenuId}
-            onAuditSelect={handleAuditSelect}
-            onMoveCall={(id: string, status: CallStatus) => moveCall.mutate({ id, status })}
-            onAdd={() => setIsAddOpen(true)}
-            buttonRefs={buttonRefs}
-            menuRefs={menuRefs}
-          />
+          <>
+            <KanbanBoard
+              calls={filteredCalls}
+              darkMode={darkMode}
+              getCallsByStatus={getCallsByStatus}
+              activeCardMenuId={activeCardMenuId}
+              setActiveCardMenuId={setActiveCardMenuId}
+              onAuditSelect={handleAuditSelect}
+              onMoveCall={(id: string, status: CallStatus) => moveCall.mutate({ id, status })}
+              onAdd={() => setIsAddOpen(true)}
+              buttonRefs={buttonRefs}
+              menuRefs={menuRefs}
+            />
+            <PositiveTipificacionesSection
+              items={positiveTipificaciones}
+              darkMode={darkMode}
+              onContactClick={(contactId) => navigate(`/contacts/${contactId}`)}
+            />
+          </>
         )}
 
         {/* Completed Audits Section */}
@@ -166,11 +177,11 @@ export default function DashboardPage() {
   );
 }
 
-function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect }: any) {
+function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect, positiveTipificaciones }: any) {
   return (
     <div className="space-y-6">
       <div className={`inline-flex p-1.5 rounded-2xl ${darkMode ? 'bg-[#1c1a18] border border-[#3e382f]' : 'bg-stone-50 border border-stone-200 shadow-sm'}`}>
-        {['seguimientos', 'llamadas', 'completadas'].map((tab) => (
+        {['seguimientos', 'llamadas', 'completadas', 'positivas'].map((tab) => (
           <button key={tab}
             onClick={() => setAgentTab(tab)}
             className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -178,7 +189,7 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect }: an
                 ? darkMode ? 'bg-amber-900/40 text-amber-500 shadow-inner' : 'bg-white text-[#b57b54] shadow-md border border-[#dfd9cc]'
                 : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-500 hover:text-stone-800'
             }`}>
-            {tab === 'seguimientos' ? 'Mis Seguimientos' : tab === 'llamadas' ? 'En Proceso' : 'Completadas'}
+            {tab === 'seguimientos' ? 'Mis Seguimientos' : tab === 'llamadas' ? 'En Proceso' : tab === 'completadas' ? 'Completadas' : 'Positivas'}
           </button>
         ))}
       </div>
@@ -214,6 +225,9 @@ function AgentView({ calls, darkMode, agentTab, setAgentTab, onAuditSelect }: an
             <CallCard key={call.id} call={call} darkMode={darkMode} onClick={() => onAuditSelect(call.id)} />
           ))}
         </div>
+      )}
+      {agentTab === 'positivas' && (
+        <PositiveTipificacionesGrid items={positiveTipificaciones} darkMode={darkMode} />
       )}
     </div>
   );
@@ -343,6 +357,100 @@ function KanbanBoard({ calls, darkMode, getCallsByStatus, activeCardMenuId, setA
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function PositiveTipificacionesGrid({ items, darkMode }: { items: PositiveTipificacion[]; darkMode: boolean }) {
+  if (items.length === 0) {
+    return (
+      <div className="col-span-full py-16 text-center text-xs font-black uppercase tracking-widest opacity-40">
+        Sin tipificaciones positivas
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {items.map((item) => (
+        <PositiveTipificacionCard key={item.id} item={item} darkMode={darkMode} />
+      ))}
+    </div>
+  );
+}
+
+function PositiveTipificacionesSection({ items, darkMode, onContactClick }: { items: PositiveTipificacion[]; darkMode: boolean; onContactClick: (id: string) => void }) {
+  if (items.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className={`text-sm md:text-base font-bold font-display ${darkMode ? 'text-[#f4f1eb]' : 'text-stone-850'}`}>
+            Tipificaciones Positivas
+          </h2>
+          <span className="text-[9px] font-bold tracking-wider uppercase border px-2.5 py-0.5 rounded-full text-emerald-600 bg-emerald-50 border-emerald-200/50 dark:text-emerald-300 dark:bg-emerald-900/30 dark:border-emerald-800/30">
+            Recientes
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {items.slice(0, 6).map((item) => (
+          <div key={item.id}
+            onClick={() => onContactClick(item.contactId)}
+            className={`p-4 rounded-[5px] border-[3px] cursor-pointer hover:border-emerald-500 transition-all ${
+              darkMode ? 'bg-[#1c1a18] border-[#3e382f] shadow-[4px_4px_0px_#151311]' : 'bg-white border-[#dfd9cc] shadow-[4px_4px_0px_#dfd9cc]'
+            }`}>
+            <div className="flex justify-between items-start mb-3">
+              <span className="text-[9px] font-black px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-600 border-emerald-500/20 flex items-center gap-1">
+                <ThumbsUp className="w-2.5 h-2.5" />
+                {item.interactionType === 'llamada' ? 'Llamada' : item.interactionType === 'correo' ? 'Correo' : 'WhatsApp'}
+              </span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            </div>
+            <h3 className={`font-bold text-xs leading-snug ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>{item.contactName}</h3>
+            {item.notes && (
+              <p className={`text-[10px] mt-1.5 line-clamp-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>{item.notes}</p>
+            )}
+            <div className="mt-3 flex justify-between items-center">
+              <span className="text-[9px] text-stone-500">{item.created_by_name}</span>
+              <span className="text-[9px] text-stone-400">{new Date(item.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PositiveTipificacionCard({ item, darkMode }: { item: PositiveTipificacion; darkMode: boolean }) {
+  const Icon = item.interactionType === 'llamada' ? PhoneForwarded : item.interactionType === 'correo' ? Mail : MessageSquare;
+
+  return (
+    <div className={`p-6 rounded-[5px] border-[3px] ${darkMode ? 'bg-[#24211e] border-emerald-800/40 shadow-[4px_4px_0px_#151311]' : 'bg-white border-emerald-200 shadow-[4px_4px_0px_#d1fae5]'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-full ${darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+            <Icon className="w-3.5 h-3.5" />
+          </div>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+            darkMode ? 'bg-emerald-900/20 text-emerald-300 border-emerald-700/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }`}>
+            {item.interactionType === 'llamada' ? 'Llamada' : item.interactionType === 'correo' ? 'Correo' : 'WhatsApp'}
+          </span>
+        </div>
+        <ThumbsUp className="w-4 h-4 text-emerald-500" />
+      </div>
+
+      <h3 className="font-black font-display text-sm">{item.contactName}</h3>
+      {item.notes && (
+        <p className={`text-[11px] mt-2 line-clamp-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>{item.notes}</p>
+      )}
+      <div className="mt-4 flex justify-between items-center">
+        <span className={`text-[10px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>{item.created_by_name}</span>
+        <span className="text-[10px] text-stone-500">{new Date(item.created_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}</span>
       </div>
     </div>
   );

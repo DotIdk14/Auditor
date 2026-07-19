@@ -23,6 +23,7 @@ import mountVisorAuditsRoutes from "./src/routes/visor-audits.js";
 import mountVisorResourcesRoutes from "./src/routes/visor-resources.js";
 import mountRecoveryRoutes from "./src/routes/recovery.js";
 import mountInteractionsRoutes from "./src/routes/interactions.js";
+import mountPositiveTipificacionesRoutes from "./src/routes/positive-tipificaciones.js";
 
 const app = express();
 
@@ -102,6 +103,7 @@ mountVisorAuditsRoutes(app);
 mountVisorResourcesRoutes(app);
 mountRecoveryRoutes(app);
 mountInteractionsRoutes(app);
+mountPositiveTipificacionesRoutes(app);
 
 // ── 404 handler (after all routes, before error handler) ─────────
 app.use((req, res, _next) => {
