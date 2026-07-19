@@ -1,4 +1,4 @@
-import { GraduationCap, FileText } from 'lucide-react';
+import { GraduationCap, FileText, Download } from 'lucide-react';
 import type { DegreeProgram } from '../../types';
 
 interface Props {
@@ -34,7 +34,7 @@ export default function ProgramCard({ program, darkMode, onClick }: Props) {
       }`}
     >
       {/* Preview */}
-      <div className={`aspect-[16/9] flex items-center justify-center overflow-hidden ${
+      <div className={`relative aspect-[16/9] flex items-center justify-center overflow-hidden ${
         darkMode ? 'bg-[#24211e]' : 'bg-stone-100'
       }`}>
         {hasImage ? (
@@ -61,6 +61,23 @@ export default function ProgramCard({ program, darkMode, onClick }: Props) {
             <FileText className="w-8 h-8" />
             <span className="text-[8px] font-bold">Sin contenido</span>
           </div>
+        )}
+
+        {hasPdf && (
+          <a
+            href={program.studyPlan}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={`absolute bottom-2 right-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all opacity-0 group-hover:opacity-100 ${
+              darkMode
+                ? 'bg-black/70 text-white hover:bg-black/90'
+                : 'bg-white/90 text-stone-800 hover:bg-white shadow-sm'
+            }`}
+          >
+            <Download className="w-3 h-3" />
+            PDF
+          </a>
         )}
       </div>
 
