@@ -298,6 +298,25 @@ export async function listContacts(
   if (filters.status) items = items.filter((c: any) => c.status === filters.status);
   if (filters.source) items = items.filter((c: any) => c.source === filters.source);
   if (filters.disposition) items = items.filter((c: any) => (c.disposition || "no_contactado") === filters.disposition);
+  if (filters.tipo) {
+    const { localInteractionsMemory: localIx } = await import("../config.js");
+    const tipoContactIds = new Set<string>();
+    for (const ix of (localIx || [])) {
+      if (ix.tipo === filters.tipo) tipoContactIds.add(ix.contact_id);
+    }
+    if (process.env.INSFORGE_BASE_URL) {
+      try {
+        const { data } = await insforge.database
+          .from("interactions")
+          .select("contact_id")
+          .eq("tipo", filters.tipo);
+        if (data) {
+          for (const row of data) tipoContactIds.add(row.contact_id);
+        }
+      } catch { /* ignore */ }
+    }
+    items = items.filter((c: any) => tipoContactIds.has(c.id));
+  }
   if (filters.assignedTo) items = items.filter((c: any) => c.assigned_to === filters.assignedTo);
   if (filters.stageId) items = items.filter((c: any) => c.stage_id === filters.stageId);
   if (filters.areaId) items = items.filter((c: any) => c.area_id === filters.areaId);

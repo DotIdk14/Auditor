@@ -38,6 +38,7 @@ const contactFiltersSchema = z.object({
   status: z.enum(["lead", "prospect", "customer", "churned"]).optional(),
   source: z.enum(["inbound", "outbound", "referral", "web", "event", "other", "manual"]).optional(),
   disposition: z.enum(["no_contactado", "cuelgue", "evaluando"]).optional(),
+  tipo: z.string().optional(),
   assignedTo: z.string().optional(),
   stageId: z.string().uuid().optional(),
   areaId: z.string().uuid().optional(),

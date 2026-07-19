@@ -5,8 +5,10 @@ import { useAuthStore } from '../../auth/authStore';
 import {
   Search, Plus, User, ChevronRight, AlertCircle,
   X, Check, CalendarClock, UserPlus, PhoneOff, PhoneCall, FlaskConical, Lock,
+  ThumbsUp, ThumbsDown, Filter,
 } from 'lucide-react';
-import type { Contact, ContactDisposition } from '@auditor/shared-types';
+import type { Contact, ContactDisposition, InteractionTipo } from '@auditor/shared-types';
+import { POSITIVE_TIPOS, NEGATIVE_TIPOS, ALL_TIPOS } from '@auditor/shared-types';
 import ContactDetailPanel from './ContactDetailPanel';
 
 const DISPOSITION_TABS: { key: ContactDisposition | 'all'; label: string; icon: typeof User }[] = [
@@ -37,11 +39,14 @@ export default function ContactsPage() {
   const [activeTab, setActiveTab] = useState<ContactDisposition | 'all'>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [tipoFilter, setTipoFilter] = useState<InteractionTipo | undefined>(undefined);
+  const [showTipoFilter, setShowTipoFilter] = useState(false);
 
   const dispositionFilter = activeTab === 'all' ? undefined : activeTab;
   const { data: contactsData, isLoading } = useContacts({
     search: searchTerm || undefined,
     disposition: dispositionFilter as any,
+    tipo: tipoFilter,
   });
   const contacts = contactsData?.data || [];
 
@@ -108,6 +113,66 @@ export default function ContactsPage() {
                 </button>
               );
             })}
+          </div>
+
+          {/* Tipificacion Filter */}
+          <div>
+            <button
+              onClick={() => setShowTipoFilter(!showTipoFilter)}
+              className={`flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider transition-all ${
+                tipoFilter ? 'text-[#b57b54]' : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-700'
+              }`}
+            >
+              <Filter className="w-3 h-3" />
+              {tipoFilter ? `Filtrado: ${tipoFilter}` : 'Filtrar por tipificación'}
+              {tipoFilter && (
+                <button onClick={(e) => { e.stopPropagation(); setTipoFilter(undefined); }}
+                  className={`ml-1 p-0.5 rounded-full ${darkMode ? 'hover:bg-[#24211e]' : 'hover:bg-stone-100'}`}>
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </button>
+
+            {showTipoFilter && (
+              <div className={`mt-2 p-2 rounded-xl border space-y-2 ${darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-[#dfd9cc]'}`}>
+                <div>
+                  <p className={`text-[8px] font-bold flex items-center gap-1 mb-1 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    <ThumbsUp className="w-2.5 h-2.5" />
+                    Positivas
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {POSITIVE_TIPOS.map((opt) => (
+                      <button key={opt} onClick={() => { setTipoFilter(tipoFilter === opt ? undefined : opt); setShowTipoFilter(false); }}
+                        className={`text-[8px] font-bold px-2 py-1 rounded-lg border transition-all ${
+                          tipoFilter === opt
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                            : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100'
+                        }`}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className={`text-[8px] font-bold flex items-center gap-1 mb-1 ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>
+                    <ThumbsDown className="w-2.5 h-2.5" />
+                    Negativas
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {NEGATIVE_TIPOS.map((opt) => (
+                      <button key={opt} onClick={() => { setTipoFilter(tipoFilter === opt ? undefined : opt); setShowTipoFilter(false); }}
+                        className={`text-[8px] font-bold px-2 py-1 rounded-lg border transition-all ${
+                          tipoFilter === opt
+                            ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                            : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100'
+                        }`}>
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="relative">

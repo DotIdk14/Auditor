@@ -9,6 +9,7 @@ export interface PositiveTipificacion {
   contactPhone: string | null;
   contactEmail: string | null;
   interactionType: 'llamada' | 'correo' | 'whatsapp';
+  tipo: string;
   notes: string | null;
   created_by_name: string;
   created_at: string;

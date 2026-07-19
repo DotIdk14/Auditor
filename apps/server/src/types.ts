@@ -234,6 +234,7 @@ export interface ContactFilters {
   status?: ContactStatus;
   source?: ContactSource;
   disposition?: ContactDisposition;
+  tipo?: string;
   assignedTo?: string;
   stageId?: string;
   areaId?: string;

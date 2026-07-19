@@ -3,7 +3,8 @@ import { isAxiosError } from 'axios';
 import { apiClient } from '../lib/api';
 import { useAuthStore } from '../auth/authStore';
 import { useContactsStore } from '../stores/contactsStore';
-import type { Contact, ContactFilters, ContactDisposition, PaginatedResponse, Interaction } from '@auditor/shared-types';
+import type { Contact, ContactFilters, ContactDisposition, InteractionTipo, PaginatedResponse, Interaction } from '@auditor/shared-types';
+import { getTipificacionFromTipo } from '@auditor/shared-types';
 
 export function useContacts(filters: ContactFilters = {}) {
   const accessToken = useAuthStore(s => s.accessToken);
@@ -298,17 +299,18 @@ export function useCreateInteraction() {
   const store = useContactsStore();
 
   return useMutation({
-    mutationFn: async ({ contactId, type, tipificacion, notes, files }: {
+    mutationFn: async ({ contactId, type, tipo, notes, files }: {
       contactId: string;
       type: 'llamada' | 'correo' | 'whatsapp';
-      tipificacion: 'positiva' | 'negativa';
+      tipo: InteractionTipo;
       notes?: string;
       files?: File[];
     }) => {
+      const tipificacion = getTipificacionFromTipo(tipo);
       const formData = new FormData();
       formData.append('contactId', contactId);
       formData.append('type', type);
-      formData.append('tipificacion', tipificacion);
+      formData.append('tipo', tipo);
       if (notes) formData.append('notes', notes);
       if (files) {
         files.forEach(f => formData.append('files', f));
@@ -324,6 +326,7 @@ export function useCreateInteraction() {
           contact_id: contactId,
           type,
           tipificacion,
+          tipo,
           notes: notes || null,
           files: files ? await Promise.all(files.map(async (f) => ({
             name: f.name,
@@ -350,6 +353,7 @@ export function useCreateInteraction() {
       }
     },
     onSuccess: (_result, variables) => {
+      const tipificacion = getTipificacionFromTipo(variables.tipo);
       qc.invalidateQueries({ queryKey: ['interactions', variables.contactId] });
       qc.invalidateQueries({ queryKey: ['contact', variables.contactId] });
       qc.invalidateQueries({ queryKey: ['contacts'] });
@@ -357,7 +361,7 @@ export function useCreateInteraction() {
 
       // Sync Zustand store on API success
       const store = useContactsStore.getState();
-      if (variables.tipificacion === 'positiva') {
+      if (tipificacion === 'positiva') {
         const current = store.get(variables.contactId);
         if (current && !current.disposition_locked) {
           store.update(variables.contactId, { disposition: 'evaluando', disposition_locked: true });

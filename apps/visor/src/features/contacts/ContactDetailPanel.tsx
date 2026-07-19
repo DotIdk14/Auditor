@@ -5,7 +5,8 @@ import {
   useInteractions, useCreateInteraction,
 } from '../../hooks/useContacts';
 import type { ActivityItem } from '../../hooks/useContacts';
-import type { InteractionType, InteractionTipificacion, Interaction } from '@auditor/shared-types';
+import type { InteractionType, InteractionTipificacion, InteractionTipo, Interaction } from '@auditor/shared-types';
+import { POSITIVE_TIPOS, NEGATIVE_TIPOS, getTipificacionFromTipo } from '@auditor/shared-types';
 import {
   Phone, Mail, Clock, Star, MessageSquare, AlertCircle, Activity, Send, PhoneCall,
   MailPlus, Users, FileCheck, Building, ArrowUpRight, CalendarClock, X, Link,
@@ -412,7 +413,7 @@ function InteractionCard({ interaction, darkMode }: { interaction: Interaction; 
             ? darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'
             : darkMode ? 'bg-rose-900/30 text-rose-400' : 'bg-rose-50 text-rose-600'
         }`}>
-          {interaction.tipificacion === 'positiva' ? '+' : '-'}
+          {interaction.tipo || (interaction.tipificacion === 'positiva' ? '+' : '-')}
         </span>
         <span className={`text-[9px] ml-auto ${darkMode ? 'text-stone-600' : 'text-stone-400'}`}>
           {new Date(interaction.created_at).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -468,11 +469,12 @@ function AddInteractionModal({ contactId, contactName, darkMode, onClose, onTipi
   onTipificacion?: (tipificacion: 'positiva' | 'negativa') => void;
 }) {
   const [type, setType] = useState<InteractionType>('llamada');
-  const [tipificacion, setTipificacion] = useState<InteractionTipificacion>('positiva');
+  const [tipo, setTipo] = useState<InteractionTipo>('Seguimiento');
   const [notes, setNotes] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createInteraction = useCreateInteraction();
+  const tipificacion = getTipificacionFromTipo(tipo);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(e.target.files || []);
@@ -488,7 +490,7 @@ function AddInteractionModal({ contactId, contactName, darkMode, onClose, onTipi
       await createInteraction.mutateAsync({
         contactId,
         type,
-        tipificacion,
+        tipo,
         notes: notes.trim() || undefined,
         files: files.length > 0 ? files : undefined,
       });
@@ -586,30 +588,57 @@ function AddInteractionModal({ contactId, contactName, darkMode, onClose, onTipi
             <label className={`text-[10px] font-bold uppercase tracking-wider block mb-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
               Tipificación
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setTipificacion('positiva')}
-                className={`flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border text-[11px] font-bold transition-all ${
-                  tipificacion === 'positiva'
-                    ? darkMode ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400' : 'bg-emerald-50 border-emerald-500 text-emerald-600'
-                    : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'
-                }`}
-              >
-                <ThumbsUp className="w-3.5 h-3.5" />
-                Positiva
-              </button>
-              <button
-                onClick={() => setTipificacion('negativa')}
-                className={`flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border text-[11px] font-bold transition-all ${
-                  tipificacion === 'negativa'
-                    ? darkMode ? 'bg-rose-900/30 border-rose-500 text-rose-400' : 'bg-rose-50 border-rose-500 text-rose-600'
-                    : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'
-                }`}
-              >
-                <ThumbsDown className="w-3.5 h-3.5" />
-                Negativa
-              </button>
+
+            <div className="space-y-2">
+              <p className={`text-[9px] font-bold flex items-center gap-1 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                <ThumbsUp className="w-3 h-3" />
+                Tipificaciones Positivas
+              </p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {POSITIVE_TIPOS.map((opt) => {
+                  const isActive = tipo === opt;
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => setTipo(opt)}
+                      className={`text-left px-3 py-2 rounded-xl border text-[10px] font-bold transition-all ${
+                        isActive
+                          ? darkMode ? 'bg-emerald-900/30 border-emerald-500 text-emerald-400' : 'bg-emerald-50 border-emerald-500 text-emerald-600'
+                          : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <div className="space-y-2 mt-3">
+              <p className={`text-[9px] font-bold flex items-center gap-1 ${darkMode ? 'text-rose-400' : 'text-rose-600'}`}>
+                <ThumbsDown className="w-3 h-3" />
+                Tipificaciones Negativas
+              </p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {NEGATIVE_TIPOS.map((opt) => {
+                  const isActive = tipo === opt;
+                  return (
+                    <button
+                      key={opt}
+                      onClick={() => setTipo(opt)}
+                      className={`text-left px-3 py-2 rounded-xl border text-[10px] font-bold transition-all ${
+                        isActive
+                          ? darkMode ? 'bg-rose-900/30 border-rose-500 text-rose-400' : 'bg-rose-50 border-rose-500 text-rose-600'
+                          : darkMode ? 'bg-[#24211e] border-[#3e382f] text-stone-400 hover:bg-[#2e2a24]' : 'bg-white border-stone-200 text-stone-500 hover:bg-stone-50'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {tipificacion === 'positiva' && (
               <p className={`text-[9px] mt-1.5 ${darkMode ? 'text-emerald-500' : 'text-emerald-600'}`}>
                 El contacto pasará a "Evaluando" y no podrá cambiarse sin administrador.

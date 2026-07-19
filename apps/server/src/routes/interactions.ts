@@ -9,10 +9,12 @@ import {
   localInteractionsMemory, prependInteraction, getInteractionsByContact,
 } from "../config.js";
 
+const POSITIVE_TIPOS = ['Revisando Informacion', 'Seguimiento', 'Volver a llamar'];
+
 const createInteractionSchema = z.object({
   contactId: z.string().min(1, "ID de contacto requerido"),
   type: z.enum(["llamada", "correo", "whatsapp"], "Tipo de interacción requerido"),
-  tipificacion: z.enum(["positiva", "negativa"], "Tipificación requerida"),
+  tipo: z.string().min(1, "Tipo de tipificación requerido"),
   notes: z.string().max(2000).optional().nullable(),
 });
 
@@ -22,6 +24,7 @@ function mapInteractionRow(row: any) {
     contact_id: row.contact_id,
     type: row.type,
     tipificacion: row.tipificacion,
+    tipo: row.tipo || null,
     notes: row.notes || null,
     files: row.files || [],
     created_by: row.created_by || null,
@@ -51,12 +54,15 @@ export default function (app: Express): void {
           url: `data:${f.mimetype};base64,${f.buffer.toString("base64")}`,
         }));
 
+        const tipificacion = POSITIVE_TIPOS.includes(input.tipo) ? "positiva" : "negativa";
+
         const ts = new Date().toISOString();
         const interaction: any = {
           id: randomUUID(),
           contact_id: input.contactId,
           type: input.type,
-          tipificacion: input.tipificacion,
+          tipificacion,
+          tipo: input.tipo,
           notes: input.notes || null,
           files: processedFiles,
           created_by: req.scope?.userId || "unknown",
@@ -70,6 +76,7 @@ export default function (app: Express): void {
           contact_id: interaction.contact_id,
           type: interaction.type,
           tipificacion: interaction.tipificacion,
+          tipo: interaction.tipo,
           notes: interaction.notes,
           files: interaction.files,
           created_by: interaction.created_by,
@@ -81,7 +88,7 @@ export default function (app: Express): void {
         prependInteraction(interaction);
 
         // Auto-update contact disposition based on tipificacion
-        if (input.tipificacion === "positiva") {
+        if (tipificacion === "positiva") {
           const { updateContact } = await import("../services/contactService.js");
           await updateContact(
             input.contactId,

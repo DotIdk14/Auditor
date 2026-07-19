@@ -188,6 +188,32 @@ export type ContactDisposition = 'no_contactado' | 'cuelgue' | 'evaluando';
 export type InteractionType = 'llamada' | 'correo' | 'whatsapp';
 export type InteractionTipificacion = 'positiva' | 'negativa';
 
+export type InteractionTipo =
+  | 'Revisando Informacion'
+  | 'Seguimiento'
+  | 'Volver a llamar'
+  | 'Cuelga'
+  | 'No le interesa'
+  | 'Muy caro'
+  | 'Broma'
+  | 'Mudo'
+  | 'Grosero'
+  | 'No quiere brindar informacion';
+
+export const POSITIVE_TIPOS: InteractionTipo[] = [
+  'Revisando Informacion', 'Seguimiento', 'Volver a llamar',
+];
+
+export const NEGATIVE_TIPOS: InteractionTipo[] = [
+  'Cuelga', 'No le interesa', 'Muy caro', 'Broma', 'Mudo', 'Grosero', 'No quiere brindar informacion',
+];
+
+export const ALL_TIPOS: InteractionTipo[] = [...POSITIVE_TIPOS, ...NEGATIVE_TIPOS];
+
+export function getTipificacionFromTipo(tipo: InteractionTipo): InteractionTipificacion {
+  return POSITIVE_TIPOS.includes(tipo) ? 'positiva' : 'negativa';
+}
+
 export interface InteractionFile {
   name: string;
   type: string;
@@ -200,6 +226,7 @@ export interface Interaction {
   contact_id: string;
   type: InteractionType;
   tipificacion: InteractionTipificacion;
+  tipo: InteractionTipo;
   notes: string | null;
   files: InteractionFile[];
   created_by: string;
@@ -239,6 +266,7 @@ export interface ContactFilters {
   status?: ContactStatus;
   source?: ContactSource;
   disposition?: ContactDisposition;
+  tipo?: InteractionTipo;
   assignedTo?: string;
   stageId?: string;
   areaId?: string;
