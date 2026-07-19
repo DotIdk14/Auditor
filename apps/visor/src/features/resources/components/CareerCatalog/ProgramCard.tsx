@@ -1,4 +1,4 @@
-import { GraduationCap, ImageOff } from 'lucide-react';
+import { GraduationCap, FileText } from 'lucide-react';
 import type { DegreeProgram } from '../../types';
 
 interface Props {
@@ -22,6 +22,7 @@ const LEVEL_LABELS: Record<string, string> = {
 export default function ProgramCard({ program, darkMode, onClick }: Props) {
   const style = LEVEL_STYLES[program.level] || LEVEL_STYLES.licenciatura;
   const hasImage = !!program.imageUrl;
+  const hasPdf = !!program.studyPlan;
 
   return (
     <button
@@ -32,7 +33,7 @@ export default function ProgramCard({ program, darkMode, onClick }: Props) {
           : 'bg-white border-stone-200 hover:border-stone-300 shadow-sm hover:shadow-md'
       }`}
     >
-      {/* Image */}
+      {/* Preview */}
       <div className={`aspect-[16/9] flex items-center justify-center overflow-hidden ${
         darkMode ? 'bg-[#24211e]' : 'bg-stone-100'
       }`}>
@@ -43,10 +44,22 @@ export default function ProgramCard({ program, darkMode, onClick }: Props) {
             className="w-full h-full object-cover"
             loading="lazy"
           />
+        ) : hasPdf ? (
+          <object
+            data={program.studyPlan}
+            type="application/pdf"
+            className="w-full h-full pointer-events-none"
+            aria-label={`Plan de estudios de ${program.name}`}
+          >
+            <div className="flex flex-col items-center justify-center w-full h-full gap-1 opacity-40">
+              <FileText className="w-8 h-8 text-red-400" />
+              <span className="text-[8px] font-bold">Ver plan de estudios</span>
+            </div>
+          </object>
         ) : (
           <div className="flex flex-col items-center gap-1 opacity-40">
-            <ImageOff className="w-8 h-8" />
-            <span className="text-[8px] font-bold">Sin imagen</span>
+            <FileText className="w-8 h-8" />
+            <span className="text-[8px] font-bold">Sin contenido</span>
           </div>
         )}
       </div>

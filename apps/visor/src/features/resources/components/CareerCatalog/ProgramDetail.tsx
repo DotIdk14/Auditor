@@ -93,19 +93,32 @@ export default function ProgramDetail({ program, darkMode, isAdmin, onClose, onE
           </div>
 
           <div className="p-5 space-y-5">
-            {/* Image */}
-            {program.imageUrl && (
+            {/* Preview (image or PDF embed) */}
+            {program.imageUrl ? (
               <div className={`rounded-xl overflow-hidden border ${border}`}>
                 <img src={program.imageUrl} alt={program.name} className="w-full object-cover max-h-64" />
               </div>
-            )}
+            ) : program.studyPlan ? (
+              <div className={`rounded-xl overflow-hidden border ${border}`}>
+                <object
+                  data={program.studyPlan}
+                  type="application/pdf"
+                  className="w-full h-64 pointer-events-none"
+                  aria-label={`Plan de estudios de ${program.name}`}
+                >
+                  <div className={`flex items-center justify-center h-64 ${darkMode ? 'bg-[#24211e]' : 'bg-stone-100'}`}>
+                    <FileText className="w-12 h-12 text-red-400/50" />
+                  </div>
+                </object>
+              </div>
+            ) : null}
 
             {/* Description */}
             {program.description && (
               <p className={`text-[11px] leading-relaxed ${textMain}`}>{program.description}</p>
             )}
 
-            {/* Study Plan (PDF) */}
+            {/* Study Plan (PDF download) */}
             {program.studyPlan && (
               <div className={`p-4 ${sectionBox}`}>
                 <div className="flex items-center gap-2 mb-2">
