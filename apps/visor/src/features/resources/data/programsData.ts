@@ -1,6 +1,36 @@
-import type { DegreeProgram, DegreeLevel } from '../types';
+import type { DegreeProgram, DegreeLevel, AreaId } from '../types';
 
 type ProgLevel = DegreeProgram['level'];
+
+const AREA_RULES: [RegExp, AreaId][] = [
+  // Ambiente — check before ingenieria (e.g. "Ingeniería Ambiental")
+  [/Desarrollo Sustentable|Sustentabilidad|Ambiental|Ecoturismo|Energías Renovables|Responsabilidad Social|Ambientales|Sostenible/i, 'ambiente'],
+  // Turismo
+  [/Turismo|Gastronom|Hotelera|Alimentos|Bebidas|Eventos Corp|Hospitalidad/i, 'turismo'],
+  // Salud
+  [/Psicología/i, 'salud'],
+  // Ingeniería y Tecnología
+  [/Ingeniería|Software|Sistemas Computacionales|Ciberseguridad|Inteligencia Artificial|Ciencia de Datos|Robótica|Automatización|Telecomunicaciones|Infraestructura|Cómputo|Nube|Programación|Logística|Transporte|Calidad y Procesos|Riesgos Tecnol|Digital Organizacional|Digital \- Utel|Transformación Digital/i, 'ingenieria'],
+  // Finanzas
+  [/Finanzas|Contaduría|Impuestos|Auditoría|Economía|Riesgos Financieros|Inversión|Fiscal/i, 'finanzas'],
+  // Educación y Humanidades
+  [/Educación|Pedagogía|Docencia|Educativa|Lenguas|Literatura|Historia Pública|Antropología|Estudios Socioculturales|Estudios Interculturales|Diversidad Humana|Estudios Interdisciplinarios|Lengua y Literatura/i, 'educacion'],
+  // Ciencias Sociales y Derecho
+  [/Derecho|Criminología|Criminalística|Ciencias Políticas|Administración Pública|Políticas Públicas|Gobierno|Seguridad Pública|Justicia|Gobernanza|Análisis Político|Participación Ciudadana|Políticas Sociales|Políticas y Gobierno/i, 'sociales'],
+  // Marketing y Comunicación
+  [/Mercadotecnia|Marketing|Publicidad|Comunicación|Redes Sociales|Periodismo|Medios Digitales(?![^,]*Lic)|Cultura Digital/i, 'marketing'],
+  // Arte y Diseño
+  [/Arte|Diseño|Multimedia|Videojuegos|Animación|Arquitectura|Entretenimiento Digital|Tecnologías Interactivas|UX|UI/i, 'arte'],
+  // Negocios (catch-all for business-related)
+  [/Administración|Negocios|Empresarial|Recursos Humanos|Capital Humano|Coaching|Ventas|MBA|Dirección|Consultoría|Emprendimiento|Comercialización|Mercadotecnia Digital|Gestión Estratégica|Gestión Organizacional|Gestión del Cambio|Gestión del Talento|Alta Dirección|Proyectos de Innovación|Asesoría|Modelos de Negocio|Comercio Internacional|Cultura y Transformación|Gestión Directiva|Instituciones en Salud/i, 'negocios'],
+];
+
+function categorize(name: string): AreaId {
+  for (const [regex, area] of AREA_RULES) {
+    if (regex.test(name)) return area;
+  }
+  return 'negocios';
+}
 
 const MODALITIES = {
   completa: '3 años 8 meses',
@@ -29,6 +59,7 @@ function prog(name: string, level: ProgLevel, studyPlan: string, duration?: stri
     id: genId(name, level),
     name,
     level,
+    area: categorize(name),
     description: '',
     duration: duration || MODALITIES[defaultModality],
     modalities,

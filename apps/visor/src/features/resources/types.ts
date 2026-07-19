@@ -402,10 +402,31 @@ export interface DegreeProgramModality {
   duration: string;
 }
 
+export const AREA_IDS = [
+  'ingenieria', 'negocios', 'finanzas', 'marketing', 'arte',
+  'educacion', 'sociales', 'turismo', 'salud', 'ambiente',
+] as const;
+
+export type AreaId = (typeof AREA_IDS)[number];
+
+export const AREAS = {
+  ingenieria: { label: 'Ingeniería y Tecnología', icon: '⚙️' },
+  negocios: { label: 'Negocios y Administración', icon: '💼' },
+  finanzas: { label: 'Finanzas y Contaduría', icon: '📊' },
+  marketing: { label: 'Marketing y Comunicación', icon: '📢' },
+  arte: { label: 'Arte y Diseño', icon: '🎨' },
+  educacion: { label: 'Educación y Humanidades', icon: '📚' },
+  sociales: { label: 'Ciencias Sociales y Derecho', icon: '⚖️' },
+  turismo: { label: 'Turismo y Gastronomía', icon: '🌴' },
+  salud: { label: 'Salud y Psicología', icon: '🧠' },
+  ambiente: { label: 'Ambiente y Sustentabilidad', icon: '🌿' },
+} as const satisfies Record<string, { label: string; icon: string }>;
+
 export interface DegreeProgram {
   id: string;
   name: string;
   level: DegreeLevelType;
+  area: AreaId;
   description: string;
   duration?: string;
   modality?: string;

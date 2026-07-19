@@ -4,6 +4,7 @@ import {
   X, GraduationCap, BookOpen, DollarSign, CheckCircle2, Star,
   FileText, Image as ImageIcon, ExternalLink, Pencil, Trash2,
 } from 'lucide-react';
+import { AREAS } from '../../types';
 import type { DegreeProgram } from '../../types';
 
 interface Props {
@@ -61,6 +62,7 @@ export default function ProgramDetail({ program, darkMode, isAdmin, onClose, onE
                 <h2 className={`text-sm font-bold font-display truncate ${textMain}`}>{program.name}</h2>
                 <p className={`text-[10px] ${textSub}`}>
                   {program.level === 'licenciatura' ? 'Licenciatura' : program.level === 'maestria' ? 'Maestría' : 'Doctorado'}
+                  {program.area && AREAS[program.area] ? ` · ${AREAS[program.area].icon} ${AREAS[program.area].label}` : ''}
                 </p>
               </div>
             </div>

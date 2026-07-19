@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import type { DegreeProgram, DegreeResource, DegreeProgramModality } from '../../types';
+import { AREAS, AREA_IDS } from '../../types';
+import type { DegreeProgram, DegreeResource, DegreeProgramModality, AreaId } from '../../types';
 
 interface Props {
   darkMode: boolean;
@@ -19,6 +20,7 @@ const LEVELS: { value: DegreeProgram['level']; label: string }[] = [
 export default function ProgramForm({ darkMode, program, onSave, onClose }: Props) {
   const [name, setName] = useState('');
   const [level, setLevel] = useState<DegreeProgram['level']>('licenciatura');
+  const [area, setArea] = useState<AreaId>('negocios');
   const [description, setDescription] = useState('');
   const [modalities, setModalities] = useState<DegreeProgramModality[]>([
     { label: 'Completa', duration: '3 años 8 meses' },
@@ -41,6 +43,7 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
     if (program) {
       setName(program.name);
       setLevel(program.level);
+      setArea(program.area || 'negocios');
       setDescription(program.description);
       setModalities(program.modalities && program.modalities.length > 0 ? program.modalities : [
         { label: 'Completa', duration: '3 años 8 meses' },
@@ -69,6 +72,7 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
       id: program?.id || `custom_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name: name.trim(),
       level,
+      area,
       description: description.trim(),
       duration: modalities[0]?.duration || '',
       modalities: modalities.filter(m => m.duration.trim()),
@@ -147,12 +151,22 @@ export default function ProgramForm({ darkMode, program, onSave, onClose }: Prop
               placeholder="Ej. Administración de Empresas" required className={inputClass(darkMode)} />
           </div>
 
-          {/* Level */}
-          <div>
-            <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Nivel</label>
-            <select value={level} onChange={e => setLevel(e.target.value as DegreeProgram['level'])} className={inputClass(darkMode)}>
-              {LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
+          {/* Level + Area */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Nivel</label>
+              <select value={level} onChange={e => setLevel(e.target.value as DegreeProgram['level'])} className={inputClass(darkMode)}>
+                {LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={`text-[10px] font-bold block mb-1 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>Área educativa</label>
+              <select value={area} onChange={e => setArea(e.target.value as AreaId)} className={inputClass(darkMode)}>
+                {AREA_IDS.map(id => (
+                  <option key={id} value={id}>{AREAS[id].icon} {AREAS[id].label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Modalities & Durations */}
