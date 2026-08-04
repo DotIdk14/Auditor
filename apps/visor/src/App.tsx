@@ -5,8 +5,7 @@ import Layout from './shared/components/Layout';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import LoginPage from './features/auth/LoginPage';
 import DashboardPage from './features/calls/DashboardPage';
-import AuditorPage from './features/audits/AuditorPage';
-import AuditorDashboardPage from './features/audits/AuditorDashboardPage';
+import Auditor22Page from './features/audits22/Auditor22Page';
 import ContactsPage from './features/contacts/ContactsPage';
 import ContactDetailPage from './features/contacts/ContactDetailPage';
 import ResourcesPage from './features/resources/ResourcesPage';
@@ -53,8 +52,7 @@ export default function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route path="auditor" element={<AuditorDashboardPage />} />
-        <Route path="auditor/:callId" element={<AuditorPage />} />
+        <Route path="auditor" element={<Auditor22Page />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="resources" element={<ResourcesPage />} />

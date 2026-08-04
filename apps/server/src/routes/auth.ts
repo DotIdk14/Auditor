@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { randomUUID } from "crypto";
 import { loginLimiter } from "../config.js";
-import { authenticateToken, signToken } from "../middleware/auth.js";
+import { authenticateToken, signToken, verifyToken } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import type { UserRole } from "../types.js";
 import { insforge, insforgeAdmin } from "../services/insforge.js";
@@ -136,6 +136,39 @@ export default function (app: Express): void {
         teamId: req.user!.teamId,
       },
     });
+  });
+
+  // POST /api/refresh-token — Emite un nuevo token si el actual es válido
+  app.post("/api/refresh-token", (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token || typeof token !== "string") {
+        return res.status(401).json({ success: false, error: "Token requerido" });
+      }
+      const payload = verifyToken(token);
+      const newToken = signToken({
+        sub: payload.sub,
+        email: payload.email,
+        displayName: payload.displayName,
+        role: payload.role,
+        areaId: payload.areaId || null,
+        teamId: payload.teamId || null,
+      });
+      return res.json({
+        success: true,
+        token: newToken,
+        user: {
+          sub: payload.sub,
+          email: payload.email,
+          displayName: payload.displayName,
+          role: payload.role,
+          areaId: payload.areaId || null,
+          teamId: payload.teamId || null,
+        },
+      });
+    } catch {
+      return res.status(401).json({ success: false, error: "Token inválido o expirado" });
+    }
   });
 
   // GET /api/me

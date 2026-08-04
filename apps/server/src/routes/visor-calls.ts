@@ -203,6 +203,30 @@ export default function (app: Express): void {
     }
   });
 
+  // DELETE /api/visor/calls/:id - Elimina una llamada (memoria + DB)
+  app.delete("/api/visor/calls/:id", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { id } = req.params;
+
+      const memIdx = localCallsMemory.findIndex((c: any) => c.id === id);
+      if (memIdx !== -1) {
+        localCallsMemory.splice(memIdx, 1);
+      }
+
+      if (process.env.INSFORGE_BASE_URL) {
+        const { error } = await insforge.database.from("auditorias").delete().eq("id", id);
+        if (error) {
+          console.warn("[VISOR_CALLS] DB delete error:", error.message);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[VISOR_CALLS] Error deleting call:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/visor/calls/guardar - Save call session state (guide, notes, profile)
   app.post("/api/visor/calls/guardar", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
     try {

@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
-import { localNotasMemory, localQuickNotesMemory, localCallsMemory } from "../config.js";
+import { localNotasMemory, localQuickNotesMemory, localCallsMemory, setLocalQuickNotesMemory } from "../config.js";
 import { insforge, insforgeAdmin } from "../services/insforge.js";
 import {
   saveNotaToSupabase,
@@ -130,6 +130,27 @@ export default function (app: Express): void {
     const merged = [...supabaseNotas, ...localNotas.filter((n: any) => !supabaseIds.has(n.id))];
 
     return res.json(merged);
+  });
+
+  // DELETE /api/notas/:id — Delete a quick note or audit note by id
+  app.delete("/api/notas/:id", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
+    const { id } = req.params;
+
+    setLocalQuickNotesMemory(localQuickNotesMemory.filter((n: any) => n.id !== id));
+
+    for (const [callId, notas] of localNotasMemory) {
+      const filtered = notas.filter((n: any) => n.id !== id);
+      if (filtered.length !== notas.length) {
+        localNotasMemory.set(callId, filtered);
+      }
+    }
+
+    try {
+      const db = insforgeAdmin?.database || insforge.database;
+      await db.from("notas").delete().eq("id", id);
+    } catch {}
+
+    return res.json({ success: true });
   });
 
   // DELETE /api/llamadas/:id/notas/:notaId — Delete a note

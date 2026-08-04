@@ -137,7 +137,7 @@ const DEFAULT_SAFE_CHECKLIST: SafeCheckItem[] = [
 ];
 
 export const useCallStore = create<CallState>((set, get) => ({
-  activeTab: 'speeches',
+  activeTab: 'newcall',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
   callSteps: getCallSteps() || [...DEFAULT_CALL_STEPS],

@@ -82,6 +82,10 @@ export function prependInteraction(interaction: any): void {
   localInteractionsMemory.unshift(interaction);
 }
 
+export function setLocalQuickNotesMemory(notas: any[]): void {
+  localQuickNotesMemory = notas;
+}
+
 export function getInteractionsByContact(contactId: string): any[] {
   return localInteractionsMemory.filter(i => i.contact_id === contactId);
 }

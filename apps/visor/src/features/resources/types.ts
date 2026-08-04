@@ -72,7 +72,7 @@ export interface CallNote {
   timestamp: number;
 }
 
-export type ActiveTab = 'speeches' | 'newcall' | 'objections' | 'notes' | 'carreras';
+export type ActiveTab = 'newcall' | 'notes' | 'carreras';
 
 export type CostDecision = 'yes' | 'no' | null;
 

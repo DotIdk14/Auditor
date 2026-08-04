@@ -1,19 +1,15 @@
 import { useOutletContext } from 'react-router-dom';
 import { useCallStore } from './store/useCallStore';
 import { NewCallView } from './components/NewCallView';
-import { SpeechCatalog } from './components/SpeechCatalog/SpeechCatalog';
-import { ObjectionManager } from './components/ObjectionManager/ObjectionManager';
 import { QuickObjections } from './components/QuickObjections/QuickObjections';
 import { SpeechModal } from './components/modals/SpeechModal';
 import { ObjectionModal } from './components/modals/ObjectionModal';
 import { AddStepModal } from './components/modals/AddStepModal';
-import { BookOpen, Phone, AlertTriangle, StickyNote, GraduationCap } from 'lucide-react';
+import { Phone, StickyNote, GraduationCap } from 'lucide-react';
 import CareerCatalog from './components/CareerCatalog/CareerCatalog';
 
 const tabs = [
-  { id: 'speeches' as const, label: 'Speeches', icon: BookOpen },
   { id: 'newcall' as const, label: 'Nueva Llamada', icon: Phone },
-  { id: 'objections' as const, label: 'Manejo Objeciones', icon: AlertTriangle },
   { id: 'notes' as const, label: 'Mis Notas', icon: StickyNote },
   { id: 'carreras' as const, label: 'Recursos', icon: GraduationCap },
 ];
@@ -45,9 +41,7 @@ export default function ResourcesPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'speeches' && <SpeechCatalog darkMode={darkMode} />}
       {activeTab === 'newcall' && <NewCallView darkMode={darkMode} />}
-      {activeTab === 'objections' && <ObjectionManager darkMode={darkMode} />}
       {activeTab === 'carreras' && <CareerCatalog darkMode={darkMode} />}
 
       {/* Global overlays */}
