@@ -8,6 +8,7 @@ import QuickActionMenu from './QuickActionMenu';
 import AddContactModal from './AddContactModal';
 import AddCallModal from './AddCallModal';
 import AddNoteModal from './AddNoteModal';
+import EquiposHomeSection from '../equipos/EquiposHomeSection';
 import { motion } from 'motion/react';
 import { 
   Plus, MoreVertical, CheckCircle2, ArrowUpRight, Search,
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const user = useAuthStore(s => s.user);
   const visorRole = useAuthStore(s => s.visorRole);
   const isAgent = visorRole() === 'agente';
+  const isManager = user ? ['admin', 'area_manager', 'coordinator'].includes(user.role) : false;
   
   const [agentTab, setAgentTab] = useState<'seguimientos' | 'llamadas' | 'completadas'>('seguimientos');
   const [activeCardMenuId, setActiveCardMenuId] = useState<string | null>(null);
@@ -88,6 +90,9 @@ export default function DashboardPage() {
           onOpenMetrics={() => {}}
           onOpenResources={() => navigate('/resources')}
         />
+
+        {/* Equipos (solo admin / gerente / coordinador) */}
+        {isManager && <EquiposHomeSection darkMode={darkMode} />}
 
         {/* Kanban */}
         {isAgent ? (

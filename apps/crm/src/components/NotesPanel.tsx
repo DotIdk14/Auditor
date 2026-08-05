@@ -4,6 +4,7 @@ import FloatingWindow from './FloatingWindow';
 import api from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 
 interface QuickNote {
   id: string;
@@ -15,7 +16,6 @@ interface QuickNote {
   type: string;
   callName: string | null;
 }
-
 interface NotesPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -134,6 +134,11 @@ export default function NotesPanel({ isOpen, onClose }: NotesPanelProps) {
               >
                 <StickyNote className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="flex-1 min-w-0">
+                  <div className="mb-1">
+                    <Badge variant={note.type === 'quick' ? 'secondary' : 'outline'} className="px-1.5 py-0 text-[9px] font-medium">
+                      {note.type === 'quick' ? 'Rápida' : 'Auditoría'}
+                    </Badge>
+                  </div>
                   <p className="text-sm text-foreground break-words">{note.text}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[10px] text-muted-foreground">{note.supervisorName}</span>

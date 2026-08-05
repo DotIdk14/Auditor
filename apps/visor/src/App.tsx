@@ -9,6 +9,7 @@ import Auditor22Page from './features/audits22/Auditor22Page';
 import ContactsPage from './features/contacts/ContactsPage';
 import ContactDetailPage from './features/contacts/ContactDetailPage';
 import ResourcesPage from './features/resources/ResourcesPage';
+import EquiposPage from './features/equipos/EquiposPage';
 
 export default function App() {
   // Esperar a que Zustand persist termine de hidratar desde sessionStorage
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="contacts/:id" element={<ContactDetailPage />} />
         <Route path="resources" element={<ResourcesPage />} />
+        <Route path="equipos" element={<EquiposPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

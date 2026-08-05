@@ -72,6 +72,11 @@ export default function (app: Express): void {
             areaId = profile.area_id || null;
             teamId = profile.team_id || null;
 
+            // Un coordinador es el responsable de sus equipos: se identifica a sí mismo
+            if (userRole === "coordinator") {
+              coordinatorId = profile.id;
+            }
+
             // Resolve coordinator for this user (via their team's coordinator_id)
             if (teamId) {
               try {

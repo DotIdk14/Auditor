@@ -74,6 +74,7 @@ export async function saveNotaToSupabase(nota: any): Promise<void> {
       segment_start: nota.segmentStart,
       segment_end: nota.segmentEnd,
       text: nota.text,
+      type: nota.type || "audit",
     });
     if (error) console.warn("[DB] Could not save nota:", error.message);
   } catch (err: any) {
@@ -97,6 +98,7 @@ export async function loadNotasFromSupabase(auditoriaId: string): Promise<any[]>
       segmentStart: row.segment_start,
       segmentEnd: row.segment_end,
       text: row.text,
+      type: row.type || (row.auditoria_id ? "audit" : "quick"),
       createdAt: row.created_at,
     }));
   } catch {

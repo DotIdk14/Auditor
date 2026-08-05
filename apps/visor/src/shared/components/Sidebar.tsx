@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
-import { LayoutGrid, Headphones, Users, FolderHeart, Settings, LogOut, StickyNote } from 'lucide-react';
+import { LayoutGrid, Headphones, Users, FolderHeart, Settings, LogOut, StickyNote, Network } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: string;
@@ -87,12 +87,14 @@ export default function Sidebar({ currentTab, onTabChange, userRole, darkMode, o
     { id: 'inicio', label: 'Inicio 🍵', icon: LayoutGrid },
     { id: 'auditor', label: 'Auditor 🎧', icon: Headphones },
     { id: 'auditorias', label: 'Contactos 👤', icon: Users },
+    { id: 'equipos', label: 'Equipos 🏢', icon: Network },
     { id: 'notas', label: 'Notas 📝', icon: StickyNote },
     { id: 'recursos', label: 'Recursos 📚', icon: FolderHeart },
     { id: 'ajustes', label: 'Preferencias ⚙️', icon: Settings },
     { id: 'logout', label: 'Cerrar sesión 👋', icon: LogOut, isLogout: true },
   ].filter(item => {
     if (item.id === 'auditor' && userRole === 'agente') return false;
+    if (item.id === 'equipos' && !['admin', 'gerente', 'coordinador'].includes(userRole)) return false;
     return true;
   });
 
