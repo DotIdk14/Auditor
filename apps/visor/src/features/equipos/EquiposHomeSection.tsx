@@ -41,7 +41,6 @@ export default function EquiposHomeSection({ darkMode }: { darkMode: boolean }) 
 
         {!isLoading && areas.map((area) => {
           const areaTeams = teams.filter((t) => t.areaId === area.id);
-          if (areaTeams.length === 0) return null;
           return (
             <div key={area.id}>
               <div className="flex items-center gap-2 mb-2">
@@ -51,7 +50,11 @@ export default function EquiposHomeSection({ darkMode }: { darkMode: boolean }) 
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {areaTeams.map((team) => {
+                {areaTeams.length === 0 ? (
+                  <span className={`text-[9px] font-bold uppercase tracking-widest ${darkMode ? "text-stone-600" : "text-stone-400"}`}>
+                    Sin equipos todavía
+                  </span>
+                ) : areaTeams.map((team) => {
                   const members = users.filter((u) => u.teamId === team.id);
                   return (
                     <div

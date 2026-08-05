@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api';
 import type { UserRole } from '@auditor/shared-types';
+import { AUDIT_KEY } from '../historial/api';
 
 // ── Types (org management) ──────────────────────────────────────────────────
 
@@ -86,6 +87,11 @@ export interface AreaUpdatePayload {
   description?: string | null;
   managerId?: string | null;
   isActive?: boolean;
+}
+
+export interface DeletedOrgUser extends OrgUser {
+  deletedAt: string | null;
+  deletedBy: string | null;
 }
 
 // ── snake_case → camelCase mappers ──────────────────────────────────────────
@@ -185,10 +191,28 @@ export async function createTeam(data: TeamCreatePayload): Promise<OrgTeam> {
   return mapTeam(res);
 }
 
+export async function listDeletedUsers(): Promise<DeletedOrgUser[]> {
+  const res = await apiClient.get<any[]>("/users/deleted");
+  return (res || []).map((u) => ({
+    ...mapUser(u),
+    deletedAt: u.deleted_at ?? u.deletedAt ?? null,
+    deletedBy: u.deleted_by ?? u.deletedBy ?? null,
+  }));
+}
+
+export async function softDeleteUser(id: string): Promise<void> {
+  await apiClient.delete(`/users/${id}`);
+}
+
+export async function restoreUser(id: string): Promise<void> {
+  await apiClient.post(`/users/${id}/restore`);
+}
+
 // ── React Query hooks (shared keys so home + page stay in sync) ─────────────
 
 export const USERS_KEY = ["users"] as const;
 export const ORG_KEY = ["org-structure"] as const;
+export const DELETED_KEY = ["users-deleted"] as const;
 
 export function useOrgUsers(enabled = true) {
   return useQuery({
@@ -214,6 +238,7 @@ export function useUpdateUser() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: USERS_KEY });
       qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });
 }
@@ -225,6 +250,7 @@ export function useCreateTeam() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: USERS_KEY });
       qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });
 }
@@ -236,6 +262,7 @@ export function useCreateUser() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: USERS_KEY });
       qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });
 }
@@ -246,6 +273,41 @@ export function useCreateArea() {
     mutationFn: (data: AreaCreatePayload) => createArea(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
+    },
+  });
+}
+
+export function useDeletedUsers(enabled = true) {
+  return useQuery({
+    queryKey: DELETED_KEY,
+    queryFn: listDeletedUsers,
+    enabled,
+  });
+}
+
+export function useSoftDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => softDeleteUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: DELETED_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
+    },
+  });
+}
+
+export function useRestoreUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreUser(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ORG_KEY });
+      qc.invalidateQueries({ queryKey: DELETED_KEY });
+      qc.invalidateQueries({ queryKey: AUDIT_KEY });
     },
   });
 }

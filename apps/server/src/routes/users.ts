@@ -12,6 +12,9 @@ import {
   updateArea,
   createUser,
   setUserPassword,
+  softDeleteUser,
+  restoreUser,
+  listDeletedUsers,
   MANAGER_ROLES,
 } from "../services/userService.js";
 
@@ -78,6 +81,23 @@ export default function (app: Express): void {
     }
   });
 
+  // GET /api/users/deleted — Usuarios eliminados (soft-delete), solo admin
+  app.get(
+    "/api/users/deleted",
+    authenticateToken,
+    injectScope,
+    requireRole("admin"),
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        const users = await listDeletedUsers(req.scope!);
+        res.json(users);
+      } catch (err: any) {
+        console.error("[USERS] deleted list error:", err.message);
+        res.status(500).json({ error: err.message });
+      }
+    }
+  );
+
   // GET /api/users/org — Org structure (areas + teams) for managers
   app.get(
     "/api/users/org",
@@ -114,6 +134,40 @@ export default function (app: Express): void {
           return res.status(400).json({ error: "Datos inválidos", details: err.issues });
         }
         console.error("[USERS] patch error:", err.message);
+        res.status(err.message.includes("Permisos") ? 403 : 400).json({ error: err.message });
+      }
+    }
+  );
+
+  // DELETE /api/users/:id — Soft delete (recuperable) de un usuario
+  app.delete(
+    "/api/users/:id",
+    authenticateToken,
+    injectScope,
+    requireRole(...MANAGER_ROLES),
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        await softDeleteUser(req.scope!, req.params.id);
+        res.json({ success: true });
+      } catch (err: any) {
+        console.error("[USERS] delete error:", err.message);
+        res.status(err.message.includes("Permisos") ? 403 : 400).json({ error: err.message });
+      }
+    }
+  );
+
+  // POST /api/users/:id/restore — Restaurar un usuario eliminado (solo admin)
+  app.post(
+    "/api/users/:id/restore",
+    authenticateToken,
+    injectScope,
+    requireRole("admin"),
+    async (req: AuthenticatedRequest, res) => {
+      try {
+        await restoreUser(req.scope!, req.params.id);
+        res.json({ success: true });
+      } catch (err: any) {
+        console.error("[USERS] restore error:", err.message);
         res.status(err.message.includes("Permisos") ? 403 : 400).json({ error: err.message });
       }
     }

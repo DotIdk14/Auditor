@@ -6,6 +6,7 @@ import type { AuthenticatedRequest } from "../middleware/auth.js";
 import type { UserRole } from "../types.js";
 import { insforge, insforgeAdmin } from "../services/insforge.js";
 import { hashPassword, verifyPassword } from "../services/userService.js";
+import { logAudit } from "../services/auditService.js";
 
 function mapRole(role: string | null | undefined): UserRole {
   if (!role) return "agent";
@@ -61,6 +62,16 @@ export default function (app: Express): void {
 
           if (profile && !error) {
             if (!profile.is_active) {
+              await logAudit({
+                actor: { id: profile.id, email: searchEmail, role: userRole },
+                action: "login_failed",
+                entityType: "auth",
+                entityId: profile.id,
+                entityLabel: searchEmail,
+                areaId: profile.area_id || null,
+                teamId: profile.team_id || null,
+                changes: { reason: "Cuenta desactivada" },
+              });
               return res.status(403).json({
                 success: false,
                 error: "Tu cuenta está desactivada. Contacta al administrador.",
@@ -122,6 +133,13 @@ export default function (app: Express): void {
         const storedHash = profileRow?.password_hash || null;
         if (password) {
           if (!storedHash || !verifyPassword(password, storedHash)) {
+            await logAudit({
+              actor: { id: userId || "unknown", email: searchEmail, role: userRole },
+              action: "login_failed",
+              entityType: "auth",
+              entityLabel: searchEmail,
+              changes: { reason: "Credenciales inválidas" },
+            });
             return res.status(401).json({ success: false, error: "Correo o contraseña incorrectos." });
           }
         } else if (storedHash) {
@@ -139,6 +157,15 @@ export default function (app: Express): void {
         coordinatorId,
       });
       console.log(`[AUTH] Login exitoso: ${searchEmail} (${userRole})`);
+      await logAudit({
+        actor: { id: userId!, email: searchEmail, role: userRole },
+        action: "login",
+        entityType: "auth",
+        entityId: userId ?? undefined,
+        entityLabel: searchEmail,
+        areaId,
+        teamId,
+      });
       return res.json({
         success: true,
         token,

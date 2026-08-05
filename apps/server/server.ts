@@ -25,6 +25,7 @@ import mountRecoveryRoutes from "./src/routes/recovery.js";
 import mountInteractionsRoutes from "./src/routes/interactions.js";
 import mountPositiveTipificacionesRoutes from "./src/routes/positive-tipificaciones.js";
 import mountUsersRoutes from "./src/routes/users.js";
+import mountAuditRoutes from "./src/routes/audit.js";
 
 const app = express();
 
@@ -106,6 +107,7 @@ mountRecoveryRoutes(app);
 mountInteractionsRoutes(app);
 mountPositiveTipificacionesRoutes(app);
 mountUsersRoutes(app);
+mountAuditRoutes(app);
 
 // ── 404 handler (after all routes, before error handler) ─────────
 app.use((req, res, _next) => {

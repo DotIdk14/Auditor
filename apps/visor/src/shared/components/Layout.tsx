@@ -50,6 +50,7 @@ export default function Layout() {
     : location.pathname.startsWith('/contacts') ? 'auditorias'
     : location.pathname.startsWith('/resources') ? 'recursos'
     : location.pathname.startsWith('/equipos') ? 'equipos'
+    : location.pathname.startsWith('/historial') ? 'historial'
     : 'ajustes';
 
   return (
@@ -187,6 +188,7 @@ export default function Layout() {
             auditorias: '/contacts',
             recursos: '/resources',
             equipos: '/equipos',
+            historial: '/historial',
           };
           if (tab === 'logout') {
             handleLogout();

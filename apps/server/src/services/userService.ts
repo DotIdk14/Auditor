@@ -1,5 +1,6 @@
 import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { insforge, insforgeAdmin } from "./insforge.js";
+import { logAuditFromScope } from "./auditService.js";
 import type { ServiceScope, UserProfile, UserRole, OrgUser, OrgStructure, OrgArea } from "../types.js";
 
 // Admin client (bypass RLS) when available, else anon client.
@@ -117,7 +118,7 @@ export async function listUsers(scope: ServiceScope): Promise<OrgUser[]> {
   if (!dbAvailable()) return [];
 
   const [profilesRes, teamsRes, areasRes] = await Promise.all([
-    db().from("profiles").select("*").order("full_name"),
+    db().from("profiles").select("*").is("deleted_at", null).order("full_name"),
     db().from("teams").select("*"),
     db().from("areas").select("id, name, code"),
   ]);
@@ -175,7 +176,7 @@ export async function getOrgStructure(scope: ServiceScope): Promise<OrgStructure
   if (!dbAvailable()) return { areas: [], teams: [] };
 
   const [profilesRes, areasRes, teamsRes] = await Promise.all([
-    db().from("profiles").select("id, email, full_name, role, area_id, team_id, is_active"),
+    db().from("profiles").select("id, email, full_name, role, area_id, team_id, is_active").is("deleted_at", null),
     db().from("areas").select("*").order("name"),
     db().from("teams").select("*").order("name"),
   ]);
@@ -295,6 +296,14 @@ export async function updateUser(scope: ServiceScope, userId: string, patch: Use
     }
   }
 
+  const before = {
+    full_name: target.full_name,
+    role: target.role,
+    area_id: target.area_id,
+    team_id: target.team_id,
+    is_active: target.is_active,
+  };
+
   // Consistency: assigning to a team also inherits the team's area
   if (patch.team_id) {
     const team = await findTeam(patch.team_id);
@@ -308,7 +317,28 @@ export async function updateUser(scope: ServiceScope, userId: string, patch: Use
   if (updateErr) throw new Error(`Error al actualizar usuario: ${updateErr.message}`);
 
   const fresh = await listUsers(scope);
-  return fresh.find((u: OrgUser) => u.id === userId) as OrgUser;
+  const result = fresh.find((u: OrgUser) => u.id === userId) as OrgUser;
+
+  await logAuditFromScope(scope, {
+    action: "update",
+    entityType: "user",
+    entityId: userId,
+    entityLabel: target.full_name || target.email,
+    areaId: result.area_id ?? target.area_id ?? null,
+    teamId: result.team_id ?? target.team_id ?? null,
+    changes: {
+      before,
+      after: {
+        full_name: result.full_name,
+        role: result.role,
+        area_id: result.area_id,
+        team_id: result.team_id,
+        is_active: result.is_active,
+      },
+    },
+  });
+
+  return result;
 }
 
 // ─── Teams ────────────────────────────────────────────────────────────────
@@ -354,6 +384,16 @@ export async function createTeam(
       .eq("id", input.supervisorId);
   }
 
+  await logAuditFromScope(scope, {
+    action: "create",
+    entityType: "team",
+    entityId: data.id,
+    entityLabel: input.name,
+    areaId: input.areaId,
+    teamId: data.id,
+    changes: { name: input.name, code, supervisorId: input.supervisorId || null, coordinatorId },
+  });
+
   return data;
 }
 
@@ -388,6 +428,13 @@ export async function updateTeam(
     updates.coordinator_id = patch.coordinatorId || null;
   }
 
+  const before = {
+    name: team.name,
+    supervisor_id: team.supervisor_id,
+    coordinator_id: team.coordinator_id,
+    is_active: team.is_active,
+  };
+
   const { error } = await db().from("teams").update(updates).eq("id", teamId);
   if (error) throw new Error(`Error al actualizar equipo: ${error.message}`);
 
@@ -409,7 +456,26 @@ export async function updateTeam(
     }
   }
 
-  return findTeam(teamId);
+  const after = await findTeam(teamId);
+  await logAuditFromScope(scope, {
+    action: "update",
+    entityType: "team",
+    entityId: teamId,
+    entityLabel: after?.name || team.name,
+    areaId: team.area_id,
+    teamId,
+    changes: {
+      before,
+      after: {
+        name: after?.name,
+        supervisor_id: after?.supervisor_id,
+        coordinator_id: after?.coordinator_id,
+        is_active: after?.is_active,
+      },
+    },
+  });
+
+  return after;
 }
 
 // ─── Areas (coordinaciones) ────────────────────────────────────────────────
@@ -422,6 +488,13 @@ export async function createArea(
   if (scope.role !== "admin") throw new Error("Solo el admin puede crear áreas");
 
   const code = (input.code || slugify(input.name)).toUpperCase().slice(0, 24) || slugify(input.name);
+
+  // Pre-check de duplicados (la tabla InsForge no tiene constraint unique)
+  const { data: dupByName } = await db().from("areas").select("id").eq("name", input.name).maybeSingle();
+  if (dupByName) throw new Error(`Ya existe un área con nombre "${input.name}"`);
+  const { data: dupByCode } = await db().from("areas").select("id").eq("code", code).maybeSingle();
+  if (dupByCode) throw new Error(`Ya existe un área con código "${code}"`);
+
   const area = {
     id: randomUUID(),
     name: input.name,
@@ -441,6 +514,16 @@ export async function createArea(
     }
     throw new Error(`Error al crear área: ${msg}`);
   }
+
+  await logAuditFromScope(scope, {
+    action: "create",
+    entityType: "area",
+    entityId: data.id,
+    entityLabel: input.name,
+    areaId: data.id,
+    changes: { name: input.name, code, managerId: input.managerId || null },
+  });
+
   return mapOrgArea(data);
 }
 
@@ -462,9 +545,36 @@ export async function updateArea(
   if (patch.managerId !== undefined) updates.manager_id = patch.managerId || null;
   if (patch.isActive !== undefined) updates.is_active = patch.isActive;
 
+  const before = {
+    name: area.name,
+    code: area.code,
+    description: area.description,
+    manager_id: area.manager_id,
+    is_active: area.is_active,
+  };
+
   const { error } = await db().from("areas").update(updates).eq("id", areaId);
   if (error) throw new Error(`Error al actualizar área: ${error.message}`);
-  return mapOrgArea(await findArea(areaId));
+
+  const after = await findArea(areaId);
+  await logAuditFromScope(scope, {
+    action: "update",
+    entityType: "area",
+    entityId: areaId,
+    entityLabel: after?.name || area.name,
+    areaId,
+    changes: {
+      before,
+      after: {
+        name: after?.name,
+        code: after?.code,
+        description: after?.description,
+        manager_id: after?.manager_id,
+        is_active: after?.is_active,
+      },
+    },
+  });
+  return mapOrgArea(after);
 }
 
 // ─── Users ─────────────────────────────────────────────────────────────────
@@ -535,6 +645,16 @@ export async function createUser(
   const { data, error } = await db().from("profiles").insert(profile).select().single();
   if (error) throw new Error(`Error al crear usuario: ${error.message}`);
 
+  await logAuditFromScope(scope, {
+    action: "create",
+    entityType: "user",
+    entityId: data.id,
+    entityLabel: input.fullName || email,
+    areaId,
+    teamId,
+    changes: { email, role: input.role },
+  });
+
   const fresh = await listUsers(scope);
   return fresh.find((u: OrgUser) => u.id === data.id) as OrgUser;
 }
@@ -544,7 +664,7 @@ export async function setUserPassword(scope: ServiceScope, userId: string, passw
   if (scope.role !== "admin" && scope.userId !== userId) {
     throw new Error("Solo el admin puede cambiar contraseñas de otros usuarios");
   }
-  const { data: target } = await db().from("profiles").select("id").eq("id", userId).maybeSingle();
+  const { data: target } = await db().from("profiles").select("id, email").eq("id", userId).maybeSingle();
   if (!target) throw new Error("Usuario no encontrado");
 
   const { error } = await db()
@@ -552,6 +672,107 @@ export async function setUserPassword(scope: ServiceScope, userId: string, passw
     .update({ password_hash: hashPassword(password), updated_at: new Date().toISOString() })
     .eq("id", userId);
   if (error) throw new Error(`Error al guardar contraseña: ${error.message}`);
+
+  await logAuditFromScope(scope, {
+    action: "password",
+    entityType: "user",
+    entityId: userId,
+    entityLabel: target.email || userId,
+    changes: { note: "Contraseña restablecida" },
+  });
+}
+
+// ─── Soft delete / restore (usuarios) ─────────────────────────────────────
+
+export async function softDeleteUser(scope: ServiceScope, userId: string): Promise<void> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+  if (userId === scope.userId) throw new Error("No puedes eliminar tu propia cuenta");
+
+  const { data: target, error: fetchErr } = await db()
+    .from("profiles")
+    .select("id, email, full_name, role, area_id, team_id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr || !target) throw new Error("Usuario no encontrado");
+
+  const can = await canManageTarget(scope, {
+    id: target.id,
+    role: target.role,
+    area_id: target.area_id,
+    team_id: target.team_id,
+  });
+  if (!can) throw new Error("Permisos insuficientes para eliminar este usuario");
+
+  const { error } = await db()
+    .from("profiles")
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: scope.userId,
+      is_active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+  if (error) throw new Error(`Error al eliminar usuario: ${error.message}`);
+
+  await logAuditFromScope(scope, {
+    action: "delete",
+    entityType: "user",
+    entityId: userId,
+    entityLabel: target.full_name || target.email,
+    areaId: target.area_id,
+    teamId: target.team_id,
+    changes: { email: target.email, role: target.role },
+  });
+}
+
+export async function restoreUser(scope: ServiceScope, userId: string): Promise<void> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+  if (scope.role !== "admin") throw new Error("Solo el admin puede restaurar usuarios");
+
+  const { data: target, error: fetchErr } = await db()
+    .from("profiles")
+    .select("id, email, full_name, role, area_id, team_id, deleted_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (fetchErr || !target) throw new Error("Usuario no encontrado");
+  if (!target.deleted_at) throw new Error("El usuario no está eliminado");
+
+  const { error } = await db()
+    .from("profiles")
+    .update({ deleted_at: null, is_active: true, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) throw new Error(`Error al restaurar usuario: ${error.message}`);
+
+  await logAuditFromScope(scope, {
+    action: "restore",
+    entityType: "user",
+    entityId: userId,
+    entityLabel: target.full_name || target.email,
+    areaId: target.area_id,
+    teamId: target.team_id,
+    changes: { email: target.email, role: target.role },
+  });
+}
+
+export interface DeletedOrgUser extends OrgUser {
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export async function listDeletedUsers(scope: ServiceScope): Promise<DeletedOrgUser[]> {
+  if (!dbAvailable()) return [];
+  if (scope.role !== "admin") throw new Error("Solo el admin puede ver usuarios eliminados");
+  const { data, error } = await db()
+    .from("profiles")
+    .select("*")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false });
+  if (error) throw new Error(`Error al listar usuarios eliminados: ${error.message}`);
+  return (data || []).map((row: any) => ({
+    ...mapProfile(row),
+    deletedAt: row.deleted_at ?? null,
+    deletedBy: row.deleted_by ?? null,
+  }));
 }
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────

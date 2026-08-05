@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOutletContext } from "react-router-dom";
 import {
-  Plus, Search, Users as UsersIcon, ShieldCheck, Building2, X, UserCog, KeyRound, UserPlus
+  Plus, Search, Users as UsersIcon, ShieldCheck, Building2, X, UserCog, KeyRound, UserPlus,
+  Trash2, RotateCcw, ArchiveRestore
 } from "lucide-react";
 import { useAuthStore } from "../../auth/authStore";
 import {
   useOrgUsers, useOrgStructure, useUpdateUser, useCreateTeam, useCreateUser, useCreateArea,
+  useSoftDeleteUser, useRestoreUser, useDeletedUsers,
   type OrgUser, type OrgTeam, type OrgArea, type UserUpdatePayload, type CreateUserPayload,
 } from "./api";
 import type { UserRole } from "@auditor/shared-types";
@@ -328,11 +330,18 @@ function NewUserDialog({
   const [teamId, setTeamId] = useState("");
   const [password, setPassword] = useState("");
 
+  const isCoordinator = me?.role === "coordinator";
+  const availableTeams = useMemo(() => {
+    const all = org?.teams ?? [];
+    if (isCoordinator) return all.filter((t) => t.coordinatorId === me?.sub);
+    if (!areaId) return [];
+    return all.filter((t) => t.areaId === areaId);
+  }, [org, isCoordinator, me, areaId]);
+
   if (!open) return null;
 
   const isAdmin = me?.role === "admin";
   const isAreaManager = me?.role === "area_manager";
-  const isCoordinator = me?.role === "coordinator";
 
   const assignable = me ? ASSIGNABLE_ROLES[me.role] ?? [] : [];
   const areas: OrgArea[] = isAdmin
@@ -340,13 +349,6 @@ function NewUserDialog({
     : isAreaManager
       ? (org?.areas ?? []).filter((a) => a.id === me?.areaId)
       : [];
-
-  const availableTeams = useMemo(() => {
-    const all = org?.teams ?? [];
-    if (isCoordinator) return all.filter((t) => t.coordinatorId === me?.sub);
-    if (!areaId) return [];
-    return all.filter((t) => t.areaId === areaId);
-  }, [org, isCoordinator, me, areaId]);
 
   const canSubmit = email.trim().includes("@") && role.length > 0 && fullName.trim().length > 0;
 
@@ -578,7 +580,6 @@ function StructureTree({ org, users, darkMode }: { org: any; users: OrgUser[]; d
       )}
       {areas.map((area) => {
         const areaTeams = teams.filter((t) => t.areaId === area.id);
-        if (areaTeams.length === 0) return null;
         return (
           <div key={area.id} className={cardCls(darkMode)}>
             <div className="flex items-center gap-2.5 px-5 py-3.5 border-b-[3px] border-[#dfd9cc] dark:border-[#3e382f]">
@@ -591,6 +592,13 @@ function StructureTree({ org, users, darkMode }: { org: any; users: OrgUser[]; d
               </div>
             </div>
             <div className="p-4 grid gap-3 md:grid-cols-2">
+              {areaTeams.length === 0 && (
+                <div className={`col-span-full rounded-[5px] border border-dashed px-4 py-6 text-center ${darkMode ? "border-[#3e382f]" : "border-[#dfd9cc]"}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                    Sin equipos todavía — usa «Nuevo equipo» para asignar uno
+                  </p>
+                </div>
+              )}
               {areaTeams.map((team) => {
                 const members = users.filter((u) => u.teamId === team.id);
                 return (
@@ -644,9 +652,13 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
   const { data: users = [], isLoading, isError, refetch } = useOrgUsers();
   const { data: org } = useOrgStructure();
   const updateUser = useUpdateUser();
+  const deleteUser = useSoftDeleteUser();
+  const restoreUser = useRestoreUser();
+  const { data: deletedUsers = [] } = useDeletedUsers(me?.role === "admin");
   const [search, setSearch] = useState("");
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [passwordUser, setPasswordUser] = useState<OrgUser | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const canEdit = me ? MANAGER_ROLES.includes(me.role) : false;
   const assignable = me ? ASSIGNABLE_ROLES[me.role] ?? [] : [];
@@ -659,6 +671,19 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
   const handlePatch = (user: OrgUser, patch: UserUpdatePayload) => {
     if (!canEdit || user.id === me?.sub) return;
     updateUser.mutate({ id: user.id, patch });
+  };
+
+  const handleDelete = (user: OrgUser) => {
+    if (!canEdit || user.id === me?.sub) return;
+    const name = user.fullName || user.email;
+    if (!window.confirm(`¿Eliminar a "${name}"? El usuario quedará desactivado y podrás restaurarlo después.`)) return;
+    deleteUser.mutate(user.id);
+  };
+
+  const handleRestore = (user: OrgUser) => {
+    const name = user.fullName || user.email;
+    if (!window.confirm(`¿Restaurar a "${name}"? Volverá a estar activo con su rol y equipo.`)) return;
+    restoreUser.mutate(user.id);
   };
 
   const filtered = useMemo(() => {
@@ -698,6 +723,18 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" /> Nuevo usuario
+          </button>
+        )}
+        {me?.role === "admin" && (
+          <button
+            onClick={() => setShowDeleted(!showDeleted)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black border cursor-pointer ${
+              showDeleted
+                ? "bg-[#b57b54] text-white border-[#b57b54]"
+                : darkMode ? "border-[#3e382f] text-stone-300" : "border-[#dfd9cc] text-stone-600"
+            }`}
+          >
+            <ArchiveRestore className="w-3.5 h-3.5" /> Eliminados{deletedUsers.length > 0 && ` (${deletedUsers.length})`}
           </button>
         )}
       </div>
@@ -792,6 +829,16 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
                           <KeyRound className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      {editable && me?.role === "admin" && (
+                        <button
+                          onClick={() => handleDelete(u)}
+                          disabled={deleteUser.isPending}
+                          className={`p-1.5 rounded-lg border cursor-pointer disabled:opacity-40 ${darkMode ? "border-[#3e382f] text-red-400 hover:bg-red-950/30" : "border-[#dfd9cc] text-red-500 hover:bg-red-50"}`}
+                          title="Eliminar usuario (recuperable)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         disabled={!editable}
                         onClick={() => handlePatch(u, { isActive: !u.isActive })}
@@ -817,6 +864,64 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
           </tbody>
         </table>
       </div>
+
+      {showDeleted && (
+        <div className={`${cardCls(darkMode)} mt-5`}>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b-[3px] border-[#dfd9cc] dark:border-[#3e382f]">
+            <div className="flex items-center gap-2.5">
+              <ArchiveRestore className={`w-4 h-4 ${darkMode ? "text-[#d4a373]" : "text-[#b57b54]"}`} />
+              <div>
+                <p className={`text-sm font-black font-display ${darkMode ? "text-[#f4f1eb]" : "text-stone-800"}`}>
+                  Usuarios eliminados
+                </p>
+                <p className={`text-[10px] font-bold ${darkMode ? "text-stone-500" : "text-stone-500"}`}>
+                  {deletedUsers.length === 0 ? "Ninguno por ahora" : `Se pueden restaurar en cualquier momento (${deletedUsers.length})`}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setShowDeleted(false)} className={`p-1.5 rounded-lg hover:bg-black/5 cursor-pointer ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {deletedUsers.length === 0 ? (
+            <div className={`px-5 py-10 text-center text-[11px] font-black uppercase tracking-widest opacity-40 ${darkMode ? "text-stone-300" : "text-stone-600"}`}>
+              No hay usuarios eliminados
+            </div>
+          ) : (
+            <ul className="divide-y divide-[#dfd9cc] dark:divide-[#2a2622]">
+              {deletedUsers.map((u) => (
+                <li key={u.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${darkMode ? "border-[#3e382f] bg-[#24211e]" : "border-[#dfd9cc] bg-white"}`}>
+                      <span className="text-[#b57b54] font-black text-[10px]">{initials(u.fullName, u.email)}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`truncate font-bold ${darkMode ? "text-stone-200" : "text-stone-800"}`}>
+                        {u.fullName || "—"}
+                      </p>
+                      <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+                        {u.email} · {ROLE_LABELS[u.role] ?? u.role}
+                      </p>
+                      {u.deletedAt && (
+                        <p className={`text-[9px] font-bold ${darkMode ? "text-stone-600" : "text-stone-400"}`}>
+                          Eliminado {new Date(u.deletedAt).toLocaleString("es-MX")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRestore(u)}
+                    disabled={restoreUser.isPending}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-black bg-[#b57b54] text-white hover:bg-[#a36d49] disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Restaurar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <NewUserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} darkMode={darkMode} />
       <PasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} darkMode={darkMode} />

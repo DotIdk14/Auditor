@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'motion/react';
-import { LayoutGrid, Headphones, Users, FolderHeart, Settings, LogOut, StickyNote, Network } from 'lucide-react';
+import { LayoutGrid, Headphones, Users, FolderHeart, Settings, LogOut, StickyNote, Network, History } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: string;
@@ -88,6 +88,7 @@ export default function Sidebar({ currentTab, onTabChange, userRole, darkMode, o
     { id: 'auditor', label: 'Auditor 🎧', icon: Headphones },
     { id: 'auditorias', label: 'Contactos 👤', icon: Users },
     { id: 'equipos', label: 'Equipos 🏢', icon: Network },
+    { id: 'historial', label: 'Historial 📋', icon: History },
     { id: 'notas', label: 'Notas 📝', icon: StickyNote },
     { id: 'recursos', label: 'Recursos 📚', icon: FolderHeart },
     { id: 'ajustes', label: 'Preferencias ⚙️', icon: Settings },
