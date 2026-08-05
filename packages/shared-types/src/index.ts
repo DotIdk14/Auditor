@@ -31,6 +31,7 @@ export interface JWTPayload {
   role: UserRole;
   areaId?: string | null;
   teamId?: string | null;
+  coordinatorId?: string | null;
   iat?: number;
   exp?: number;
 }
@@ -40,6 +41,7 @@ export interface MeResponse extends JWTPayload {
     areaId: string | null;
     teamId: string | null;
     supervisorId?: string | null;
+    coordinatorId?: string | null;
   };
   permissions: string[];
 }

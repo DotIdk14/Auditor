@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { insforge } from "../services/insforge.js";
+import { resolveManagedTeamIds } from "../services/userService.js";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { localCallsMemory } from "../config.js";
@@ -53,7 +54,14 @@ export default function (app: Express): void {
         query = query.not('contacts.id', 'is', null).eq("contacts.assigned_to", scope.userId);
       } else if (scope.role === "supervisor" && scope.teamId) {
         query = query.not('contacts.id', 'is', null).eq("contacts.team_id", scope.teamId);
-      } else if ((scope.role === "coordinator" || scope.role === "area_manager") && scope.areaId) {
+      } else if (scope.role === "coordinator") {
+        const teamIds = await resolveManagedTeamIds(scope);
+        if (teamIds.length > 0) {
+          query = query.not('contacts.id', 'is', null).in("contacts.team_id", teamIds);
+        } else {
+          query = query.not('contacts.id', 'is', null).eq("contacts.team_id", "none");
+        }
+      } else if (scope.role === "area_manager" && scope.areaId) {
         query = query.not('contacts.id', 'is', null).eq("contacts.area_id", scope.areaId);
       }
       // admin sees all

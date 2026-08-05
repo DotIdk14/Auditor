@@ -6,7 +6,7 @@ import type { JWTPayload, UserRole } from '@auditor/shared-types';
 const DEVICE_ID_KEY = 'visor_device_id';
 
 interface AuthState {
-  user: (JWTPayload & { permissions?: string[]; hierarchy?: { areaId: string | null; teamId: string | null } }) | null;
+  user: (JWTPayload & { permissions?: string[]; hierarchy?: { areaId: string | null; teamId: string | null; coordinatorId?: string | null } }) | null;
   accessToken: string | null;
   loading: boolean;
   error: string | null;
@@ -17,7 +17,7 @@ interface AuthState {
   checkSession: () => Promise<void>;
   can: (permission: string) => boolean;
   canViewRole: (targetRole: string) => boolean;
-  canViewAgent: (agentHierarchy?: { areaId?: string; teamId?: string; supervisorId?: string }) => boolean;
+  canViewAgent: (agentHierarchy?: { areaId?: string; teamId?: string; supervisorId?: string; coordinatorId?: string }) => boolean;
 
   visorRole: () => string;
   roleLabel: () => string;
@@ -72,13 +72,14 @@ export const useAuthStore = create<AuthState>()(
         role: body.role || 'agent',
         areaId: body.areaId || null,
         teamId: body.teamId || null,
+        coordinatorId: body.coordinatorId || null,
       };
 
       set({
         user: {
           ...user,
           permissions: [],
-          hierarchy: { areaId: user.areaId || null, teamId: user.teamId || null },
+          hierarchy: { areaId: user.areaId || null, teamId: user.teamId || null, coordinatorId: user.coordinatorId || null },
         },
         accessToken: token,
         loading: false,
@@ -114,6 +115,7 @@ export const useAuthStore = create<AuthState>()(
           role: string;
           areaId?: string | null;
           teamId?: string | null;
+          coordinatorId?: string | null;
         };
       }>('/refresh-token', { token: currentToken });
 
@@ -127,9 +129,11 @@ export const useAuthStore = create<AuthState>()(
             role: data.user.role as any,
             areaId: data.user.areaId ?? null,
             teamId: data.user.teamId ?? null,
+            coordinatorId: data.user.coordinatorId ?? null,
             hierarchy: {
               areaId: data.user.areaId ?? null,
               teamId: data.user.teamId ?? null,
+              coordinatorId: data.user.coordinatorId ?? null,
             },
             permissions: [],
           },
@@ -157,7 +161,11 @@ export const useAuthStore = create<AuthState>()(
           user: {
             ...data.user,
             role: data.user.role || currentUser?.role || 'agent',
-            hierarchy: { areaId: data.user.areaId || null, teamId: data.user.teamId || null },
+            hierarchy: {
+              areaId: data.user.areaId || null,
+              teamId: data.user.teamId || null,
+              coordinatorId: data.user.coordinatorId || currentUser?.coordinatorId || null,
+            },
             permissions: [],
           },
         });
@@ -198,6 +206,13 @@ export const useAuthStore = create<AuthState>()(
     const userTeam = user.teamId;
 
     if (userRole === 'area_manager' || userRole === 'coordinator') {
+      if (userRole === 'coordinator' && user.coordinatorId) {
+        // Coordinador: solo asesores de sus equipos (vía coordinator_id o su propio equipo)
+        return (
+          agentHierarchy.coordinatorId === user.coordinatorId ||
+          agentHierarchy.teamId === user.teamId
+        );
+      }
       return agentHierarchy.areaId === userArea;
     }
     if (userRole === 'supervisor') {

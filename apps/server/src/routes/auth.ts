@@ -36,6 +36,7 @@ export default function (app: Express): void {
       let userRole: UserRole = "agent";
       let areaId: string | null = null;
       let teamId: string | null = null;
+      let coordinatorId: string | null = null;
       let userId: string | null = null;
 
       // 1. Check if email is in ALLOWED_EMAILS (env var override for admin access)
@@ -70,6 +71,14 @@ export default function (app: Express): void {
             }
             areaId = profile.area_id || null;
             teamId = profile.team_id || null;
+
+            // Resolve coordinator for this user (via their team's coordinator_id)
+            if (teamId) {
+              try {
+                const { data: team } = await db.from("teams").select("coordinator_id").eq("id", teamId).maybeSingle();
+                if (team?.coordinator_id) coordinatorId = team.coordinator_id;
+              } catch { /* non-fatal */ }
+            }
           } else {
             // Auto-registro: crear perfil
             const newId = randomUUID();
@@ -103,6 +112,7 @@ export default function (app: Express): void {
         role: userRole,
         areaId,
         teamId,
+        coordinatorId,
       });
       console.log(`[AUTH] Login exitoso: ${searchEmail} (${userRole})`);
       return res.json({
@@ -112,6 +122,7 @@ export default function (app: Express): void {
         role: userRole,
         areaId,
         teamId,
+        coordinatorId,
         userId,
       });
     } catch (err: any) {
@@ -134,6 +145,7 @@ export default function (app: Express): void {
         role: req.user!.role,
         areaId: req.user!.areaId,
         teamId: req.user!.teamId,
+        coordinatorId: req.user!.coordinatorId || null,
       },
     });
   });
@@ -153,6 +165,7 @@ export default function (app: Express): void {
         role: payload.role,
         areaId: payload.areaId || null,
         teamId: payload.teamId || null,
+        coordinatorId: payload.coordinatorId || null,
       });
       return res.json({
         success: true,
@@ -164,6 +177,7 @@ export default function (app: Express): void {
           role: payload.role,
           areaId: payload.areaId || null,
           teamId: payload.teamId || null,
+          coordinatorId: payload.coordinatorId || null,
         },
       });
     } catch {
@@ -182,6 +196,7 @@ export default function (app: Express): void {
         role: req.user!.role,
         areaId: req.user!.areaId,
         teamId: req.user!.teamId,
+        coordinatorId: req.user!.coordinatorId || null,
       },
     });
   });

@@ -1,5 +1,7 @@
 export type CallStatus = 'uploaded' | 'processing' | 'completed' | 'failed';
 
+export type DemoScenario = 'excelente' | 'regular' | 'deficiente';
+
 export interface CallMetadata {
   fileName: string;
   url: string;

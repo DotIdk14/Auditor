@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { insforge } from "../services/insforge.js";
+import { resolveManagedTeamIds } from "../services/userService.js";
 import { localInteractionsMemory, localContactsMemory } from "../config.js";
 import type { ServiceScope } from "../types.js";
 
@@ -22,7 +23,12 @@ export default function (app: Express): void {
           const contact = localContactsMemory.find(
             (c: any) => c.id === interaction.contact_id
           );
-          if (!contact || !isInScope(contact, scope)) continue;
+          if (!contact) continue;
+          if (scope.role === "coordinator") {
+            if (!(await coordinatorInScope(contact, scope))) continue;
+          } else if (!isInScope(contact, scope)) {
+            continue;
+          }
 
           seenIds.add(interaction.id);
           localPositive.push({
@@ -44,7 +50,7 @@ export default function (app: Express): void {
           let contactQuery = insforge.database
             .from("contacts")
             .select("id, full_name, phone, email, area_id, team_id, assigned_to");
-          contactQuery = buildScopeFilter(contactQuery, scope);
+          contactQuery = await buildScopeFilter(contactQuery, scope);
           const { data: scopeContacts } = await contactQuery;
           const scopeContactIds = (scopeContacts || []).map((c: any) => c.id);
 
@@ -101,8 +107,9 @@ function isInScope(contact: any, scope: ServiceScope): boolean {
     case "admin":
       return true;
     case "area_manager":
-    case "coordinator":
       return contact.area_id === scope.areaId;
+    case "coordinator":
+      return false; // replaced by async coordinatorInScope below
     case "supervisor":
       return contact.team_id === scope.teamId;
     case "agent":
@@ -114,14 +121,23 @@ function isInScope(contact: any, scope: ServiceScope): boolean {
   }
 }
 
-function buildScopeFilter(query: any, scope: ServiceScope) {
+async function coordinatorInScope(contact: any, scope: ServiceScope): Promise<boolean> {
+  const teamIds = await resolveManagedTeamIds(scope);
+  return teamIds.includes(contact.team_id);
+}
+
+async function buildScopeFilter(query: any, scope: ServiceScope) {
   switch (scope.role) {
     case "admin":
       break;
     case "area_manager":
-    case "coordinator":
       query = query.eq("area_id", scope.areaId);
       break;
+    case "coordinator": {
+      const teamIds = await resolveManagedTeamIds(scope);
+      query = teamIds.length > 0 ? query.in("team_id", teamIds) : query.eq("team_id", "none");
+      break;
+    }
     case "supervisor":
       query = query.eq("team_id", scope.teamId);
       break;

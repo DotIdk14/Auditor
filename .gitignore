@@ -27,3 +27,6 @@ firebase-service-account.json
 .roo
 .trae
 .windsurf
+
+.vercel
+.env*

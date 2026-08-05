@@ -46,7 +46,7 @@ const adminNav: NavItem[] = [
     label: "Usuarios",
     href: "/users",
     icon: Shield,
-    roles: ["admin", "area_manager"],
+    roles: ["admin", "area_manager", "coordinator"],
   },
 ];
 

@@ -9,6 +9,7 @@ import Contacts from "@/routes/Contacts";
 import ContactDetail from "@/routes/ContactDetail";
 import Pipeline from "@/routes/Pipeline";
 import Tasks from "@/routes/Tasks";
+import Users from "@/routes/Users";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 export default function App() {
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="contacts/:id" element={<ContactDetail />} />
             <Route path="pipeline" element={<Pipeline />} />
             <Route path="tasks" element={<Tasks />} />
+            <Route path="users" element={<Users />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

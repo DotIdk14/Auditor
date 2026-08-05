@@ -27,6 +27,7 @@ export interface JWTPayload {
   role: UserRole;
   areaId?: string | null;
   teamId?: string | null;
+  coordinatorId?: string | null;
   iat?: number;
   exp?: number;
 }
@@ -64,6 +65,42 @@ export interface Team {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// ── Org management (role assignment / hierarchy) ─────────────────────
+export interface OrgUser extends UserProfile {
+  coordinatorId?: string | null;
+  coordinatorName?: string | null;
+  supervisorId?: string | null;
+  supervisorName?: string | null;
+  teamName?: string | null;
+  areaName?: string | null;
+}
+
+export interface OrgArea {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  manager_id: string | null;
+  is_active: boolean;
+}
+
+export interface OrgTeam {
+  id: string;
+  area_id: string;
+  name: string;
+  code: string | null;
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  coordinator_id: string | null;
+  coordinator_name: string | null;
+  is_active: boolean;
+}
+
+export interface OrgStructure {
+  areas: OrgArea[];
+  teams: OrgTeam[];
 }
 
 export type ContactStatus = 'lead' | 'prospect' | 'customer' | 'churned';

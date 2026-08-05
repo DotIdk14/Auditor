@@ -9,10 +9,12 @@ import { sectionMeta } from '../../data/sections/sectionMeta';
 import { objectionReasons } from '../../data/defaultObjections';
 import { PRINCIPLE_LABELS, PRINCIPLE_ICONS, TIMING_LABELS } from '../../types';
 import type { SmartBlock, SectionMeta, ObjectionCategory, ObjectionResponse } from '../../types';
+import { useLearnedSpeeches } from '../../hooks/useLearnedSpeeches';
+import { LearnedSpeechesPanel } from './LearnedSpeechesPanel';
 
 interface Props { darkMode: boolean; }
 
-type Tab = 'sections' | 'custom' | 'objections';
+type Tab = 'sections' | 'custom' | 'objections' | 'learned';
 
 interface SpeechItem {
   id: string;
@@ -75,6 +77,9 @@ export function SpeechesDropdown({ darkMode }: Props) {
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState<Tab>('sections');
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+
+  const { data: learnedData } = useLearnedSpeeches();
+  const learnedCount = learnedData?.speeches?.length || 0;
 
   const sections = sectionMeta.map(section => {
     const builtins = (blocksBySection[section.id] || []).map(b => blockToItem(b, section));
@@ -296,6 +301,9 @@ export function SpeechesDropdown({ darkMode }: Props) {
             <button onClick={() => setTab('objections')} className={tabBtn(tab === 'objections')}>
               Objeciones ({totalObjections})
             </button>
+            <button onClick={() => setTab('learned')} className={tabBtn(tab === 'learned')}>
+              IA Top ventas ({learnedCount})
+            </button>
           </div>
 
           {tab === 'sections' && (
@@ -398,6 +406,10 @@ export function SpeechesDropdown({ darkMode }: Props) {
                 );
               })}
             </div>
+          )}
+
+          {tab === 'learned' && (
+            <LearnedSpeechesPanel darkMode={darkMode} />
           )}
         </div>
       )}

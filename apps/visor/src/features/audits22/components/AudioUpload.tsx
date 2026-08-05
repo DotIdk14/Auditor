@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { Upload, FileAudio, Check, AlertCircle, Play, Settings, RefreshCw, Layers, ShieldCheck, Database, Search, Folder, X, ChevronRight, ArrowLeft, Home, HardDrive } from 'lucide-react';
-import type { SalesCall } from '../types';
+import type { SalesCall, DemoScenario } from '../types';
 import { saveAudioToDB } from '../utils/audioCache';
 import { getDriveToken } from '../lib/googleDriveToken';
 import { apiClient } from '../../../lib/api';
 import { useAuthStore } from '../../../auth/authStore';
 import { adaptCall } from '../adapters/callAdapter';
+import DemoCallMenu from './DemoCallMenu';
 
 interface AudioUploadProps {
   onUploadSuccess: (newCall: SalesCall) => void;
@@ -25,12 +26,12 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
   const [generatedId, setGeneratedId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleLoadDemo = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar abrir el explorador de archivos
+  const handleLoadDemo = async (scenario: DemoScenario = 'excelente', e?: React.MouseEvent) => {
+    e?.stopPropagation(); // Evitar abrir el explorador de archivos
     setIsLoadingDemo(true);
     setUploadError(null);
     try {
-      const data = await apiClient.post('/cargar-demo');
+      const data = await apiClient.post('/cargar-demo', { scenario });
       onUploadSuccess(adaptCall(data));
     } catch (err: any) {
       console.error("Error al cargar demo:", err);
@@ -442,15 +443,12 @@ export default function AudioUpload({ onUploadSuccess }: AudioUploadProps) {
               <Folder className={`w-3.5 h-3.5 text-amber-500 ${isDriveLoading ? 'animate-pulse' : ''}`} />
               {isDriveLoading ? 'Conectando...' : 'Importar de Drive'}
             </button>
-            <button
-              type="button"
-              onClick={handleLoadDemo}
-              disabled={isLoadingDemo || isDriveLoading}
-              className="px-4 py-2.5 bg-indigo-600/10 hover:bg-indigo-600/20 active:scale-[0.98] text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-[11px] font-bold tracking-wide transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <FileAudio className={`w-3.5 h-3.5 ${isLoadingDemo ? 'animate-spin' : ''}`} />
-              {isLoadingDemo ? 'Generando...' : 'Llamada de Prueba'}
-            </button>
+            <DemoCallMenu
+              onLoad={(scenario) => handleLoadDemo(scenario)}
+              isLoading={isLoadingDemo || isDriveLoading}
+              label="Llamada de Prueba"
+              buttonClassName="px-4 py-2.5 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-[11px] font-bold tracking-wide transition-all shadow-sm"
+            />
           </div>
         </div>
       )}

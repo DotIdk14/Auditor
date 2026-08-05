@@ -1,4 +1,5 @@
 import { insforge } from "./insforge.js";
+import { resolveManagedTeamIds } from "./userService.js";
 import type { Task, TaskCreate, TaskUpdate, TaskFilters, PaginatedResponse } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -24,14 +25,18 @@ function mapRow(row: any): Task {
   };
 }
 
-function buildScopeFilter(query: any, scope: ServiceScope) {
+async function buildScopeFilter(query: any, scope: ServiceScope) {
   switch (scope.role) {
     case "admin":
       break;
     case "area_manager":
-    case "coordinator":
       query = query.eq("area_id", scope.areaId);
       break;
+    case "coordinator": {
+      const teamIds = await resolveManagedTeamIds(scope);
+      query = teamIds.length > 0 ? query.in("team_id", teamIds) : query.eq("team_id", "none");
+      break;
+    }
     case "supervisor":
       query = query.eq("team_id", scope.teamId);
       break;
@@ -55,7 +60,7 @@ export async function listTasks(
 
   let query = insforge.database.from(TABLE).select("*", { count: "exact" });
 
-  query = buildScopeFilter(query, scope);
+  query = await buildScopeFilter(query, scope);
 
   if (filters.contactId) query = query.eq("contact_id", filters.contactId);
   if (filters.assignedTo) query = query.eq("assigned_to", filters.assignedTo);
@@ -87,7 +92,7 @@ export async function getTask(
   scope: ServiceScope
 ): Promise<Task | null> {
   let query = insforge.database.from(TABLE).select("*").eq("id", id);
-  query = buildScopeFilter(query, scope);
+  query = await buildScopeFilter(query, scope);
 
   const { data, error } = await query.single();
 

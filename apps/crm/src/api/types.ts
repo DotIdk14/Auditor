@@ -14,6 +14,7 @@ export interface JWTPayload {
   role: UserRole;
   areaId?: string | null;
   teamId?: string | null;
+  coordinatorId?: string | null;
 }
 
 // ─── Contacts ───────────────────────────────────────────────────────────────
@@ -246,6 +247,42 @@ export interface UserProfile {
   areaId: string | null;
   teamId: string | null;
   isActive: boolean;
+}
+
+// ─── Org management / role assignment ──────────────────────────────────────
+export interface OrgUser extends UserProfile {
+  coordinatorId?: string | null;
+  coordinatorName?: string | null;
+  supervisorId?: string | null;
+  supervisorName?: string | null;
+  teamName?: string | null;
+  areaName?: string | null;
+}
+
+export interface OrgArea {
+  id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  managerId: string | null;
+  isActive: boolean;
+}
+
+export interface OrgTeam {
+  id: string;
+  areaId: string;
+  name: string;
+  code: string | null;
+  supervisorId: string | null;
+  supervisorName: string | null;
+  coordinatorId: string | null;
+  coordinatorName: string | null;
+  isActive: boolean;
+}
+
+export interface OrgStructure {
+  areas: OrgArea[];
+  teams: OrgTeam[];
 }
 
 // ─── Generic paginated response ─────────────────────────────────────────────

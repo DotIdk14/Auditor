@@ -1,4 +1,5 @@
 import { insforge } from "./insforge.js";
+import { resolveManagedTeamIds } from "./userService.js";
 import type { SalesKPIs, UnifiedDashboard } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -18,14 +19,18 @@ export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
     };
   }
 
+  const managedTeamIds = scope.role === "coordinator" ? await resolveManagedTeamIds(scope) : [];
+
   // Build base filter
-  const buildFilter = (query: any) => {
+  const buildFilter = async (query: any) => {
     switch (scope.role) {
       case "admin":
         break;
       case "area_manager":
-      case "coordinator":
         query = query.eq("area_id", scope.areaId);
+        break;
+      case "coordinator":
+        query = managedTeamIds.length > 0 ? query.in("team_id", managedTeamIds) : query.eq("team_id", "none");
         break;
       case "supervisor":
         query = query.eq("team_id", scope.teamId);
@@ -41,7 +46,7 @@ export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
 
   // Get contacts by stage
   let contactsQuery = insforge.database.from("contacts").select("id, stage_id, status, pipeline_id, created_at");
-  contactsQuery = buildFilter(contactsQuery);
+  contactsQuery = await buildFilter(contactsQuery);
   const { data: contacts } = await contactsQuery;
 
   const totalLeads = contacts?.filter(c => c.status === "lead").length ?? 0;
@@ -69,7 +74,7 @@ export async function getSalesKPIs(scope: ServiceScope): Promise<SalesKPIs> {
   
   if (["admin", "area_manager", "coordinator", "supervisor"].includes(scope.role)) {
     agentsQuery = insforge.database.from("contacts").select("assigned_to");
-    agentsQuery = buildFilter(agentsQuery);
+    agentsQuery = await buildFilter(agentsQuery);
   }
   
   const { data: agentData } = await agentsQuery;
@@ -123,13 +128,16 @@ export async function getQAKPIs(scope: ServiceScope): Promise<{
   if (!process.env.INSFORGE_BASE_URL) return { averagePceScore: 0, totalAudits: 0, complianceRate: 0, emotionalTrend: { positive: 0, neutral: 0, negative: 0 }, auditsByAgent: [] };
 
   let query = insforge.database.from("auditorias").select("id, score, metadata");
-  
+  const managedTeamIds = scope.role === "coordinator" ? await resolveManagedTeamIds(scope) : [];
+
   switch (scope.role) {
     case "admin":
       break;
     case "area_manager":
-    case "coordinator":
       query = query.eq("area_id", scope.areaId);
+      break;
+    case "coordinator":
+      query = managedTeamIds.length > 0 ? query.in("team_id", managedTeamIds) : query.eq("team_id", "none");
       break;
     case "supervisor":
       query = query.eq("team_id", scope.teamId);

@@ -13,9 +13,10 @@ import {
   RefreshCw,
   HelpCircle,
 } from 'lucide-react';
-import type { SalesCall } from './types';
+import type { SalesCall, DemoScenario } from './types';
 import AudioUpload from './components/AudioUpload';
 import AuditorDashboard from './components/AuditorDashboard';
+import DemoCallMenu from './components/DemoCallMenu';
 import { deleteAudioFromDB, clearAllAudiosFromDB } from './utils/audioCache';
 import { getDriveToken } from './lib/googleDriveToken';
 import { apiClient } from '../../lib/api';
@@ -212,10 +213,10 @@ export default function Auditor22Page() {
     }
   };
 
-  const handleLoadDemo = async () => {
+  const handleLoadDemo = async (scenario: DemoScenario = 'excelente') => {
     setIsLoading(true);
     try {
-      const newCall = await apiClient.post('/cargar-demo');
+      const newCall = await apiClient.post('/cargar-demo', { scenario });
       setCalls(prev => [adaptCall(newCall), ...prev]);
       setSelectedCallId((newCall as any).id);
     } catch (err: any) {
@@ -340,13 +341,11 @@ export default function Auditor22Page() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleLoadDemo}
-                        disabled={isLoading}
-                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/10 border border-indigo-500/20 rounded px-2.5 py-1 hover:bg-indigo-500/20 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                      >
-                        <span>+ Caso de Prueba</span>
-                      </button>
+                      <DemoCallMenu
+                        onLoad={handleLoadDemo}
+                        isLoading={isLoading}
+                        buttonClassName="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/10 border border-indigo-500/20 rounded px-2.5 py-1 hover:bg-indigo-500/20 transition-all"
+                      />
                       {calls.length > 0 && (
                         <button
                           onClick={async () => {
@@ -389,12 +388,11 @@ export default function Auditor22Page() {
                   ) : calls.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
                       <p className="text-xs text-gray-500 italic">No hay audiciones registradas.</p>
-                      <button
-                        onClick={handleLoadDemo}
-                        className="text-xs text-indigo-400 hover:underline font-bold"
-                      >
-                        Hacer clic para sembrar caso de prueba
-                      </button>
+                      <DemoCallMenu
+                        onLoad={handleLoadDemo}
+                        isLoading={isLoading}
+                        buttonClassName="text-xs text-indigo-400 hover:underline font-bold"
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
@@ -490,13 +488,11 @@ export default function Auditor22Page() {
                     <Plus className="w-4 h-4" />
                     Nueva Audición / Drive
                   </button>
-                  <button
-                    onClick={handleLoadDemo}
-                    disabled={isLoading}
-                    className="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-xs font-bold tracking-wide transition-all shadow-sm cursor-pointer disabled:opacity-50"
-                  >
-                    {isLoading ? 'Cargando...' : 'Caso de Prueba'}
-                  </button>
+                  <DemoCallMenu
+                    onLoad={handleLoadDemo}
+                    isLoading={isLoading}
+                    buttonClassName="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-indigo-400 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-xs font-bold tracking-wide transition-all shadow-sm"
+                  />
                 </div>
               </div>
 

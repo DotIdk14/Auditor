@@ -387,7 +387,6 @@ export const DEFAULT_VALUE_CHECKLIST: ValueCheckItem[] = [
 ];
 
 // ─── DEGREE CATALOG ──────────────────────────────────────────────
-
 export type DegreeLevelType = 'licenciatura' | 'maestria' | 'doctorado';
 
 export interface DegreeResource {
@@ -445,3 +444,50 @@ export interface DegreeLevel {
   icon: string;
   programs: DegreeProgram[];
 }
+
+// ─── AI LEARNING (speeches aprendidos desde las mejores llamadas) ─
+
+export interface LearnedSpeech {
+  id: string;
+  sectionId: string | null;
+  objectionId: string | null;
+  title: string;
+  content: string;
+  sourceCallCount: number;
+  avgScore: number;
+  winCount: number;
+  status: string;
+  createdAt: string;
+}
+
+export type LearningWarning = 'none' | 'info' | 'warning';
+
+export interface LearningStatus {
+  totalCalls: number;
+  newCallsSince: number;
+  lastRegeneratedAt: string | null;
+  generatedSpeechCount: number;
+  warning: LearningWarning;
+  warningThreshold: number;
+  topCallsCount: number;
+  avgTopScore: number;
+  canRegenerate: boolean;
+}
+
+export interface TopCallRef {
+  id: string;
+  fileName: string;
+  score: number;
+  salesOutcome: string;
+  momentCount: number;
+  snippets: string[];
+}
+
+export const SALES_OUTCOME_LABELS: Record<string, string> = {
+  venta_cerrada: '🎉 Venta cerrada',
+  interesado_seguimiento: '📌 Interesado / seguimiento',
+  agenda_demostracion: '📅 Demo agendada',
+  no_interesado: '🚫 No interesado',
+  '': '—',
+};
+

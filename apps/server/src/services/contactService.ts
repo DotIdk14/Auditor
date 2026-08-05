@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { insforge, insforgeAdmin } from "./insforge.js";
+import { resolveManagedTeamIds } from "./userService.js";
 import { localContactsMemory, prependContact, updateContactInMemory, removeContactById } from "../config.js";
 import type { Contact, ContactCreate, ContactUpdate, ContactFilters, ContactDisposition, PaginatedResponse, ServiceScope } from "../types.js";
 
@@ -173,14 +174,18 @@ function localDelete(id: string): boolean {
 
 // ─── Scope filter (Supabase) ──────────────────────────────────────────────
 
-function buildScopeFilter(query: any, scope: ServiceScope) {
+async function buildScopeFilter(query: any, scope: ServiceScope) {
   switch (scope.role) {
     case "admin":
       break;
     case "area_manager":
-    case "coordinator":
       query = query.eq("area_id", scope.areaId);
       break;
+    case "coordinator": {
+      const teamIds = await resolveManagedTeamIds(scope);
+      query = teamIds.length > 0 ? query.in("team_id", teamIds) : query.eq("team_id", "none");
+      break;
+    }
     case "supervisor":
       query = query.eq("team_id", scope.teamId);
       break;
@@ -235,7 +240,7 @@ export async function listContacts(
 
   // Fetch from DB
   let query = insforge.database.from(TABLE).select("*", { count: "exact" });
-  query = buildScopeFilter(query, scope);
+  query = await buildScopeFilter(query, scope);
 
   if (filters.search) {
     const s = filters.search.trim();
@@ -353,7 +358,7 @@ export async function getContact(
   if (!process.env.INSFORGE_BASE_URL) return null;
 
   let query = insforge.database.from(TABLE).select("*").eq("id", id);
-  query = buildScopeFilter(query, scope);
+  query = await buildScopeFilter(query, scope);
 
   const { data, error } = await query.maybeSingle();
   if (error) {
@@ -519,7 +524,7 @@ export async function findContactByPhoneOrEmail(
     query = query.eq("email", email);
   }
 
-  if (scope) query = buildScopeFilter(query, scope);
+  if (scope) query = await buildScopeFilter(query, scope);
 
   const { data, error } = await query.limit(1).maybeSingle();
   if (error || !data) return null;

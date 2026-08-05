@@ -1,4 +1,5 @@
 import { insforge } from "./insforge.js";
+import { resolveManagedTeamIds } from "./userService.js";
 import type { Pipeline, PipelineStage, Contact } from "../types.js";
 import type { ServiceScope } from "../types.js";
 
@@ -211,9 +212,13 @@ export async function getContactsByStage(
     case "admin":
       break;
     case "area_manager":
-    case "coordinator":
       query = query.eq("area_id", scope.areaId);
       break;
+    case "coordinator": {
+      const teamIds = await resolveManagedTeamIds(scope);
+      query = teamIds.length > 0 ? query.in("team_id", teamIds) : query.eq("team_id", "none");
+      break;
+    }
     case "supervisor":
       query = query.eq("team_id", scope.teamId);
       break;

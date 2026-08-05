@@ -16,17 +16,20 @@ import { authenticateToken, injectScope } from "../middleware/auth.js";
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import { saveCallToSupabase, deleteCallFromSupabase } from "../services/supabase.js";
 import { generateLocalAnalysis } from "../services/analysis.js";
-import { generateHighFidelitySimulatedCall } from "../__fixtures__/simulated-calls.js";
+import { generateHighFidelitySimulatedCall, isDemoScenario, type DemoScenario } from "../__fixtures__/simulated-calls.js";
 import * as contactService from "../services/contactService.js";
 
 export default function (app: Express): void {
-  // POST /api/cargar-demo — Load a demo/test call
+  // POST /api/cargar-demo — Load a demo/test call (scenario: excelente | regular | deficiente)
   app.post("/api/cargar-demo", authenticateToken, injectScope, async (req: AuthenticatedRequest, res) => {
-    const uniqueId = `call_demo_${Date.now()}`;
+    const scenario: DemoScenario = isDemoScenario(req.body?.scenario) ? req.body.scenario : 'excelente';
+    const scenarioLabel = scenario === 'excelente' ? 'Excelente' : scenario === 'regular' ? 'Regular' : 'Deficiente';
+    const uniqueId = `call_demo_${scenario}_${Date.now()}`;
     const demoCall = generateHighFidelitySimulatedCall(
-      `Llamada_Comercial_Demo_UTEL_${randomUUID().split("-")[0]}.mp3`,
+      `Llamada_Comercial_Demo_UTEL_${scenarioLabel}_${randomUUID().split("-")[0]}.mp3`,
       4829310,
       uniqueId,
+      scenario,
     );
     prependCall(demoCall);
     saveCallToSupabase(demoCall);

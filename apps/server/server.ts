@@ -20,9 +20,11 @@ import mountTasksRoutes from "./src/routes/tasks.js";
 import mountDashboardRoutes from "./src/routes/dashboard.js";
 import mountVisorCallsRoutes from "./src/routes/visor-calls.js";
 import mountVisorResourcesRoutes from "./src/routes/visor-resources.js";
+import mountVisorLearningRoutes from "./src/routes/visor-learning.js";
 import mountRecoveryRoutes from "./src/routes/recovery.js";
 import mountInteractionsRoutes from "./src/routes/interactions.js";
 import mountPositiveTipificacionesRoutes from "./src/routes/positive-tipificaciones.js";
+import mountUsersRoutes from "./src/routes/users.js";
 
 const app = express();
 
@@ -99,9 +101,11 @@ mountTasksRoutes(app);
 mountDashboardRoutes(app);
 mountVisorCallsRoutes(app);
 mountVisorResourcesRoutes(app);
+mountVisorLearningRoutes(app);
 mountRecoveryRoutes(app);
 mountInteractionsRoutes(app);
 mountPositiveTipificacionesRoutes(app);
+mountUsersRoutes(app);
 
 // ── 404 handler (after all routes, before error handler) ─────────
 app.use((req, res, _next) => {
