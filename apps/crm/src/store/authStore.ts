@@ -47,7 +47,7 @@ export interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  login: (email: string, displayName: string) => Promise<void>;
+  login: (email: string, displayName: string, password?: string) => Promise<void>;
   logout: () => void;
   checkSession: () => Promise<void>;
 }
@@ -64,14 +64,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
 
   // ── login ──────────────────────────────────────────────────────────────
-  login: async (email: string, displayName: string) => {
+  login: async (email: string, displayName: string, password?: string) => {
     set({ isLoading: true, error: null });
 
     try {
-      const res = await api.post<{ token: string }>('/api/login', {
-        email,
-        displayName,
-      });
+      const body: Record<string, string> = { email, displayName };
+      if (password) body.password = password;
+      const res = await api.post<{ token: string }>('/api/login', body);
 
       const { token } = res.data;
 

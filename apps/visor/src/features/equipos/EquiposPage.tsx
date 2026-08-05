@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOutletContext } from "react-router-dom";
 import {
-  Plus, Search, Users as UsersIcon, ShieldCheck, Building2, X, UserCog
+  Plus, Search, Users as UsersIcon, ShieldCheck, Building2, X, UserCog, KeyRound, UserPlus
 } from "lucide-react";
 import { useAuthStore } from "../../auth/authStore";
 import {
-  useOrgUsers, useOrgStructure, useUpdateUser, useCreateTeam,
-  type OrgUser, type OrgTeam, type OrgArea, type UserUpdatePayload,
+  useOrgUsers, useOrgStructure, useUpdateUser, useCreateTeam, useCreateUser, useCreateArea,
+  type OrgUser, type OrgTeam, type OrgArea, type UserUpdatePayload, type CreateUserPayload,
 } from "./api";
 import type { UserRole } from "@auditor/shared-types";
 
@@ -207,6 +207,361 @@ function NewTeamDialog({
   );
 }
 
+// ── New area (coordinación) dialog ──────────────────────────────────────────
+
+function NewAreaDialog({
+  open, onClose, darkMode,
+}: { open: boolean; onClose: () => void; darkMode: boolean }) {
+  const { data: users } = useOrgUsers(open);
+  const createArea = useCreateArea();
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [description, setDescription] = useState("");
+  const [managerId, setManagerId] = useState("");
+
+  if (!open) return null;
+
+  const managerOptions = (users ?? []).filter((u) => u.role === "area_manager" || u.role === "admin");
+
+  const handleCreate = () => {
+    createArea.mutate(
+      {
+        name: name.trim(),
+        code: code.trim() || undefined,
+        description: description.trim() || undefined,
+        managerId: managerId || null,
+      },
+      {
+        onSuccess: () => {
+          setName("");
+          setCode("");
+          setDescription("");
+          setManagerId("");
+          onClose();
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className={`w-full max-w-md ${cardCls(darkMode)} p-6 space-y-4`}>
+        <div className="flex items-center justify-between">
+          <h3 className={`text-base font-black font-display ${darkMode ? "text-[#f4f1eb]" : "text-stone-800"}`}>
+            Nueva coordinación
+          </h3>
+          <button onClick={onClose} className={`p-1.5 rounded-lg hover:bg-black/5 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className={`text-[11px] font-semibold ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+          Crea un área de coordinación (ej. Ventas Norte, Retención).
+        </p>
+
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Nombre del área *
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Ej. Coordinación Ventas Norte" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Código (opcional)
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Ej. VENTAS_NORTE (auto si se deja vacío)" value={code} onChange={(e) => setCode(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Descripción (opcional)
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Descripción breve" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Gerente responsable (opcional)
+          </label>
+          <select className={selectCls(darkMode)} value={managerId} onChange={(e) => setManagerId(e.target.value)}>
+            <option value="">Sin gerente asignado</option>
+            {managerOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.fullName || m.email}</option>
+            ))}
+          </select>
+        </div>
+
+        {createArea.isError && (
+          <p className="text-[11px] font-bold text-red-500">
+            {(createArea.error as any)?.message || "No se pudo crear el área"}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer ${darkMode ? "border-[#3e382f] text-stone-300" : "border-[#dfd9cc] text-stone-600"}`}>
+            Cancelar
+          </button>
+          <button
+            disabled={!name.trim() || createArea.isPending}
+            onClick={handleCreate}
+            className="px-4 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] disabled:opacity-50 cursor-pointer"
+          >
+            {createArea.isPending ? "Creando…" : "Crear área"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── New user dialog ─────────────────────────────────────────────────────────
+
+function NewUserDialog({
+  open, onClose, darkMode,
+}: { open: boolean; onClose: () => void; darkMode: boolean }) {
+  const me = useAuthStore((s) => s.user);
+  const { data: org } = useOrgStructure(open);
+  const { data: users = [] } = useOrgUsers(open);
+  const createUser = useCreateUser();
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<UserRole>("agent");
+  const [areaId, setAreaId] = useState("");
+  const [teamId, setTeamId] = useState("");
+  const [password, setPassword] = useState("");
+
+  if (!open) return null;
+
+  const isAdmin = me?.role === "admin";
+  const isAreaManager = me?.role === "area_manager";
+  const isCoordinator = me?.role === "coordinator";
+
+  const assignable = me ? ASSIGNABLE_ROLES[me.role] ?? [] : [];
+  const areas: OrgArea[] = isAdmin
+    ? org?.areas ?? []
+    : isAreaManager
+      ? (org?.areas ?? []).filter((a) => a.id === me?.areaId)
+      : [];
+
+  const availableTeams = useMemo(() => {
+    const all = org?.teams ?? [];
+    if (isCoordinator) return all.filter((t) => t.coordinatorId === me?.sub);
+    if (!areaId) return [];
+    return all.filter((t) => t.areaId === areaId);
+  }, [org, isCoordinator, me, areaId]);
+
+  const canSubmit = email.trim().includes("@") && role.length > 0 && fullName.trim().length > 0;
+
+  const handleCreate = () => {
+    const payload: CreateUserPayload = {
+      email: email.trim(),
+      fullName: fullName.trim(),
+      role,
+      password: password.trim() || undefined,
+      isActive: true,
+    };
+    if (isCoordinator) {
+      payload.areaId = me?.areaId ?? null;
+      payload.teamId = teamId || null;
+    } else {
+      payload.areaId = areaId || null;
+      payload.teamId = teamId || null;
+    }
+    createUser.mutate(payload, {
+      onSuccess: () => {
+        setFullName("");
+        setEmail("");
+        setRole("agent");
+        setAreaId("");
+        setTeamId("");
+        setPassword("");
+        onClose();
+      },
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className={`w-full max-w-md ${cardCls(darkMode)} p-6 space-y-4 max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between">
+          <h3 className={`text-base font-black font-display ${darkMode ? "text-[#f4f1eb]" : "text-stone-800"}`}>
+            Nuevo usuario
+          </h3>
+          <button onClick={onClose} className={`p-1.5 rounded-lg hover:bg-black/5 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className={`text-[11px] font-semibold ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+          El usuario podrá entrar con correo + contraseña o vincular Google (mismo correo).
+        </p>
+
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Nombre completo *
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Ej. Ana Martínez" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Correo electrónico *
+          </label>
+          <input className={inputCls(darkMode)} placeholder="usuario@correo.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Rol *
+          </label>
+          <select className={selectCls(darkMode)} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+            {assignable.map((r) => (
+              <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+            ))}
+          </select>
+        </div>
+
+        {!isCoordinator && areas.length > 0 && (
+          <div className="space-y-1.5">
+            <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+              Área
+            </label>
+            <select className={selectCls(darkMode)} value={areaId} onChange={(e) => { setAreaId(e.target.value); setTeamId(""); }}>
+              <option value="">Sin área</option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!isCoordinator && availableTeams.length > 0 && (
+          <div className="space-y-1.5">
+            <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+              Equipo
+            </label>
+            <select className={selectCls(darkMode)} value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Sin equipo</option>
+              {availableTeams.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {isCoordinator && availableTeams.length > 0 && (
+          <div className="space-y-1.5">
+            <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+              Equipo (tus equipos)
+            </label>
+            <select className={selectCls(darkMode)} value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Sin equipo</option>
+              {availableTeams.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Contraseña inicial (opcional)
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Mínimo 6 caracteres" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <p className={`text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+            Si se deja vacía, el acceso queda abierto por correo (como hoy).
+          </p>
+        </div>
+
+        {createUser.isError && (
+          <p className="text-[11px] font-bold text-red-500">
+            {(createUser.error as any)?.message || "No se pudo crear el usuario"}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer ${darkMode ? "border-[#3e382f] text-stone-300" : "border-[#dfd9cc] text-stone-600"}`}>
+            Cancelar
+          </button>
+          <button
+            disabled={!canSubmit || createUser.isPending}
+            onClick={handleCreate}
+            className="px-4 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] disabled:opacity-50 cursor-pointer"
+          >
+            {createUser.isPending ? "Creando…" : "Crear usuario"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Password dialog ─────────────────────────────────────────────────────────
+
+function PasswordDialog({
+  user, onClose, darkMode,
+}: { user: OrgUser | null; onClose: () => void; darkMode: boolean }) {
+  const updateUser = useUpdateUser();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  if (!user) return null;
+
+  const canSubmit = password.length >= 6 && password === confirm;
+
+  const handleSave = () => {
+    updateUser.mutate(
+      { id: user.id, patch: { password } },
+      { onSuccess: () => { setPassword(""); setConfirm(""); onClose(); } }
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className={`w-full max-w-sm ${cardCls(darkMode)} p-6 space-y-4`}>
+        <div className="flex items-center justify-between">
+          <h3 className={`text-base font-black font-display ${darkMode ? "text-[#f4f1eb]" : "text-stone-800"}`}>
+            Contraseña de acceso
+          </h3>
+          <button onClick={onClose} className={`p-1.5 rounded-lg hover:bg-black/5 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className={`text-[11px] font-semibold ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+          Usuario: <span className="font-black text-stone-600 dark:text-stone-200">{user.fullName || user.email}</span>
+        </p>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Nueva contraseña
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Mínimo 6 caracteres" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <label className={`text-[10px] font-black uppercase tracking-wider ${darkMode ? "text-stone-400" : "text-stone-500"}`}>
+            Confirmar contraseña
+          </label>
+          <input className={inputCls(darkMode)} placeholder="Repite la contraseña" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          {confirm.length > 0 && password !== confirm && (
+            <p className="text-[10px] font-bold text-red-500">Las contraseñas no coinciden</p>
+          )}
+        </div>
+        {updateUser.isError && (
+          <p className="text-[11px] font-bold text-red-500">
+            {(updateUser.error as any)?.message || "No se pudo guardar la contraseña"}
+          </p>
+        )}
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className={`px-4 py-2 rounded-lg text-xs font-bold border cursor-pointer ${darkMode ? "border-[#3e382f] text-stone-300" : "border-[#dfd9cc] text-stone-600"}`}>
+            Cancelar
+          </button>
+          <button
+            disabled={!canSubmit || updateUser.isPending}
+            onClick={handleSave}
+            className="px-4 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] disabled:opacity-50 cursor-pointer"
+          >
+            {updateUser.isPending ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Structure tab (tree) ────────────────────────────────────────────────────
 
 function StructureTree({ org, users, darkMode }: { org: any; users: OrgUser[]; darkMode: boolean }) {
@@ -290,6 +645,8 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
   const { data: org } = useOrgStructure();
   const updateUser = useUpdateUser();
   const [search, setSearch] = useState("");
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<OrgUser | null>(null);
 
   const canEdit = me ? MANAGER_ROLES.includes(me.role) : false;
   const assignable = me ? ASSIGNABLE_ROLES[me.role] ?? [] : [];
@@ -335,6 +692,14 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
             Reintentar
           </button>
         )}
+        {canEdit && (
+          <button
+            onClick={() => setUserDialogOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" /> Nuevo usuario
+          </button>
+        )}
       </div>
 
       <div className={`overflow-x-auto ${cardCls(darkMode)}`}>
@@ -369,6 +734,13 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
                           {u.fullName || "—"}{isMe && <span className={`ml-2 text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>(tú)</span>}
                         </p>
                         <p className={`truncate text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>{u.email}</p>
+                        <span className={`inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider ${
+                          u.hasPassword
+                            ? darkMode ? "text-[#d4a373]" : "text-[#b57b54]"
+                            : darkMode ? "text-stone-600" : "text-stone-400"
+                        }`}>
+                          <KeyRound className="w-2.5 h-2.5" /> {u.hasPassword ? "con contraseña" : "sin contraseña"}
+                        </span>
                       </div>
                     </div>
                   </td>
@@ -410,16 +782,27 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
                   <td className={`px-4 py-3 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>{u.supervisorName || "—"}</td>
                   <td className={`px-4 py-3 ${darkMode ? "text-stone-400" : "text-stone-500"}`}>{u.coordinatorName || "—"}</td>
                   <td className="px-4 py-3">
-                    <button
-                      disabled={!editable}
-                      onClick={() => handlePatch(u, { isActive: !u.isActive })}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-all cursor-pointer ${editable ? "" : "opacity-40 cursor-not-allowed"} ${
-                        u.isActive ? "bg-[#b57b54]" : darkMode ? "bg-[#3e382f]" : "bg-[#dfd9cc]"
-                      }`}
-                      title={u.isActive ? "Desactivar" : "Activar"}
-                    >
-                      <span className={`block w-4 h-4 rounded-full bg-white shadow-sm transition-all ${u.isActive ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {editable && me?.role === "admin" && (
+                        <button
+                          onClick={() => setPasswordUser(u)}
+                          className={`p-1.5 rounded-lg border cursor-pointer ${darkMode ? "border-[#3e382f] text-[#d4a373] hover:bg-[#2e2a24]" : "border-[#dfd9cc] text-[#b57b54] hover:bg-[#faedcd]/40"}`}
+                          title="Fijar/restablecer contraseña"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        disabled={!editable}
+                        onClick={() => handlePatch(u, { isActive: !u.isActive })}
+                        className={`w-9 h-5 rounded-full p-0.5 transition-all cursor-pointer ${editable ? "" : "opacity-40 cursor-not-allowed"} ${
+                          u.isActive ? "bg-[#b57b54]" : darkMode ? "bg-[#3e382f]" : "bg-[#dfd9cc]"
+                        }`}
+                        title={u.isActive ? "Desactivar" : "Activar"}
+                      >
+                        <span className={`block w-4 h-4 rounded-full bg-white shadow-sm transition-all ${u.isActive ? "translate-x-4" : "translate-x-0"}`} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -434,6 +817,9 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
           </tbody>
         </table>
       </div>
+
+      <NewUserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} darkMode={darkMode} />
+      <PasswordDialog user={passwordUser} onClose={() => setPasswordUser(null)} darkMode={darkMode} />
     </div>
   );
 }
@@ -446,8 +832,10 @@ export default function EquiposPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<"equipos" | "usuarios">("equipos");
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [areaDialogOpen, setAreaDialogOpen] = useState(false);
 
   const isManager = me ? MANAGER_ROLES.includes(me.role) : false;
+  const isAdmin = me?.role === "admin";
   const { data: org, isLoading } = useOrgStructure(isManager);
   const { data: users = [] } = useOrgUsers(isManager);
 
@@ -479,12 +867,22 @@ export default function EquiposPage() {
             Coordinadores → supervisores → asesores. Asigna roles y organiza equipos.
           </p>
         </div>
-        <button
-          onClick={() => setTeamDialogOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Nuevo equipo
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => setAreaDialogOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black border bg-white dark:bg-[#24211e] text-[#b57b54] border-[#d4a373]/40 hover:bg-[#faedcd]/40 dark:hover:bg-[#3e342a]/40 cursor-pointer"
+            >
+              <Building2 className="w-4 h-4" /> Nueva área
+            </button>
+          )}
+          <button
+            onClick={() => setTeamDialogOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black bg-[#b57b54] text-white hover:bg-[#a36d49] cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Nuevo equipo
+          </button>
+        </div>
       </div>
 
       <div className={`inline-flex p-1.5 rounded-2xl mb-5 ${darkMode ? "bg-[#1c1a18] border border-[#3e382f]" : "bg-stone-50 border border-stone-200 shadow-sm"}`}>
@@ -513,6 +911,7 @@ export default function EquiposPage() {
 
       {!isLoading && tab === "usuarios" && <UsersTable darkMode={darkMode} />}
 
+      <NewAreaDialog open={areaDialogOpen} onClose={() => setAreaDialogOpen(false)} darkMode={darkMode} />
       <NewTeamDialog open={teamDialogOpen} onClose={() => setTeamDialogOpen(false)} darkMode={darkMode} />
     </div>
   );

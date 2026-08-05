@@ -1,6 +1,6 @@
-import { randomUUID } from "crypto";
+import { randomUUID, scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { insforge, insforgeAdmin } from "./insforge.js";
-import type { ServiceScope, UserProfile, UserRole, OrgUser, OrgStructure } from "../types.js";
+import type { ServiceScope, UserProfile, UserRole, OrgUser, OrgStructure, OrgArea } from "../types.js";
 
 // Admin client (bypass RLS) when available, else anon client.
 function db() {
@@ -9,6 +9,39 @@ function db() {
 
 export function dbAvailable(): boolean {
   return Boolean(process.env.INSFORGE_BASE_URL && db());
+}
+
+// ─── Password hashing (scrypt + salt, no external deps) ────────────────────
+
+const SCRYPT_KEYLEN = 64;
+
+export function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, SCRYPT_KEYLEN).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  try {
+    const [scheme, salt, hash] = stored.split("$");
+    if (scheme !== "scrypt" || !salt || !hash) return false;
+    const candidate = scryptSync(password, salt, SCRYPT_KEYLEN);
+    const expected = Buffer.from(hash, "hex");
+    return candidate.length === expected.length && timingSafeEqual(candidate, expected);
+  } catch {
+    return false;
+  }
+}
+
+function mapOrgArea(row: any): OrgArea {
+  return {
+    id: row.id,
+    name: row.name,
+    code: row.code ?? null,
+    description: row.description ?? null,
+    manager_id: row.manager_id ?? null,
+    is_active: row.is_active !== false,
+  };
 }
 
 export const MANAGER_ROLES: UserRole[] = ["admin", "area_manager", "coordinator"];
@@ -23,6 +56,7 @@ function mapProfile(row: any): UserProfile {
     area_id: row.area_id ?? null,
     team_id: row.team_id ?? null,
     is_active: row.is_active !== false,
+    has_password: Boolean(row.password_hash),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -376,6 +410,148 @@ export async function updateTeam(
   }
 
   return findTeam(teamId);
+}
+
+// ─── Areas (coordinaciones) ────────────────────────────────────────────────
+
+export async function createArea(
+  scope: ServiceScope,
+  input: { name: string; code?: string; description?: string; managerId?: string | null }
+): Promise<OrgArea> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+  if (scope.role !== "admin") throw new Error("Solo el admin puede crear áreas");
+
+  const code = (input.code || slugify(input.name)).toUpperCase().slice(0, 24) || slugify(input.name);
+  const area = {
+    id: randomUUID(),
+    name: input.name,
+    code,
+    description: input.description || null,
+    manager_id: input.managerId || null,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await db().from("areas").insert(area).select().single();
+  if (error) {
+    const msg = error.message || "";
+    if (/duplicate|unique/i.test(msg)) {
+      throw new Error(`Ya existe un área con nombre o código "${input.name}" / "${code}"`);
+    }
+    throw new Error(`Error al crear área: ${msg}`);
+  }
+  return mapOrgArea(data);
+}
+
+export async function updateArea(
+  scope: ServiceScope,
+  areaId: string,
+  patch: { name?: string; code?: string; description?: string | null; managerId?: string | null; isActive?: boolean }
+): Promise<OrgArea> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+  if (scope.role !== "admin") throw new Error("Solo el admin puede modificar áreas");
+
+  const area = await findArea(areaId);
+  if (!area) throw new Error("Área no encontrada");
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.name !== undefined) updates.name = patch.name;
+  if (patch.code !== undefined) updates.code = patch.code;
+  if (patch.description !== undefined) updates.description = patch.description || null;
+  if (patch.managerId !== undefined) updates.manager_id = patch.managerId || null;
+  if (patch.isActive !== undefined) updates.is_active = patch.isActive;
+
+  const { error } = await db().from("areas").update(updates).eq("id", areaId);
+  if (error) throw new Error(`Error al actualizar área: ${error.message}`);
+  return mapOrgArea(await findArea(areaId));
+}
+
+// ─── Users ─────────────────────────────────────────────────────────────────
+
+export async function createUser(
+  scope: ServiceScope,
+  input: {
+    email: string;
+    fullName?: string;
+    role: UserRole;
+    areaId?: string | null;
+    teamId?: string | null;
+    password?: string;
+    isActive?: boolean;
+  }
+): Promise<OrgUser> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+
+  const email = input.email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Correo electrónico inválido");
+
+  const { data: existing } = await db().from("profiles").select("id").eq("email", email).maybeSingle();
+  if (existing) throw new Error("Ya existe un usuario con ese correo");
+
+  if (scope.role === "area_manager" && !["coordinator", "supervisor", "agent", "qa"].includes(input.role)) {
+    throw new Error("Como gerente solo puedes crear coordinador, supervisor, agente o auditor");
+  }
+  if (scope.role === "coordinator" && !["agent", "qa"].includes(input.role)) {
+    throw new Error("Como coordinador solo puedes crear asesores o auditores");
+  }
+
+  let areaId = input.areaId || null;
+  let teamId = input.teamId || null;
+
+  if (teamId) {
+    const team = await findTeam(teamId);
+    if (!team) throw new Error("Equipo no encontrado");
+    if (scope.role === "area_manager" && team.area_id !== scope.areaId) {
+      throw new Error("El equipo está fuera de tu área");
+    }
+    if (scope.role === "coordinator") {
+      const teamIds = await resolveManagedTeamIds(scope);
+      if (!teamIds.includes(teamId)) throw new Error("El equipo está fuera de tu grupo de coordinación");
+    }
+    areaId = areaId || team.area_id;
+  }
+
+  if (scope.role === "area_manager" && areaId && areaId !== scope.areaId) {
+    throw new Error("El área está fuera de tu alcance");
+  }
+  if (scope.role === "coordinator" && areaId && areaId !== scope.areaId) {
+    throw new Error("Como coordinador no puedes cambiar el área");
+  }
+
+  const profile = {
+    id: randomUUID(),
+    email,
+    full_name: input.fullName || email.split("@")[0],
+    role: input.role,
+    area_id: areaId,
+    team_id: teamId,
+    is_active: input.isActive !== false,
+    password_hash: input.password ? hashPassword(input.password) : null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await db().from("profiles").insert(profile).select().single();
+  if (error) throw new Error(`Error al crear usuario: ${error.message}`);
+
+  const fresh = await listUsers(scope);
+  return fresh.find((u: OrgUser) => u.id === data.id) as OrgUser;
+}
+
+export async function setUserPassword(scope: ServiceScope, userId: string, password: string): Promise<void> {
+  if (!dbAvailable()) throw new Error("Base de datos no disponible");
+  if (scope.role !== "admin" && scope.userId !== userId) {
+    throw new Error("Solo el admin puede cambiar contraseñas de otros usuarios");
+  }
+  const { data: target } = await db().from("profiles").select("id").eq("id", userId).maybeSingle();
+  if (!target) throw new Error("Usuario no encontrado");
+
+  const { error } = await db()
+    .from("profiles")
+    .update({ password_hash: hashPassword(password), updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) throw new Error(`Error al guardar contraseña: ${error.message}`);
 }
 
 // ─── Lookup helpers ───────────────────────────────────────────────────────

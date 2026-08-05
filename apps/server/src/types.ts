@@ -41,6 +41,7 @@ export interface UserProfile {
   area_id: string | null;
   team_id: string | null;
   is_active: boolean;
+  has_password?: boolean;
   created_at: string;
   updated_at: string;
 }

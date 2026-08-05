@@ -11,7 +11,7 @@ interface AuthState {
   loading: boolean;
   error: string | null;
 
-  login: (email: string, displayName?: string) => Promise<void>;
+  login: (email: string, displayName?: string, password?: string, provider?: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
   checkSession: () => Promise<void>;
@@ -55,13 +55,16 @@ export const useAuthStore = create<AuthState>()(
   loading: false,
   error: null,
 
-  login: async (email, displayName) => {
+  login: async (email, displayName, password?, provider?) => {
     set({ loading: true, error: null });
     try {
-      const res: any = await publicApi.post('/login', {
+      const payload: Record<string, string> = {
         email: email.trim().toLowerCase(),
         displayName: displayName || email.split('@')[0],
-      });
+      };
+      if (password) payload.password = password;
+      if (provider) payload.provider = provider;
+      const res: any = await publicApi.post('/login', payload);
 
       const body = res.data;
       const token = body.token;

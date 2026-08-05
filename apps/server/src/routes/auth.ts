@@ -5,6 +5,7 @@ import { authenticateToken, signToken, verifyToken } from "../middleware/auth.js
 import type { AuthenticatedRequest } from "../middleware/auth.js";
 import type { UserRole } from "../types.js";
 import { insforge, insforgeAdmin } from "../services/insforge.js";
+import { hashPassword, verifyPassword } from "../services/userService.js";
 
 function mapRole(role: string | null | undefined): UserRole {
   if (!role) return "agent";
@@ -26,7 +27,7 @@ export default function (app: Express): void {
   // POST /api/login — Registro/login abierto. Todos entran como agente por defecto.
   app.post("/api/login", loginLimiter, async (req, res) => {
     try {
-      const { email, displayName } = req.body;
+      const { email, displayName, password, provider } = req.body;
       if (!email) {
         return res.status(400).json({ success: false, error: "Email requerido" });
       }
@@ -38,6 +39,7 @@ export default function (app: Express): void {
       let teamId: string | null = null;
       let coordinatorId: string | null = null;
       let userId: string | null = null;
+      let profileRow: any = null;
 
       // 1. Check if email is in ALLOWED_EMAILS (env var override for admin access)
       const allowedEmails = (process.env.ALLOWED_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
@@ -52,9 +54,10 @@ export default function (app: Express): void {
         try {
           const { data: profile, error } = await db
             .from("profiles")
-            .select("id, full_name, role, area_id, team_id, is_active")
+            .select("id, full_name, role, area_id, team_id, is_active, password_hash")
             .eq("email", searchEmail)
             .maybeSingle();
+          profileRow = profile || null;
 
           if (profile && !error) {
             if (!profile.is_active) {
@@ -93,6 +96,7 @@ export default function (app: Express): void {
               full_name: userName,
               role: userRole,
               is_active: true,
+              password_hash: password ? hashPassword(password) : null,
             }]);
             if (!insertError) {
               userId = newId;
@@ -108,6 +112,21 @@ export default function (app: Express): void {
         }
       } else {
         userId = randomUUID();
+      }
+
+      // 3. Credential verification
+      // - provider === "google": identity verified by Google client-side → skip password.
+      // - password provided: must match the stored hash.
+      // - no password: only allowed if the account has no password set (backward compat).
+      if (provider !== "google") {
+        const storedHash = profileRow?.password_hash || null;
+        if (password) {
+          if (!storedHash || !verifyPassword(password, storedHash)) {
+            return res.status(401).json({ success: false, error: "Correo o contraseña incorrectos." });
+          }
+        } else if (storedHash) {
+          return res.status(401).json({ success: false, error: "Esta cuenta requiere contraseña." });
+        }
       }
 
       const token = signToken({

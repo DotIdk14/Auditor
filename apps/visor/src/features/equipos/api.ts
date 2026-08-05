@@ -13,6 +13,7 @@ export interface OrgUser {
   areaId: string | null;
   teamId: string | null;
   isActive: boolean;
+  hasPassword?: boolean;
   coordinatorId?: string | null;
   coordinatorName?: string | null;
   supervisorId?: string | null;
@@ -52,6 +53,17 @@ export interface UserUpdatePayload {
   teamId?: string | null;
   areaId?: string | null;
   isActive?: boolean;
+  password?: string;
+}
+
+export interface CreateUserPayload {
+  email: string;
+  fullName?: string;
+  role: UserRole;
+  areaId?: string | null;
+  teamId?: string | null;
+  password?: string;
+  isActive?: boolean;
 }
 
 export interface TeamCreatePayload {
@@ -59,6 +71,21 @@ export interface TeamCreatePayload {
   areaId: string;
   supervisorId?: string | null;
   coordinatorId?: string | null;
+}
+
+export interface AreaCreatePayload {
+  name: string;
+  code?: string;
+  description?: string;
+  managerId?: string | null;
+}
+
+export interface AreaUpdatePayload {
+  name?: string;
+  code?: string;
+  description?: string | null;
+  managerId?: string | null;
+  isActive?: boolean;
 }
 
 // ── snake_case → camelCase mappers ──────────────────────────────────────────
@@ -73,6 +100,7 @@ function mapUser(raw: any): OrgUser {
     areaId: raw.area_id ?? raw.areaId ?? null,
     teamId: raw.team_id ?? raw.teamId ?? null,
     isActive: raw.is_active ?? raw.isActive ?? true,
+    hasPassword: raw.has_password ?? raw.hasPassword ?? false,
     coordinatorId: raw.coordinator_id ?? raw.coordinatorId ?? null,
     coordinatorName: raw.coordinator_name ?? raw.coordinatorName ?? null,
     supervisorId: raw.supervisor_id ?? raw.supervisorId ?? null,
@@ -128,8 +156,28 @@ export async function updateUser(id: string, patch: UserUpdatePayload): Promise<
   if (patch.teamId !== undefined) body.team_id = patch.teamId;
   if (patch.areaId !== undefined) body.area_id = patch.areaId;
   if (patch.isActive !== undefined) body.is_active = patch.isActive;
+  if (patch.password !== undefined) body.password = patch.password;
   const res = await apiClient.patch<any>(`/users/${id}`, body);
   return mapUser(res);
+}
+
+export async function createUser(data: CreateUserPayload): Promise<OrgUser> {
+  const res = await apiClient.post<any>("/users", data);
+  return mapUser(res);
+}
+
+export async function setUserPassword(id: string, password: string): Promise<void> {
+  await apiClient.patch(`/users/${id}`, { password });
+}
+
+export async function createArea(data: AreaCreatePayload): Promise<OrgArea> {
+  const res = await apiClient.post<any>("/areas", data);
+  return mapArea(res);
+}
+
+export async function updateArea(id: string, patch: AreaUpdatePayload): Promise<OrgArea> {
+  const res = await apiClient.patch<any>(`/areas/${id}`, patch);
+  return mapArea(res);
 }
 
 export async function createTeam(data: TeamCreatePayload): Promise<OrgTeam> {
@@ -176,6 +224,27 @@ export function useCreateTeam() {
     mutationFn: (data: TeamCreatePayload) => createTeam(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ORG_KEY });
+    },
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateUserPayload) => createUser(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: USERS_KEY });
+      qc.invalidateQueries({ queryKey: ORG_KEY });
+    },
+  });
+}
+
+export function useCreateArea() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: AreaCreatePayload) => createArea(data),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ORG_KEY });
     },
   });

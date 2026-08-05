@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Shield, Coffee, Mail, ArrowRight } from 'lucide-react';
+import { Shield, Coffee, Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuthStore } from '../../auth/authStore';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '703833866895-ktjlej45ulmuor5nouqsth9um2n45293.apps.googleusercontent.com';
@@ -19,6 +19,7 @@ export default function LoginPage() {
   const { login, loading, error } = useAuthStore();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
   const [gisReady, setGisReady] = useState(false);
   const [gisLoading, setGisLoading] = useState(false);
@@ -45,7 +46,7 @@ export default function LoginPage() {
             if (!res?.credential) { setLocalError('No se recibió credencial de Google.'); setGisLoading(false); return; }
             const { email: gEmail, name: gName } = decodeGoogleCredential(res.credential);
             if (!gEmail) { setLocalError('No se pudo obtener tu correo de Google.'); setGisLoading(false); return; }
-            login(gEmail, gName).then(() => navigate('/', { replace: true })).catch((e: any) => {
+            login(gEmail, gName, undefined, 'google').then(() => navigate('/', { replace: true })).catch((e: any) => {
               setLocalError(e.message || 'Error de autenticación con Google');
             }).finally(() => setGisLoading(false));
           },
@@ -75,7 +76,7 @@ export default function LoginPage() {
     setLocalError(null);
     if (!email) { setLocalError('Ingresa tu correo electrónico.'); return; }
     try {
-      await login(email.trim(), email.trim().split('@')[0]);
+      await login(email.trim(), email.trim().split('@')[0], password || undefined);
       navigate('/', { replace: true });
     } catch (err: any) {
       setLocalError(err.message || 'Error de autenticación');
@@ -164,6 +165,20 @@ export default function LoginPage() {
                   value={email} onChange={(e) => { setEmail(e.target.value); setLocalError(null); }}
                   className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="login-password" className="text-sm font-semibold flex items-center gap-2 text-stone-300">
+                  <Lock className="w-4 h-4" />
+                  <span>Contraseña</span>
+                </label>
+                <input id="login-password" type="password" placeholder="•••••••• (opcional si tu cuenta no tiene)"
+                  value={password} onChange={(e) => { setPassword(e.target.value); setLocalError(null); }}
+                  className="w-full bg-[#161412] border border-[#2a2622] focus:border-[#d4a373] focus:ring-1 focus:ring-[#d4a373] rounded-xl py-3.5 px-4 text-sm text-stone-200 placeholder-stone-600 focus:outline-none transition-colors"
+                />
+                <p className="text-[10px] text-stone-500 font-medium">
+                  Cuentas con contraseña requieren usarla. Si tu cuenta es solo por correo, déjala vacía.
+                </p>
               </div>
               <button type="submit" disabled={isLoading}
                 className="w-full py-4 bg-[#faedcd] hover:bg-[#fff3d6] text-[#4a3219] font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2 mt-8 cursor-pointer"

@@ -20,6 +20,7 @@ import { Briefcase, Loader2, AlertCircle } from "lucide-react";
 export default function Login() {
   const { login, isAuthenticated, isLoading, error } = useAuthStore();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState("");
 
   // Clear local error when email changes
@@ -49,7 +50,7 @@ export default function Login() {
     }
 
     setLocalError("");
-    await login(trimmed, trimmed);
+    await login(trimmed, trimmed, password);
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -93,6 +94,20 @@ export default function Login() {
                 autoFocus
                 disabled={isLoading}
                 required
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Contraseña</Label>
+              <Input
+                id="login-password"
+                type="password"
+                placeholder="•••••••• (opcional si tu cuenta no tiene)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                disabled={isLoading}
               />
             </div>
 
