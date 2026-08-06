@@ -40,6 +40,7 @@ import { Check, ClipboardList, Info, FileSpreadsheet, Gift, ShieldAlert, Award, 
 import { ProgramHoverAccordion } from './ProgramHoverAccordion';
 import { RESUMENES, findResumen } from '../../data/resumenesData';
 import { PreciosConfig } from '../../types';
+import { useAuthStore } from '../../../../auth/authStore';
 
 export interface QuoteSnapshot {
   programa: string;
@@ -120,8 +121,16 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
   const [proposalStatus, setProposalStatus] = useState<'revision' | 'aprobada'>('revision');
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [proposalHtmlContent, setProposalHtmlContent] = useState('');
-  const [advisorName, setAdvisorName] = useState('Asesor Asesor');
+  const loggedUser = useAuthStore((s) => s.user);
+  const [advisorName, setAdvisorName] = useState<string>(loggedUser?.displayName || '');
   const isTit0FreeActive = tituloCosto0;
+
+  // Auto-asignar el nombre del asesor desde el usuario logueado (login)
+  React.useEffect(() => {
+    if (loggedUser?.displayName) {
+      setAdvisorName(loggedUser.displayName);
+    }
+  }, [loggedUser?.displayName]);
 
   // Fecha de cotización y vigencia de 2 días o hasta hoy 23:59 si título gratis está activo
   const [createdDateStr, setCreatedDateStr] = useState('');

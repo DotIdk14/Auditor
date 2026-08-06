@@ -5,6 +5,7 @@ import { getPrice } from './utils/calculo_cotizacion/quoteUtils';
 import { QuoteForm } from './components/cotizador/QuoteForm';
 import { QuoteResult, type QuoteSnapshot } from './components/cotizador/QuoteResult';
 import { SaveQuoteModal } from './components/SaveQuoteModal';
+import { ContactPicker, type QuoteContactContext } from './components/ContactPicker';
 import { QuoteComparator } from './components/cotizador/QuoteComparator';
 import { CompetitorComparison } from './components/cotizador/CompetitorComparison';
 import { MonitorPlay, UsersRound, Maximize2, Minimize2, X, Briefcase, RefreshCw, ExternalLink, MessagesSquare } from 'lucide-react';
@@ -64,6 +65,7 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
 
   const [saveSnapshot, setSaveSnapshot] = useState<QuoteSnapshot | null>(null);
   const [saveKey, setSaveKey] = useState(0);
+  const [contactContext, setContactContext] = useState<QuoteContactContext>({ mode: 'existing' });
 
   const handleSyncToMain = (config: any) => {
     setActiveTab(config.activeTab);
@@ -646,10 +648,18 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
             transition={{ duration: 0.5 }}
             className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4"
           >
+            {/* CONTACT ASSIGNMENT */}
+            <div className="mb-5">
+              <ContactPicker
+                darkMode={darkMode}
+                value={contactContext}
+                onChange={setContactContext}
+              />
+            </div>
+
             {/* CORE CALCULATOR FORM */}
             <QuoteForm
-              activeTab={activeTab}
-              setActiveTab={(tab) => {
+              activeTab={activeTab}              setActiveTab={(tab) => {
                 setActiveTab(tab);
                 setSelectedArea('');
               }}
@@ -1000,6 +1010,7 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
             key={saveKey}
             darkMode={darkMode}
             snapshot={saveSnapshot}
+            contactContext={contactContext}
             onClose={() => setSaveSnapshot(null)}
             onSaved={() => {
               setTimeout(() => setSaveSnapshot(null), 1500);

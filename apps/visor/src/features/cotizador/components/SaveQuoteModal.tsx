@@ -4,10 +4,12 @@ import { apiClient } from '../../../lib/api';
 import { useCallStore } from '../../resources/store/useCallStore';
 import type { QuoteSnapshot } from './cotizador/QuoteResult';
 import type { Contact } from '@auditor/shared-types';
+import type { QuoteContactContext } from './ContactPicker';
 
 interface Props {
   darkMode: boolean;
   snapshot: QuoteSnapshot | null;
+  contactContext?: QuoteContactContext;
   onClose: () => void;
   onSaved?: () => void;
 }
@@ -20,17 +22,19 @@ interface UsedSelectable {
   categoryId?: string;
 }
 
-export function SaveQuoteModal({ darkMode, snapshot, onClose, onSaved }: Props) {
-  const [mode, setMode] = useState<'existing' | 'new'>('existing');
+export function SaveQuoteModal({ darkMode, snapshot, contactContext, onClose, onSaved }: Props) {
+  const [mode, setMode] = useState<'existing' | 'new'>(contactContext?.mode || 'existing');
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<Contact[]>([]);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(
+    contactContext?.mode === 'existing' ? contactContext.contact ?? null : null
+  );
   const [searching, setSearching] = useState(false);
 
   // New contact fields
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState(contactContext?.fullName || '');
+  const [phone, setPhone] = useState(contactContext?.phone || '');
+  const [email, setEmail] = useState(contactContext?.email || '');
   const [notes, setNotes] = useState('');
 
   // Auto-captured speeches & objections (editable)
