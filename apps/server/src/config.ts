@@ -39,6 +39,7 @@ export const localNotasMemory = new Map<string, any[]>();
 export const localObjecionesMemory = new Map<string, any[]>();
 export let localQuickNotesMemory: any[] = [];
 export let localInteractionsMemory: any[] = [];
+export let localCotizacionesMemory: any[] = [];
 
 // Mutator helpers
 export function setLocalCallsMemory(calls: any[]): void {
@@ -80,6 +81,18 @@ export function removeContactById(id: string): boolean {
 
 export function prependInteraction(interaction: any): void {
   localInteractionsMemory.unshift(interaction);
+}
+
+export function setLocalCotizacionesMemory(items: any[]): void {
+  localCotizacionesMemory = items;
+}
+
+export function prependCotizacion(item: any): void {
+  localCotizacionesMemory = [item, ...localCotizacionesMemory];
+}
+
+export function getCotizacionesByContact(contactId: string): any[] {
+  return localCotizacionesMemory.filter(c => c.contact_id === contactId);
 }
 
 export function setLocalQuickNotesMemory(notas: any[]): void {

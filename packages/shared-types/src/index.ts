@@ -194,6 +194,7 @@ export type InteractionTipo =
   | 'Revisando Informacion'
   | 'Seguimiento'
   | 'Volver a llamar'
+  | 'Cotización enviada'
   | 'Cuelga'
   | 'No le interesa'
   | 'Muy caro'
@@ -203,7 +204,7 @@ export type InteractionTipo =
   | 'No quiere brindar informacion';
 
 export const POSITIVE_TIPOS: InteractionTipo[] = [
-  'Revisando Informacion', 'Seguimiento', 'Volver a llamar',
+  'Revisando Informacion', 'Seguimiento', 'Volver a llamar', 'Cotización enviada',
 ];
 
 export const NEGATIVE_TIPOS: InteractionTipo[] = [
@@ -221,6 +222,63 @@ export interface InteractionFile {
   type: string;
   size: number;
   url: string;
+}
+
+export interface UsedItem {
+  id: string;
+  title: string;
+  content?: string | null;
+  sectionId?: string | null;
+  categoryId?: string | null;
+}
+
+export interface Cotizacion {
+  id: string;
+  contact_id: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  area_id: string | null;
+  team_id: string | null;
+  programa: string | null;
+  nivel: string | null;
+  jornada: string | null;
+  lead: string | null;
+  zona: string | null;
+  fecha_inicio: string | null;
+  experiencia: string | null;
+  modalidad: string | null;
+  beneficios: Record<string, unknown>;
+  pricing: Record<string, unknown>;
+  resumen_programa: string | null;
+  advisor_name: string | null;
+  proposal_status: string | null;
+  used_speeches: UsedItem[];
+  used_objections: UsedItem[];
+  notes: string | null;
+  interaction_type: string | null;
+  interaction_tipo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ActivityItemType = 'interaction' | 'audit' | 'task' | 'cotizacion';
+
+export interface ActivityItem {
+  id: string;
+  type: ActivityItemType;
+  interactionType?: InteractionType;
+  titulo: string;
+  title?: string;
+  description: string;
+  created_at: string;
+  files?: InteractionFile[];
+  tipificacion?: InteractionTipificacion;
+  assigned_to?: string;
+  score?: number;
+  programa?: string | null;
+  nivel?: string | null;
+  pricing?: Record<string, unknown>;
+  cotizacionId?: string;
 }
 
 export interface Interaction {

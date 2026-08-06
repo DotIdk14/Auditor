@@ -41,6 +41,24 @@ import { ProgramHoverAccordion } from './ProgramHoverAccordion';
 import { RESUMENES, findResumen } from '../../data/resumenesData';
 import { PreciosConfig } from '../../types';
 
+export interface QuoteSnapshot {
+  programa: string;
+  nivel: string;
+  jornada: string;
+  lead: string;
+  zona: string;
+  fechaInicio: string;
+  experiencia: string | null;
+  modalidad: string;
+  beneficios: Record<string, unknown>;
+  pricing: Record<string, unknown>;
+  resumenPrograma: string;
+  advisorName: string;
+  proposalStatus: 'revision' | 'aprobada';
+  createdDate: string;
+  expiryDate: string;
+}
+
 interface QuoteResultProps {
   activeTab: string;
   activeSubTabEN: string;
@@ -70,6 +88,9 @@ interface QuoteResultProps {
   platziPreview: boolean;
   precios: PreciosConfig;
   selectedJornada?: string;
+
+  // Save quote
+  onSaveQuote?: (snapshot: QuoteSnapshot) => void;
 }
 
 // Esta parte es la que muestra cuánto dinero tiene que pagar el alumno al final.
@@ -92,7 +113,8 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
   tituloCosto0,
   platziPreview,
   precios,
-  selectedJornada = 'intensiva'
+  selectedJornada = 'intensiva',
+  onSaveQuote
 }) => {
   // Estado para la gestión de la propuesta académica: 'revision' o 'aprobada'
   const [proposalStatus, setProposalStatus] = useState<'revision' | 'aprobada'>('revision');
@@ -1538,14 +1560,63 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
     );
   }
 
+  // Build snapshot of the current quote for saving
+  const buildSnapshot = (): QuoteSnapshot => {
+    const programName = activeTab === 'dip' ? selectedDiplomado : selectedProgram;
+    const nivelLabel = activeTab === 'dip' ? 'Diplomado'
+      : { lic: 'Licenciatura', mae: 'Maestría', ms: 'Master UTEL', doc: 'Doctorado' }[sec] || 'Licenciatura';
+    const modalidadLabel = activeTab === 'en' ? 'Ejecutiva (en línea)'
+      : activeTab === 'pu' ? 'Pagos Únicos'
+      : activeTab === 'dip' ? 'Diplomado (en línea)'
+      : isOnline ? 'En línea' : 'Modalidad especial';
+
+    const res = findResumen(programName);
+    const resumenPrograma = res?.secciones["1_EL_GANCHO"] || getProgramSummary(programName) || '';
+    const precioLista = (pkgName && LISTA_MAP[pkgName]) || LISTA;
+    const cuotaBeca = rows.length > 0 ? rows[rows.length - 1].total : (finalPrices[finalPrices.length - 1] || 0);
+    const ahorroMensual = Math.max(0, precioLista - cuotaBeca);
+
+    return {
+      programa: programName,
+      nivel: nivelLabel,
+      jornada: selectedJornada,
+      lead: selectedLead,
+      zona: selectedZona,
+      fechaInicio: selectedStartDate,
+      experiencia: selectedExperiencia,
+      modalidad: modalidadLabel,
+      beneficios: {
+        incluidos: incList,
+        opcionales: optionalItems,
+        domiciliacionPct,
+        tituloCosto0,
+        platziPreview,
+      },
+      pricing: {
+        filas: rows,
+        paquete: pkgName,
+        escalonado: escName,
+        becaPct: becaPercentNum,
+        domiciliacionPct,
+        precioLista,
+        cuotaBeca,
+        ahorroMensual,
+      },
+      resumenPrograma,
+      advisorName,
+      proposalStatus,
+      createdDate: createdDateStr,
+      expiryDate: expiryDateStr,
+    };
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.6 }}
       className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6"
-    >
-      {/* LEFT COLUMN: TABLE OF PAYMENTS */}
+    >      {/* LEFT COLUMN: TABLE OF PAYMENTS */}
       <div className="lg:col-span-2 space-y-6">
         {/* CHOSEN PROGRAM INFO & PDF DOWNLOAD HEADER */}
         <div className="bg-slate-50/70 dark:bg-slate-900/60 shadow-xs border border-gray-200 dark:border-slate-800 p-5 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
@@ -1712,6 +1783,18 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
                 <FileSpreadsheet className="h-4 w-4" />
                 Descargar propuesta
               </motion.button>
+
+              {onSaveQuote && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => onSaveQuote(buildSnapshot())}
+                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm active:scale-95"
+                >
+                  <Check className="h-4 w-4" />
+                  Guardar cotización
+                </motion.button>
+              )}
             </div>
           </div>
 

@@ -94,7 +94,7 @@ export function useContactActivity(id: string) {
 
 export interface ActivityItem {
   id: string;
-  type: 'audit' | 'task' | 'interaction';
+  type: 'audit' | 'task' | 'interaction' | 'cotizacion';
   title: string;
   description?: string;
   created_at: string;
@@ -110,6 +110,8 @@ export interface ActivityItem {
   titulo?: string;
   files?: any[];
   tipificacion?: string;
+  nivel?: string | null;
+  pricing?: Record<string, unknown>;
 }
 
 export function useCreateContact() {

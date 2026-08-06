@@ -344,3 +344,63 @@ export interface ContactRecord {
   metadata?: Record<string, unknown>;
   dispositionLocked?: boolean;
 }
+
+// ── Cotizaciones ─────────────────────────────────────────────────
+export interface UsedItem {
+  id: string;
+  title: string;
+  content?: string | null;
+  sectionId?: string | null;
+  categoryId?: string | null;
+}
+
+export interface Cotizacion {
+  id: string;
+  contact_id: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  area_id: string | null;
+  team_id: string | null;
+  programa: string | null;
+  nivel: string | null;
+  jornada: string | null;
+  lead: string | null;
+  zona: string | null;
+  fecha_inicio: string | null;
+  experiencia: string | null;
+  modalidad: string | null;
+  beneficios: Record<string, unknown>;
+  pricing: Record<string, unknown>;
+  resumen_programa: string | null;
+  advisor_name: string | null;
+  proposal_status: string | null;
+  used_speeches: UsedItem[];
+  used_objections: UsedItem[];
+  notes: string | null;
+  interaction_type: string | null;
+  interaction_tipo: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CotizacionCreate {
+  contactId: string;
+  programa?: string | null;
+  nivel?: string | null;
+  jornada?: string | null;
+  lead?: string | null;
+  zona?: string | null;
+  fechaInicio?: string | null;
+  experiencia?: string | null;
+  modalidad?: string | null;
+  beneficios?: Record<string, unknown> | null;
+  pricing?: Record<string, unknown> | null;
+  resumenPrograma?: string | null;
+  advisorName?: string | null;
+  proposalStatus?: string | null;
+  usedSpeeches?: UsedItem[] | null;
+  usedObjections?: UsedItem[] | null;
+  notes?: string | null;
+  interactionType?: string | null;
+  interactionTipo?: string | null;
+}

@@ -4,12 +4,21 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, X, ChevronDown, CheckCircle2, Circle } from 'lucide-react';
 
-interface Props { darkMode: boolean; }
+interface Props { darkMode: boolean; programName?: string; }
 
-export function QuickObjections({ darkMode }: Props) {
+export function QuickObjections({ darkMode, programName }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const { usedResponses, toggleUsedResponse } = useCallStore();
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
+
+  const recommendationScore = (cat: { title: string; objection: string; responses: { title: string; content: string }[] }) => {
+    if (!programName) return 0;
+    const keywords = programName.toLowerCase().split(' ').filter(w => w.length > 3);
+    const haystack = `${cat.title} ${cat.objection} ${cat.responses.map(r => `${r.title} ${r.content}`).join(' ')}`.toLowerCase();
+    return keywords.reduce((acc, k) => acc + (haystack.includes(k) ? 1 : 0), 0);
+  };
+
+  const categories = [...defaultObjectionCategories].sort((a, b) => recommendationScore(b) - recommendationScore(a));
 
   return (
     <>
@@ -48,14 +57,35 @@ export function QuickObjections({ darkMode }: Props) {
                 </button>
               </div>
               <div className="p-4 space-y-3">
-                {defaultObjectionCategories.map(cat => (
-                  <div key={cat.id} className={`rounded-xl border overflow-hidden ${darkMode ? 'bg-[#24211e] border-[#3e382f]' : 'bg-stone-50 border-stone-200'}`}>
+                {programName && (
+                  <div className={`rounded-xl border p-3 ${darkMode ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                      ✨ Objeciones relevantes para {programName}
+                    </p>
+                    <p className={`text-[8px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+                      Las categorías más relacionadas con este programa aparecen primero.
+                    </p>
+                  </div>
+                )}
+                {categories.map(cat => {
+                  const isRecommended = recommendationScore(cat) > 0;
+                  return (
+                  <div key={cat.id} className={`rounded-xl border overflow-hidden ${
+                    isRecommended
+                      ? darkMode ? 'bg-emerald-950/10 border-emerald-800/40' : 'bg-emerald-50/50 border-emerald-200'
+                      : darkMode ? 'bg-[#24211e] border-[#3e382f]' : 'bg-stone-50 border-stone-200'
+                  }`}>
                     <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)}
                       className={`w-full flex items-center justify-between p-3 transition-all ${darkMode ? 'hover:bg-[#1c1a18]' : 'hover:bg-white'}`}>
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{cat.icon}</span>
                         <span className={`text-[11px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>{cat.title}</span>
                         <span className={`text-[8px] ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>({cat.responses.length})</span>
+                        {isRecommended && (
+                          <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                            Relevante
+                          </span>
+                        )}
                       </div>
                       <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandedCat === cat.id ? 'rotate-180' : ''} ${darkMode ? 'text-stone-500' : 'text-stone-400'}`} />
                     </button>
@@ -84,7 +114,8 @@ export function QuickObjections({ darkMode }: Props) {
                       )}
                     </AnimatePresence>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
           </>

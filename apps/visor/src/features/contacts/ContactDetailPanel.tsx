@@ -243,7 +243,9 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                         ? item.tipificacion === 'positiva'
                           ? darkMode ? 'bg-amber-900 border-amber-500' : 'bg-amber-100 border-amber-500'
                           : darkMode ? 'bg-rose-900 border-rose-500' : 'bg-rose-100 border-rose-500'
-                        : darkMode ? 'bg-indigo-900 border-indigo-500' : 'bg-indigo-100 border-indigo-500'
+                        : item.type === 'cotizacion'
+                          ? darkMode ? 'bg-blue-900 border-blue-500' : 'bg-blue-100 border-blue-500'
+                          : darkMode ? 'bg-indigo-900 border-indigo-500' : 'bg-indigo-100 border-indigo-500'
                     }`} />
                     <div
                       className={`p-3 rounded-xl border transition-all ${
@@ -264,6 +266,8 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                           ) : (
                             <MessageSquare className={`w-3 h-3 ${darkMode ? 'text-amber-400' : 'text-amber-600'}`} />
                           )
+                        ) : item.type === 'cotizacion' ? (
+                          <FileCheck className={`w-3 h-3 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                         ) : item.taskType === 'call' ? (
                           <PhoneCall className={`w-3 h-3 ${darkMode ? 'text-indigo-400' : 'text-indigo-600'}`} />
                         ) : item.taskType === 'email' ? (
@@ -277,11 +281,13 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                           item.type === 'audit' ? 'bg-emerald-900/30 text-emerald-400'
                           : item.type === 'interaction'
                           ? item.tipificacion === 'positiva' ? 'bg-amber-900/30 text-amber-400' : 'bg-rose-900/30 text-rose-400'
+                          : item.type === 'cotizacion' ? 'bg-blue-900/30 text-blue-400'
                           : 'bg-indigo-900/30 text-indigo-400'
                         }`}>
                           {item.type === 'audit' ? 'Auditoría'
                           : item.type === 'interaction'
                           ? item.interactionType || 'Interacción'
+                          : item.type === 'cotizacion' ? 'Cotización'
                           : item.taskType || 'Tarea'}
                         </span>
                         {item.type === 'audit' && item.score != null && (
@@ -295,6 +301,25 @@ export default function ContactDetailPanel({ contactId, darkMode, onClose, onTip
                       <span className={`text-[11px] font-bold ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
                         {item.title}
                       </span>
+                      {item.type === 'cotizacion' && (item.nivel || item.pricing) && (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {item.nivel && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                              {item.nivel}
+                            </span>
+                          )}
+                          {typeof (item.pricing as any)?.cuotaBeca === 'number' && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-50 text-emerald-600'}`}>
+                              ${Number((item.pricing as any).cuotaBeca).toLocaleString('es-MX')}/mes
+                            </span>
+                          )}
+                          {typeof (item.pricing as any)?.becaPct === 'number' && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-50 text-amber-600'}`}>
+                              {(item.pricing as any).becaPct}% beca
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mt-1">
                         <Clock className={`w-3 h-3 ${textMuted}`} />
                         <span className={`text-[9px] ${textMuted}`}>

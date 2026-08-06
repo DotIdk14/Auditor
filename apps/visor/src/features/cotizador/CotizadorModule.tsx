@@ -1,13 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, cloneElement, isValidElement } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CATALOG, LISTA, LISTA_MAP, PROG, ACCS, EJE_PKG_MAP, HIB_PKG_MAP, HIB_ESC_MAP } from './data/catalogs';
 import { getPrice } from './utils/calculo_cotizacion/quoteUtils';
 import { QuoteForm } from './components/cotizador/QuoteForm';
-import { QuoteResult } from './components/cotizador/QuoteResult';
+import { QuoteResult, type QuoteSnapshot } from './components/cotizador/QuoteResult';
+import { SaveQuoteModal } from './components/SaveQuoteModal';
 import { QuoteComparator } from './components/cotizador/QuoteComparator';
 import { CompetitorComparison } from './components/cotizador/CompetitorComparison';
 import { MonitorPlay, UsersRound, Maximize2, Minimize2, X, Briefcase, RefreshCw, ExternalLink, MessagesSquare } from 'lucide-react';
 import { FloatingChatButton } from './components/ia_asistente/FloatingChatButton';
+import { QuickObjections } from '../resources/components/QuickObjections/QuickObjections';
 import { AdminScreen } from './components/administracion/AdminScreen';
 import type { PreciosConfig, AppConfig } from './types';
 import { api } from '../../lib/api';
@@ -41,7 +43,6 @@ interface CotizadorModuleProps {
   darkMode: boolean;
   speechesPanel?: React.ReactNode;
 }
-
 export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProps) {
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -60,6 +61,9 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
   const [selectedExperiencia, setSelectedExperiencia] = useState<string | null>(null);
   const [selectedJornada, setSelectedJornada] = useState<string>('intensiva');
   const [viewMode, setViewMode] = useState<'individual' | 'double' | 'comparativa'>('individual');
+
+  const [saveSnapshot, setSaveSnapshot] = useState<QuoteSnapshot | null>(null);
+  const [saveKey, setSaveKey] = useState(0);
 
   const handleSyncToMain = (config: any) => {
     setActiveTab(config.activeTab);
@@ -768,6 +772,10 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
                     platziPreview={adminConfig.platziPreview}
                     precios={precios}
                     selectedJornada={selectedJornada}
+                    onSaveQuote={(snapshot) => {
+                      setSaveKey(k => k + 1);
+                      setSaveSnapshot(snapshot);
+                    }}
                   />
                 </motion.div>
               )}
@@ -892,7 +900,9 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
                       </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4">
-                      {speechesPanel}
+                      {isValidElement(speechesPanel)
+                        ? cloneElement(speechesPanel, { programName: selectedProgram } as any)
+                        : speechesPanel}
                     </div>
                   </motion.aside>
                 </>
@@ -971,8 +981,7 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
             </AnimatePresence>
 
             {/* SYSTEM DISCLAIMER MARGIN */}
-            <footer className="text-center mt-12 text-[10px] text-gray-450 dark:text-slate-500 max-w-2xl mx-auto leading-relaxed border-t border-gray-200/50 dark:border-slate-800/80 pt-6">
-              <div className="font-semibold text-gray-400/80 dark:text-slate-500 mb-1">CONFIDENCIAL — Solo para uso interno del equipo de admisiones UTEL</div>
+            <footer className="text-center mt-12 text-[10px] text-gray-450 dark:text-slate-500 max-w-2xl mx-auto leading-relaxed border-t border-gray-200/50 dark:border-slate-800/80 pt-6">              <div className="font-semibold text-gray-400/80 dark:text-slate-500 mb-1">CONFIDENCIAL — Solo para uso interno del equipo de admisiones UTEL</div>
               <div className="mb-2">
                 Desarrollado por: <span className="font-bold text-gray-500 dark:text-slate-400">Ian Emiliano Jarquín Hernández</span> (ianidk1@gmail.com)
                 <br/>
@@ -983,7 +992,19 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
 
             {/* CHATBOT */}
             <FloatingChatButton />
+            <QuickObjections darkMode={darkMode} programName={selectedProgram} />
           </motion.div>
+
+          {/* Save Quote Modal */}
+          <SaveQuoteModal
+            key={saveKey}
+            darkMode={darkMode}
+            snapshot={saveSnapshot}
+            onClose={() => setSaveSnapshot(null)}
+            onSaved={() => {
+              setTimeout(() => setSaveSnapshot(null), 1500);
+            }}
+          />
         </AnimatePresence>
       )}
     </div>

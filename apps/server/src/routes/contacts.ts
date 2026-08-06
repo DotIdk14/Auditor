@@ -199,8 +199,9 @@ export default function (app: Express): void {
 
       let auditItems: any[] = [];
       let taskItems: any[] = [];
+      let cotizacionItems: any[] = [];
 
-      const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }] = await Promise.all([
+      const [{ data: audits, error: auditsError }, { data: tasks, error: tasksError }, { data: cotizaciones, error: cotizacionesError }] = await Promise.all([
         insforge.database
           .from("auditorias")
           .select("id, contact_id, metadata, score, analysis, transcription, created_at")
@@ -211,10 +212,16 @@ export default function (app: Express): void {
           .select("id, contact_id, title, description, type, status, priority, due_date, completed_at, assigned_to, created_at, updated_at")
           .eq("contact_id", contactId)
           .order("created_at", { ascending: false }),
+        insforge.database
+          .from("cotizaciones")
+          .select("id, contact_id, programa, nivel, pricing, created_at, advisor_name")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false }),
       ]);
 
       if (auditsError) console.warn("[ACTIVITY] Error fetching audits:", auditsError.message);
       if (tasksError) console.warn("[ACTIVITY] Error fetching tasks:", tasksError.message);
+      if (cotizacionesError) console.warn("[ACTIVITY] Error fetching cotizaciones:", cotizacionesError.message);
 
       auditItems = (audits || []).map((a: any) => ({
         id: a.id,
@@ -253,7 +260,19 @@ export default function (app: Express): void {
         assigned_to: i.created_by_name,
       }));
 
-      const items = [...auditItems, ...taskItems, ...interactionItems]
+      cotizacionItems = (cotizaciones || []).map((c: any) => ({
+        id: c.id,
+        type: "cotizacion" as const,
+        title: c.programa || "Cotización",
+        description: c.advisor_name ? `Asesor: ${c.advisor_name}` : "",
+        created_at: c.created_at,
+        programa: c.programa,
+        nivel: c.nivel,
+        pricing: c.pricing || {},
+        cotizacionId: c.id,
+      }));
+
+      const items = [...auditItems, ...taskItems, ...interactionItems, ...cotizacionItems]
         .sort((a, b) => new Date(b.created_at || "").getTime() - new Date(a.created_at || "").getTime());
 
       res.json({ contactId, items, total: items.length });

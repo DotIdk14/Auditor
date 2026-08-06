@@ -3,9 +3,10 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 
-import { PORT, setLocalCallsMemory, setLocalContactsMemory, localInteractionsMemory } from "./src/config.js";
+import { PORT, setLocalCallsMemory, setLocalContactsMemory, localInteractionsMemory, setLocalCotizacionesMemory } from "./src/config.js";
 import { loadCallsFromSupabase } from "./src/services/supabase.js";
 import { loadContactsFromDB, loadInteractionsFromDB, loadProfilesCache } from "./src/services/contactService.js";
+import { loadCotizacionesFromDB } from "./src/services/cotizacionService.js";
 import { errorHandler } from "./src/middleware/errorHandler.js";
 
 import mountAuthRoutes from "./src/routes/auth.js";
@@ -154,6 +155,16 @@ loadInteractionsFromDB().then((interactions) => {
 }).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
   console.warn("[DB] Failed to load interactions on startup:", message);
+});
+
+loadCotizacionesFromDB().then((cotizaciones) => {
+  if (cotizaciones.length > 0) {
+    setLocalCotizacionesMemory(cotizaciones);
+    console.log(`[DB] Restored ${cotizaciones.length} cotizaciones from database to memory.`);
+  }
+}).catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn("[DB] Failed to load cotizaciones on startup:", message);
 });
 
 // ── Start server ────────────────────────────────────────────────

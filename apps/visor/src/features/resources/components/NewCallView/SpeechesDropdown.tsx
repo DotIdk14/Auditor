@@ -10,8 +10,10 @@ import { PRINCIPLE_LABELS, PRINCIPLE_ICONS, TIMING_LABELS } from '../../types';
 import type { SmartBlock, SectionMeta } from '../../types';
 import { useLearnedSpeeches } from '../../hooks/useLearnedSpeeches';
 import { LearnedSpeechesPanel } from './LearnedSpeechesPanel';
+import { findResumen } from '../../../cotizador/data/resumenesData';
+import { getProgramSummary } from '../../../cotizador/data/summaries';
 
-interface Props { darkMode: boolean; }
+interface Props { darkMode: boolean; programName?: string; }
 
 type Tab = 'sections' | 'custom' | 'learned';
 
@@ -64,7 +66,7 @@ function customToItem(speech: { id: string; title: string; content: string }, se
   };
 }
 
-export function SpeechesDropdown({ darkMode }: Props) {
+export function SpeechesDropdown({ darkMode, programName }: Props) {
   const {
     completedSpeeches, expandedSections, defaultSpeeches: defaults, callVariables,
     customSpeeches, toggleSection, toggleSpeech, setDefaultSpeech,
@@ -245,6 +247,66 @@ export function SpeechesDropdown({ darkMode }: Props) {
 
           {tab === 'sections' && (
             <div className="p-3 pt-0 space-y-2 max-h-[50vh] overflow-y-auto">
+              {programName && (
+                <div className={`rounded-xl border p-3 ${darkMode ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <p className={`text-[9px] font-bold uppercase tracking-wider mb-1 ${darkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                    ✨ Recomendadas para este programa
+                  </p>
+                  <p className={`text-[9px] font-bold mb-1 ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
+                    {programName}
+                  </p>
+                  <p className={`text-[9px] leading-relaxed mb-2 ${darkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                    {(() => {
+                      const res = findResumen(programName);
+                      const hook = res?.secciones?.["1_EL_GANCHO"];
+                      return hook || getProgramSummary(programName) || '';
+                    })()}
+                  </p>
+                  {(() => {
+                    const keywords = programName.toLowerCase().split(' ').filter(w => w.length > 3);
+                    const matched = sections.flatMap(s =>
+                      s.builtins.filter(item => {
+                        const haystack = `${item.title} ${item.content} ${item.sectionTitle}`.toLowerCase();
+                        return keywords.some(k => haystack.includes(k));
+                      })
+                    ).slice(0, 4);
+                    return matched.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className={`text-[8px] font-bold ${darkMode ? 'text-emerald-500' : 'text-emerald-600'}`}>
+                          Speeches alineados al tema:
+                        </p>
+                        {matched.map(item => (
+                          <div key={item.id}
+                            onClick={() => toggleExpanded(item.id)}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer ${
+                              darkMode ? 'bg-[#1c1a18] border-[#3e382f]' : 'bg-white border-stone-200'
+                            }`}>
+                            <span className="text-sm">{item.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className={`text-[9px] font-bold truncate ${darkMode ? 'text-stone-200' : 'text-stone-700'}`}>
+                                {item.title}
+                              </p>
+                              <p className={`text-[7px] truncate ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>
+                                {item.sectionTitle}
+                              </p>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleSpeech(item.id); }}
+                              className={`p-1 rounded-lg hover:scale-110 transition-all ${
+                                completedSpeeches.includes(item.id) ? 'text-emerald-500' : darkMode ? 'text-stone-500' : 'text-stone-400'
+                              }`}
+                            >
+                              {completedSpeeches.includes(item.id)
+                                ? <CheckCircle2 className="w-3 h-3" />
+                                : <Circle className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
               {sections.map(({ section, builtins }) => {
                 const isExpanded = expandedSections.includes(section.id);
                 return (
