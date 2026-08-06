@@ -6,15 +6,14 @@ import { useCallStore } from '../../store/useCallStore';
 import { renderScriptText } from '../../utils/renderScriptText';
 import { blocksBySection } from '../../data/smartBlocks/index';
 import { sectionMeta } from '../../data/sections/sectionMeta';
-import { objectionReasons } from '../../data/defaultObjections';
 import { PRINCIPLE_LABELS, PRINCIPLE_ICONS, TIMING_LABELS } from '../../types';
-import type { SmartBlock, SectionMeta, ObjectionCategory, ObjectionResponse } from '../../types';
+import type { SmartBlock, SectionMeta } from '../../types';
 import { useLearnedSpeeches } from '../../hooks/useLearnedSpeeches';
 import { LearnedSpeechesPanel } from './LearnedSpeechesPanel';
 
 interface Props { darkMode: boolean; }
 
-type Tab = 'sections' | 'custom' | 'objections' | 'learned';
+type Tab = 'sections' | 'custom' | 'learned';
 
 interface SpeechItem {
   id: string;
@@ -70,8 +69,6 @@ export function SpeechesDropdown({ darkMode }: Props) {
     completedSpeeches, expandedSections, defaultSpeeches: defaults, callVariables,
     customSpeeches, toggleSection, toggleSpeech, setDefaultSpeech,
     openCreateSpeechModal, openEditSpeechModal, handleDeleteSpeech,
-    usedResponses, callCostReason, getMergedObjections,
-    toggleUsedResponse, openCreateObjectionModal, openEditObjectionModal, handleDeleteObjection,
   } = useCallStore();
 
   const [open, setOpen] = useState(true);
@@ -97,8 +94,6 @@ export function SpeechesDropdown({ darkMode }: Props) {
 
   const totalBuiltins = sections.reduce((acc, s) => acc + s.builtins.length, 0);
   const totalCustom = sections.reduce((acc, s) => acc + s.customs.length, 0);
-  const mergedObjections = getMergedObjections();
-  const totalObjections = mergedObjections.reduce((acc, c) => acc + c.responses.length, 0);
 
   const toggleExpanded = (id: string) => setExpandedItem(prev => prev === id ? null : id);
 
@@ -214,61 +209,6 @@ export function SpeechesDropdown({ darkMode }: Props) {
     );
   };
 
-  const renderObjectionResponse = (cat: ObjectionCategory, resp: ObjectionResponse) => {
-    const isUsed = usedResponses.includes(resp.id);
-    const isCustom = resp.isCustom === true;
-    const isExpanded = expandedItem === resp.id;
-    const container = `rounded-xl border-[2px] transition-all ${isCustom ? 'border-dashed ' : ''}${
-      isUsed
-        ? darkMode ? 'bg-emerald-950/15 border-emerald-800/30' : 'bg-emerald-50/60 border-emerald-200'
-        : isCustom
-          ? darkMode ? 'bg-[#24211e] border-amber-800/40' : 'bg-stone-50 border-amber-300'
-          : darkMode ? 'bg-[#24211e] border-[#4a4036]' : 'bg-stone-50 border-stone-200'
-    }`;
-
-    return (
-      <div key={resp.id} className={container}>
-        <div className="flex items-center gap-2 p-2.5">
-          <button onClick={() => toggleExpanded(resp.id)} className="flex-1 flex items-center gap-2 min-w-0 text-left">
-            <span className="text-sm">{isCustom ? '✏️' : '💬'}</span>
-            <p className={`text-[10px] font-bold font-display truncate ${isUsed ? 'line-through opacity-60 ' : ''}${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-              {resp.title}
-            </p>
-          </button>
-          <div className="flex items-center gap-0.5 shrink-0">
-            {isCustom && (
-              <>
-                <button onClick={() => openEditObjectionModal(cat.id, resp)}
-                  className={`p-1 rounded-lg transition-all hover:scale-110 ${darkMode ? 'text-stone-500 hover:text-amber-400' : 'text-stone-400 hover:text-amber-600'}`}
-                  title="Editar objeción"><Pencil className="w-3 h-3" /></button>
-                <button onClick={() => handleDeleteObjection(cat.id, resp.id)}
-                  className={`p-1 rounded-lg transition-all hover:scale-110 ${darkMode ? 'text-stone-500 hover:text-red-400' : 'text-stone-400 hover:text-red-600'}`}
-                  title="Eliminar objeción"><Trash2 className="w-3 h-3" /></button>
-              </>
-            )}
-            <button onClick={() => toggleUsedResponse(resp.id)}
-              className={`p-1 rounded-lg transition-all hover:scale-110 ${isUsed ? 'text-emerald-500' : darkMode ? 'text-stone-500 hover:text-stone-300' : 'text-stone-400 hover:text-stone-600'}`}
-              title={isUsed ? 'Marcar como no usada' : 'Marcar como usada'}>
-              {isUsed ? <CheckCircle2 className="w-3 h-3" /> : <Circle className="w-3 h-3" />}
-            </button>
-          </div>
-        </div>
-
-        {isExpanded && (
-          <div className={`px-3 pb-3 pt-2 border-t ${darkMode ? 'border-[#3e382f]' : 'border-stone-200'}`}>
-            <div className={`text-[10px] leading-relaxed p-3 rounded-lg whitespace-pre-line ${
-              isUsed
-                ? darkMode ? 'bg-emerald-950/10 text-stone-500' : 'bg-emerald-50/40 text-stone-500'
-                : darkMode ? 'bg-[#1c1a18] text-stone-400' : 'bg-white text-stone-600'
-            }`}>
-              {resp.content}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const tabBtn = (active: boolean) => `flex-1 px-2 py-1.5 rounded-lg text-[9px] font-bold transition-all ${
     active
       ? darkMode ? 'bg-amber-900/40 text-amber-400' : 'bg-white text-[#b57b54] shadow-sm border border-[#dfd9cc]'
@@ -297,9 +237,6 @@ export function SpeechesDropdown({ darkMode }: Props) {
             </button>
             <button onClick={() => setTab('custom')} className={tabBtn(tab === 'custom')}>
               Personalizados ({totalCustom})
-            </button>
-            <button onClick={() => setTab('objections')} className={tabBtn(tab === 'objections')}>
-              Objeciones ({totalObjections})
             </button>
             <button onClick={() => setTab('learned')} className={tabBtn(tab === 'learned')}>
               IA Top ventas ({learnedCount})
@@ -363,48 +300,6 @@ export function SpeechesDropdown({ darkMode }: Props) {
                   </div>
                 ))
               )}
-            </div>
-          )}
-
-          {tab === 'objections' && (
-            <div className="p-3 pt-0 space-y-2 max-h-[50vh] overflow-y-auto">
-              {mergedObjections.map(cat => {
-                const isExpanded = expandedSections.includes(`obj_${cat.id}`);
-                const relevant = callCostReason ? (objectionReasons.find(r => r.id === callCostReason)?.matchedObjections.includes(cat.id) ?? false) : false;
-                return (
-                  <div key={cat.id} className={`rounded-xl border overflow-hidden ${
-                    relevant
-                      ? darkMode ? 'bg-amber-950/10 border-amber-800/30' : 'bg-amber-50/50 border-amber-200'
-                      : darkMode ? 'bg-zinc-900/50 border-white/5' : 'bg-white/50 border-stone-200'
-                  }`}>
-                    <button onClick={() => toggleSection(`obj_${cat.id}`)}
-                      className={`w-full flex items-center justify-between p-2.5 transition-all ${darkMode ? 'hover:bg-[#24211e]' : 'hover:bg-stone-50'}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span>{cat.icon}</span>
-                        <span className={`text-[10px] font-bold font-display truncate ${darkMode ? 'text-stone-200' : 'text-stone-800'}`}>{cat.title}</span>
-                        {relevant && <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${darkMode ? 'bg-amber-900/40 text-amber-300' : 'bg-amber-200 text-amber-700'}`}>Relevante</span>}
-                        <span className={`text-[8px] font-bold shrink-0 ${darkMode ? 'text-stone-500' : 'text-stone-400'}`}>{cat.responses.length}</span>
-                      </div>
-                      <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''} ${darkMode ? 'text-stone-500' : 'text-stone-400'}`} />
-                    </button>
-                    {isExpanded && (
-                      <div className={`border-t p-2 space-y-2 ${darkMode ? 'border-[#3e382f]' : 'border-stone-200'}`}>
-                        <div className={`text-[9px] italic p-2.5 rounded-lg ${darkMode ? 'bg-[#24211e] text-stone-400' : 'bg-stone-50 text-stone-500'}`}>
-                          {cat.objection}
-                        </div>
-                        {cat.responses.map(resp => renderObjectionResponse(cat, resp))}
-                        <button onClick={() => openCreateObjectionModal(cat.id)}
-                          className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-dashed text-[9px] font-bold transition-all ${
-                            darkMode ? 'border-[#4a4036] text-stone-500 hover:border-amber-800/40 hover:text-amber-400'
-                            : 'border-stone-200 text-stone-400 hover:border-amber-300 hover:text-amber-600'
-                          }`}>
-                          <Plus className="w-3 h-3" /> Agregar objeción
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
             </div>
           )}
 

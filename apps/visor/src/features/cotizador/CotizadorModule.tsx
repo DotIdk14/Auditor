@@ -6,7 +6,7 @@ import { QuoteForm } from './components/cotizador/QuoteForm';
 import { QuoteResult } from './components/cotizador/QuoteResult';
 import { QuoteComparator } from './components/cotizador/QuoteComparator';
 import { CompetitorComparison } from './components/cotizador/CompetitorComparison';
-import { MonitorPlay, UsersRound, Maximize2, Minimize2, X, Briefcase, RefreshCw, ExternalLink } from 'lucide-react';
+import { MonitorPlay, UsersRound, Maximize2, Minimize2, X, Briefcase, RefreshCw, ExternalLink, MessagesSquare } from 'lucide-react';
 import { FloatingChatButton } from './components/ia_asistente/FloatingChatButton';
 import { AdminScreen } from './components/administracion/AdminScreen';
 import type { PreciosConfig, AppConfig } from './types';
@@ -39,11 +39,13 @@ const COLOR_PRESETS = [
 
 interface CotizadorModuleProps {
   darkMode: boolean;
+  speechesPanel?: React.ReactNode;
 }
 
-export function CotizadorModule({ darkMode }: CotizadorModuleProps) {
+export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProps) {
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isSpeechesOpen, setIsSpeechesOpen] = useState(false);
 
   // Botones para elegir qué nivel estudiar (prepa, uni, maestría)
   const [activeTab, setActiveTab] = useState<string>('lic');
@@ -833,7 +835,69 @@ export function CotizadorModule({ darkMode }: CotizadorModuleProps) {
                   </div>
                 </div>
               </div>
+
+              {speechesPanel && (
+                <div className="relative group/btn4 flex items-center">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsSpeechesOpen(true)}
+                    className="h-14 w-14 flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-full shadow-xl hover:border-amber-500/50 transition-all cursor-pointer z-10 flex cursor-pointer text-inherit"
+                  >
+                    <div className="bg-amber-50 dark:bg-amber-900/30 p-2.5 rounded-full text-amber-600 dark:text-amber-400">
+                      <MessagesSquare className="h-6 w-6" />
+                    </div>
+                  </motion.button>
+                  <div className="absolute left-[calc(100%+12px)] opacity-0 group-hover/btn4:opacity-100 translate-x-2 group-hover/btn4:translate-x-0 transition-all duration-200 pointer-events-none">
+                    <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg whitespace-nowrap">
+                      Speeches
+                      <div className="absolute top-1/2 -left-1 -translate-y-1/2 border-y-[6px] border-y-transparent border-r-[6px] border-r-slate-900 dark:border-r-white" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Speeches Drawer */}
+            <AnimatePresence>
+              {isSpeechesOpen && speechesPanel && (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setIsSpeechesOpen(false)}
+                    className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm"
+                  />
+                  <motion.aside
+                    initial={{ x: '100%' }}
+                    animate={{ x: 0 }}
+                    exit={{ x: '100%' }}
+                    transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
+                    className="fixed right-0 inset-y-0 z-[70] w-full max-w-[420px] bg-white dark:bg-[#1c1a18] shadow-2xl flex flex-col"
+                  >
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-[#3e382f] shrink-0">
+                      <div className="flex items-center gap-2">
+                        <MessagesSquare className="h-4 w-4 text-amber-500" />
+                        <span className="text-sm font-bold font-display text-gray-800 dark:text-stone-200">
+                          Biblioteca de Speeches
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setIsSpeechesOpen(false)}
+                        className="p-2 rounded-lg bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-stone-400 transition-colors cursor-pointer"
+                        title="Cerrar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      {speechesPanel}
+                    </div>
+                  </motion.aside>
+                </>
+              )}
+            </AnimatePresence>
 
             {/* System iFrame Modal */}
             <AnimatePresence>
