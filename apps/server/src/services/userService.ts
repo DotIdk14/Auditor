@@ -100,7 +100,11 @@ export async function resolveManagedTeamIds(scope: ServiceScope): Promise<string
 export async function canManageTarget(scope: ServiceScope, target: { id: string; role: UserRole; area_id: string | null; team_id: string | null }): Promise<boolean> {
   if (scope.role === "admin") return true;
   if (scope.role === "area_manager") {
-    return target.area_id === scope.areaId && target.role !== "admin" && target.role !== "area_manager";
+    return (
+      target.role !== "admin" &&
+      target.role !== "area_manager" &&
+      (target.area_id === scope.areaId || !target.area_id)
+    );
   }
   if (scope.role === "coordinator") {
     if (target.role === "admin" || target.role === "area_manager" || target.role === "coordinator") return false;
@@ -136,7 +140,7 @@ export async function listUsers(scope: ServiceScope): Promise<OrgUser[]> {
     case "admin":
       break;
     case "area_manager":
-      rows = rows.filter(p => p.area_id === scope.areaId);
+      rows = rows.filter(p => !p.area_id || p.area_id === scope.areaId);
       break;
     case "coordinator":
       rows = rows.filter(p => p.id === scope.userId || (p.team_id && teamIds.includes(p.team_id)));
@@ -288,10 +292,13 @@ export async function updateUser(scope: ServiceScope, userId: string, patch: Use
   if (patch.area_id !== undefined && scope.role === "coordinator") {
     throw new Error("Como coordinador no puedes cambiar el área");
   }
+  if (patch.area_id !== undefined && patch.area_id !== null && scope.role === "area_manager" && patch.area_id !== scope.areaId) {
+    throw new Error("El área está fuera de tu alcance");
+  }
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   for (const key of ALLOWED_PATCH) {
-    if (patch[key] !== undefined && patch[key] !== null) {
+    if (patch[key] !== undefined) {
       updates[key] = patch[key];
     }
   }

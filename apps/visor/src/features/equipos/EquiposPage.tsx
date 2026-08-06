@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useOutletContext } from "react-router-dom";
 import {
@@ -566,10 +566,96 @@ function PasswordDialog({
 
 // ── Structure tab (tree) ────────────────────────────────────────────────────
 
+function TeamCard({
+  team, members, candidates, area, darkMode, canEdit,
+}: {
+  team: OrgTeam; members: OrgUser[]; candidates: OrgUser[]; area: OrgArea; darkMode: boolean; canEdit: boolean;
+}) {
+  const updateUser = useUpdateUser();
+  const addRef = useRef<HTMLSelectElement>(null);
+
+  const addMember = (userId: string) => updateUser.mutate({ id: userId, patch: { teamId: team.id } });
+  const removeMember = (user: OrgUser) => updateUser.mutate({ id: user.id, patch: { teamId: null } });
+
+  return (
+    <div className={`rounded-[5px] border p-3.5 ${darkMode ? "bg-[#161412] border-[#3e382f]" : "bg-[#fcfbf9] border-[#e6e0d0]"}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-xs font-black ${darkMode ? "text-stone-200" : "text-stone-800"}`}>{team.name}</p>
+        <span className={`text-[9px] font-black uppercase tracking-wider border px-2 py-0.5 rounded-full ${darkMode ? "text-[#ffd8b3] bg-[#3e342a]/40 border-[#d4a373]/20" : "text-[#b57b54] bg-[#faedcd]/40 border-[#d4a373]/30"}`}>
+          {members.length} {members.length === 1 ? "miembro" : "miembros"}
+        </span>
+      </div>
+      <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10px] font-semibold">
+        <div className={darkMode ? "text-stone-400" : "text-stone-500"}>
+          <p className="font-black uppercase tracking-wider">Coordinador</p>
+          <p className="text-stone-600 dark:text-stone-300">{team.coordinatorName || "—"}</p>
+        </div>
+        <div className={darkMode ? "text-stone-400" : "text-stone-500"}>
+          <p className="font-black uppercase tracking-wider">Supervisor</p>
+          <p className="text-stone-600 dark:text-stone-300">{team.supervisorName || "—"}</p>
+        </div>
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {members.map((m) => (
+          <span key={m.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold ${
+            darkMode ? "bg-[#24211e] border-[#3e382f] text-stone-300" : "bg-stone-50 border-[#e0dacb] text-stone-600"
+          }`}>
+            <UsersIcon className="w-3 h-3" />
+            {m.fullName || m.email}
+            {canEdit && (
+              <button
+                onClick={() => removeMember(m)}
+                disabled={updateUser.isPending}
+                className="rounded-full p-0.5 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 cursor-pointer disabled:opacity-40"
+                title="Quitar del equipo"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            )}
+          </span>
+        ))}
+        {members.length === 0 && (
+          <span className={`text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
+            Sin asesores asignados
+          </span>
+        )}
+      </div>
+      {canEdit && (
+        <div className="mt-2.5">
+          <select
+            ref={addRef}
+            value=""
+            onChange={(e) => {
+              if (e.target.value) addMember(e.target.value);
+              if (addRef.current) addRef.current.value = "";
+            }}
+            className={selectCls(darkMode) + " w-full"}
+          >
+            <option value="">+ Añadir asesor…</option>
+            {candidates.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.fullName || c.email}
+                {c.areaId && c.areaId !== area.id ? ` (${c.areaName || "otra coordinación"})` : ""}
+              </option>
+            ))}
+          </select>
+          {candidates.length === 0 && (
+            <p className={`mt-1 text-[9px] font-semibold ${darkMode ? "text-stone-600" : "text-stone-400"}`}>
+              No hay asesores disponibles para añadir
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StructureTree({ org, users, darkMode }: { org: any; users: OrgUser[]; darkMode: boolean }) {
+  const me = useAuthStore((s) => s.user);
   const areas: OrgArea[] = org?.areas ?? [];
   const teams: OrgTeam[] = org?.teams ?? [];
   const none = areas.length === 0;
+  const canEdit = me ? MANAGER_ROLES.includes(me.role) : false;
 
   return (
     <div className="space-y-4">
@@ -601,40 +687,22 @@ function StructureTree({ org, users, darkMode }: { org: any; users: OrgUser[]; d
               )}
               {areaTeams.map((team) => {
                 const members = users.filter((u) => u.teamId === team.id);
+                const candidates = users.filter(
+                  (u) =>
+                    (u.role === "agent" || u.role === "qa") &&
+                    !members.some((m) => m.id === u.id) &&
+                    (me?.role === "admin" || !u.areaId || u.areaId === area.id)
+                );
                 return (
-                  <div key={team.id} className={`rounded-[5px] border p-3.5 ${darkMode ? "bg-[#161412] border-[#3e382f]" : "bg-[#fcfbf9] border-[#e6e0d0]"}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={`text-xs font-black ${darkMode ? "text-stone-200" : "text-stone-800"}`}>{team.name}</p>
-                      <span className={`text-[9px] font-black uppercase tracking-wider border px-2 py-0.5 rounded-full ${darkMode ? "text-[#ffd8b3] bg-[#3e342a]/40 border-[#d4a373]/20" : "text-[#b57b54] bg-[#faedcd]/40 border-[#d4a373]/30"}`}>
-                        {members.length} {members.length === 1 ? "miembro" : "miembros"}
-                      </span>
-                    </div>
-                    <div className="mt-2.5 grid grid-cols-2 gap-2 text-[10px] font-semibold">
-                      <div className={darkMode ? "text-stone-400" : "text-stone-500"}>
-                        <p className="font-black uppercase tracking-wider">Coordinador</p>
-                        <p className="text-stone-600 dark:text-stone-300">{team.coordinatorName || "—"}</p>
-                      </div>
-                      <div className={darkMode ? "text-stone-400" : "text-stone-500"}>
-                        <p className="font-black uppercase tracking-wider">Supervisor</p>
-                        <p className="text-stone-600 dark:text-stone-300">{team.supervisorName || "—"}</p>
-                      </div>
-                    </div>
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {members.map((m) => (
-                        <span key={m.id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9px] font-bold ${
-                          darkMode ? "bg-[#24211e] border-[#3e382f] text-stone-300" : "bg-stone-50 border-[#e0dacb] text-stone-600"
-                        }`}>
-                          <UsersIcon className="w-3 h-3" />
-                          {m.fullName || m.email}
-                        </span>
-                      ))}
-                      {members.length === 0 && (
-                        <span className={`text-[10px] font-semibold ${darkMode ? "text-stone-500" : "text-stone-400"}`}>
-                          Sin asesores asignados
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    members={members}
+                    candidates={candidates}
+                    area={area}
+                    darkMode={darkMode}
+                    canEdit={canEdit}
+                  />
                 );
               })}
             </div>
@@ -699,6 +767,23 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
 
   const teamsFor = (u: OrgUser) => (myTeams ?? org?.teams ?? []).filter((t) => t.areaId === u.areaId || !u.areaId);
 
+  const visibleAreas = me?.role === "area_manager"
+    ? (org?.areas ?? []).filter((a) => a.id === me?.areaId)
+    : (org?.areas ?? []);
+
+  const handleAreaChange = (u: OrgUser, areaId: string | null) => {
+    if (!areaId) {
+      handlePatch(u, { areaId: null, teamId: null });
+      return;
+    }
+    const team = (org?.teams ?? []).find((t) => t.id === u.teamId);
+    if (team && team.areaId !== areaId) {
+      handlePatch(u, { areaId, teamId: null });
+    } else {
+      handlePatch(u, { areaId });
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -743,7 +828,7 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
         <table className="w-full text-left text-xs">
           <thead>
             <tr className={`border-b-[3px] ${darkMode ? "border-[#3e382f] text-stone-400" : "border-[#dfd9cc] text-stone-500"}`}>
-              {["Nombre", "Rol", "Equipo", "Supervisor", "Coordinador", "Activo"].map((h) => (
+              {["Nombre", "Rol", "Coordinación", "Equipo", "Supervisor", "Coordinador", "Activo"].map((h) => (
                 <th key={h} className="px-4 py-3 text-[10px] font-black uppercase tracking-wider">{h}</th>
               ))}
             </tr>
@@ -751,7 +836,7 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8">
+                <td colSpan={7} className="px-4 py-8">
                   <div className="h-4 w-full rounded animate-pulse bg-stone-200 dark:bg-[#24211e]" />
                 </td>
               </tr>
@@ -798,6 +883,22 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
                       }`}>
                         {ROLE_LABELS[u.role]}
                       </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {editable && visibleAreas.length > 0 ? (
+                      <select
+                        className={selectCls(darkMode)}
+                        value={u.areaId ?? "none"}
+                        onChange={(e) => handleAreaChange(u, e.target.value === "none" ? null : e.target.value)}
+                      >
+                        <option value="none">Sin coordinación</option>
+                        {visibleAreas.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={darkMode ? "text-stone-400" : "text-stone-500"}>{u.areaName || "—"}</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -856,7 +957,7 @@ function UsersTable({ darkMode }: { darkMode: boolean }) {
             })}
             {!isLoading && filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className={`px-4 py-10 text-center text-[11px] font-black uppercase tracking-widest opacity-40 ${darkMode ? "text-stone-300" : "text-stone-600"}`}>
+                <td colSpan={7} className={`px-4 py-10 text-center text-[11px] font-black uppercase tracking-widest opacity-40 ${darkMode ? "text-stone-300" : "text-stone-600"}`}>
                   No hay usuarios que coincidan con la búsqueda
                 </td>
               </tr>
