@@ -1,0 +1,566 @@
+{
+  "Licenciaturas y Bachillerato": [
+    {
+      "nombre": "Ingeniería en Sistemas Computacionales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Sistemas_Computacionales_d9a24615f1.pdf"
+    },
+    {
+      "nombre": "Ingeniería Industrial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_ingenieria_Industrial_1_compressed_24bfe80601.pdf"
+    },
+    {
+      "nombre": "Administración de Negocios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Admin_Negocios_e1b22e92c9.pdf"
+    },
+    {
+      "nombre": "Ingeniería Industrial y Administración",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ing_Industrialy_Admin_65755e07ed.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Desarrollo de Software",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ingenieria_Desarrollo_De_Software_8ad3d28d93.pdf"
+    },
+    {
+      "nombre": "Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Inteligencia_Artificial_dfe7f635b1.pdf"
+    },
+    {
+      "nombre": "Seguridad Informática",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Seguridad_Informatica_0068610e3e.pdf"
+    },
+    {
+      "nombre": "Administración y Finanzas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Administracion_2_80d370dee7.pdf"
+    },
+    {
+      "nombre": "Administración",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Administracion_457cde47fb.pdf"
+    },
+    {
+      "nombre": "Administración de Recursos Humanos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Admin_RRHH_27ccf0858f.pdf"
+    },
+    {
+      "nombre": "Administración de Tecnologías de Información",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Admin_Tec_DE_Info_1edaf645f8.pdf"
+    },
+    {
+      "nombre": "Contaduría Pública",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Contaduria_Publica_fe1486cbdb.pdf"
+    },
+    {
+      "nombre": "Contaduría y Finanzas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Contaduria_Finanzas_18fffec214.pdf"
+    },
+    {
+      "nombre": "Mercadotecnia",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Mercadotecnia_5dd0a7dc87.pdf"
+    },
+    {
+      "nombre": "Negocios Internacionales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Negocios_Internacionales_df658a0d3f.pdf"
+    },
+    {
+      "nombre": "Administración de Ventas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Admin_Ventas_ae72a3bb34.pdf"
+    },
+    {
+      "nombre": "Economía y Finanzas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Economia_Y_Finanzas_cdf7d1009d.pdf"
+    },
+    {
+      "nombre": "Agronegocios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Agronegocios_be27999612.pdf"
+    },
+    {
+      "nombre": "Diseño y Animación Digital",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Diseno_Animacion_Digital_bfec925cfa.pdf"
+    },
+    {
+      "nombre": "Emprendimiento",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Emprendimiento_20f1fa6bb4.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Energías Renovables",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ingenieria_Energias_Renovables_c82ce0efdf.pdf"
+    },
+    {
+      "nombre": "Comunicación Corporativa",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Comunicacion_Corporativa_7a09bb193d.pdf"
+    },
+    {
+      "nombre": "Medios Digitales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Medios_Digitales_eeb2e7e6f4.pdf"
+    },
+    {
+      "nombre": "Marketing y Publicidad",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Marketingy_Publicidad_c9f53d21bd.pdf"
+    },
+    {
+      "nombre": "Ciencias Políticas y Administración Pública",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ciencias_Politicasy_Administracion_Publica_a4c8141bf7.pdf"
+    },
+    {
+      "nombre": "Criminología y Criminalística",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Criminologiay_Criminalistica_3248aeb79c.pdf"
+    },
+    {
+      "nombre": "Comunicación Organizacional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Comunicacion_Organizacional_c795c49f91.pdf"
+    },
+    {
+      "nombre": "Comunicación Digital",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Comunicacion_Digital_98c68b7314.pdf"
+    },
+    {
+      "nombre": "Comunicación",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Comunicacion_e69ee1618e.pdf"
+    },
+    {
+      "nombre": "Comunicación y Manejo de Redes Sociales",
+      "url": "https://dbyiwwn1ggdry.cloudfront.net/generador-de-fichas-pdf-dev/MX_Licenciatura_en__Comunicaci%C3%B3n_y_manejo_de_Redes_Sociales_Nuevos_Programas_Bloque_2_1779202897141_285024.pdf"
+    },
+    {
+      "nombre": "Comunicación y Periodismo",
+      "url": "https://dbyiwwn1ggdry.cloudfront.net/generador-de-fichas-pdf-dev/MX_Licenciatura_en__Comunicaci%C3%B3n_y_Periodismo_Nuevos_Programas_Bloque_2_1779202886839_172722.pdf"
+    },
+    {
+      "nombre": "Arte Digital y Multimedia",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Arte_Digitaly_Multimedia_1d380e0d05.pdf"
+    },
+    {
+      "nombre": "Derecho Internacional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Internacional_36b609aa99.pdf"
+    },
+    {
+      "nombre": "Derecho Empresarial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_Empresarial_ca1006342e.pdf"
+    },
+    {
+      "nombre": "Derecho",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Derecho_8b884c2b4f.pdf"
+    },
+    {
+      "nombre": "Psicología Organizacional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Psicologia_Organizacional_bccf39fc57.pdf"
+    },
+    {
+      "nombre": "Psicología",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Psicologia_d10f2bfaab.pdf"
+    },
+    {
+      "nombre": "Pedagogía",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Pedagogia_fe576a9722.pdf"
+    },
+    {
+      "nombre": "Tecnología Educativa",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_en_Tecnologia_Educativa_793382b821.pdf"
+    },
+    {
+      "nombre": "Dirección de Arte",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Direccion_De_Arte_d37575c530.pdf"
+    },
+    {
+      "nombre": "Administración de Empresas Turísticas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Administracionde_Empresas_Turisticas_273dfd42c9.pdf"
+    },
+    {
+      "nombre": "Desarrollo Sustentable y Ecoturismo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Desarrollo_Sustentabley_Ecoturismo_a29d06337e.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Logística y Transporte",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Lic_Ingenieria_Logistica_Transporte_67546df959.pdf"
+    },
+    {
+      "nombre": "Bachillerato General",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Bachillerato_General_b00472d69a.pdf"
+    },
+    {
+      "nombre": "Tecnologías Interactivas y Virtuales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Tecnologias_Interactivasy_Virtuales_FT_4c96f78dca.pdf"
+    },
+    {
+      "nombre": "Software para Entretenimiento Digital",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Software_Para_Entretenimiento_Digital_FT_40834e1ab2.pdf"
+    },
+    {
+      "nombre": "Inteligencia Artificial en Educación",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Inteligencia_Artificialen_Educacion_FT_49f0aaee94.pdf"
+    },
+    {
+      "nombre": "Inteligencia Artificial y Ciencia de Datos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Inteligencia_Artificialy_Cienciade_Datos_FT_d92b253666.pdf"
+    },
+    {
+      "nombre": "Inteligencia Artificial aplicada a Negocios, Industria y Automatización",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Inteligencia_Artificial_Aplicadaa_Negocios_Industriay_Automatizacion_FT_0525deb805.pdf"
+    },
+    {
+      "nombre": "Innovación y Transformación de Negocios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Innovaciony_Transformacionde_Negocios_FT_cce777d6bf.pdf"
+    },
+    {
+      "nombre": "Innovación y Emprendimiento con Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Innovaciony_Emprendimientocon_Inteligencia_Artificial_FT_2e762d2e71.pdf"
+    },
+    {
+      "nombre": "Ingeniería Robótica",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Robotica_FT_3a52cfcd75.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Tecnología de Videojuegos y Realidad Virtual",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Tecnologiade_Videojuegosy_Realidad_Virtual_FT_f10bf5a66e.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Ciencia de Datos e Inteligencia Analítica",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Cienciade_Datose_Inteligencia_Analitica_FT_f681b50180.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Sistemas Inteligentes",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Sistemas_Inteligentes_FT_1a60cbeb8d.pdf"
+    },
+    {
+      "nombre": "Ingeniería en Programación en la Nube",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Programacionenla_Nube_FT_5683d364ce.pdf"
+    },
+    {
+      "nombre": "Ingeniería Ambiental",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ingenieria_Ambiental_FT_afda2bd77b.pdf"
+    },
+    {
+      "nombre": "Finanzas y Banca",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Finanzasy_Banca_FT_c6bc0b9eb3.pdf"
+    },
+    {
+      "nombre": "Finanzas y Estratégia Fiscal",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Finanzasy_Estrategia_Fiscal_FT_7d185759a6.pdf"
+    },
+    {
+      "nombre": "Ética y Gobernanza de la Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Eticay_Gobernanzadela_Inteligencia_Artificial_FT_d6579329a5.pdf"
+    },
+    {
+      "nombre": "Estrategia y Transformación de Negocios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Estrategiay_Transformacionde_Negocios_FT_5c19e393c1.pdf"
+    },
+    {
+      "nombre": "Educación para la Sustentabilidad",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Educacion_Para_La_Sustentabilidad_FT_cbe92e220b.pdf"
+    },
+    {
+      "nombre": "Comercio Electrónico y Negocios Digitales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Comercio_Electronicoy_Negocios_Digitales_FT_55c1a4b9d1.pdf"
+    },
+    {
+      "nombre": "Ciberseguridad y Riesgos en Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Ciberseguridady_Riesgos_En_Inteligencia_Artificial_FT_774ae9f9e9.pdf"
+    },
+    {
+      "nombre": "Arquitectura",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Licenciatura_Arquitectura_FT_d0afabe2dc.pdf"
+    }
+  ],
+  "Maestrías": [
+    {
+      "nombre": "Ciencia de Datos para Negocios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Ciencia_De_Datos_Para_Negocios_08ec57cf5c.pdf"
+    },
+    {
+      "nombre": "Ingeniería y Tecnología Ambiental",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Ingenieria_Tecnologia_Ambiental_1f83de1270.pdf"
+    },
+    {
+      "nombre": "Dirección de Proyectos de Innovación",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Direccion_De_Proyectos_De_Innovacion_c996edb737.pdf"
+    },
+    {
+      "nombre": "Dirección en Ingeniería de Software",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Direccion_Ingenieria_De_Software_1_632cf28df4.pdf"
+    },
+    {
+      "nombre": "Ciencias Computacionales y Telecomunicaciones",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Ciencias_Computacionales_Telecomunicaciones_c3bc67a6d6.pdf"
+    },
+    {
+      "nombre": "Ciberseguridad",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Ciberseguridad_34606f7656.pdf"
+    },
+    {
+      "nombre": "MBA Internacional",
+      "url": "https://cmsutel.s3.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestr_a_Administracion_De_Negocios_mar24_compressed_50f45c7fd0.pdf"
+    },
+    {
+      "nombre": "Administración de Negocios Deportivos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_De_Negocios_Deportivos_0bd8015017.pdf"
+    },
+    {
+      "nombre": "Mercadotecnia Digital y Comercio Electrónico",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Mercadotecnia_Digital_Comercio_Electronico_dc1c2895af.pdf"
+    },
+    {
+      "nombre": "Administración de Recursos Humanos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_De_RRHH_e9c85971d7.pdf"
+    },
+    {
+      "nombre": "Administración de Tecnologías de la Información",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_De_Tecnologias_De_La_Info_80229e16c8.pdf"
+    },
+    {
+      "nombre": "Dirección de Ventas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Direccion_De_Ventas_e4d28a1098.pdf"
+    },
+    {
+      "nombre": "Administración Pública",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_Publica_50a4512507.pdf"
+    },
+    {
+      "nombre": "Coaching Integral y Organizacional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Coaching_Integral_Organizacional_68dc7d414e.pdf"
+    },
+    {
+      "nombre": "Comercio Internacional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Comercio_Internacional_a776e529e3.pdf"
+    },
+    {
+      "nombre": "Dirección de Negocios de Alimentos y Bebidas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Direccionde_Negociosde_Alimentosy_Bebidas_03e6bd5cd6.pdf"
+    },
+    {
+      "nombre": "Gestión Estratégica del Capital Humano",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Gestion_Estrategica_Capital_Humano_bbd9c05e5a.pdf"
+    },
+    {
+      "nombre": "Gestión Organizacional Positiva",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Gestion_Organizacional_Positiva_ace5c3b999.pdf"
+    },
+    {
+      "nombre": "Finanzas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Finanzas_f720a26e9c.pdf"
+    },
+    {
+      "nombre": "Administración Pública (CIFAL Málaga / UNITAR)",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_en_Administracion_Publica_con_CIFAL_Malaga_UNITAR_2_0321ee7532.pdf"
+    },
+    {
+      "nombre": "Diseño para Medios Digitales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Diseno_Para_Medios_Digitales_dadd16d500.pdf"
+    },
+    {
+      "nombre": "Energías Renovables y Eficiencia Energética",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Energia_Renovables_Eficiencia_Energetica_1dad0f8501.pdf"
+    },
+    {
+      "nombre": "Impuestos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Impuestos_534f2d4aa5.pdf"
+    },
+    {
+      "nombre": "Mercadotecnia Política",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Mercadotecnia_Politica_67f42de647.pdf"
+    },
+    {
+      "nombre": "Administración de Instituciones Educativas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_De_Instituciones_Educativas_e921a11461.pdf"
+    },
+    {
+      "nombre": "Derecho Procesal y Juicios Orales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Derecho_Procesaly_Juicios_Orales_a35d0321fb.pdf"
+    },
+    {
+      "nombre": "Maestría en Educación y Docencia",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Educaciony_Docencia_ae49ed6624.pdf"
+    },
+    {
+      "nombre": "Maestría en Psicología Transpersonal",
+      "url": "https://cmsutel.s3.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Psicologia_Transpersonal_699440d665.pdf"
+    },
+    {
+      "nombre": "Derecho Procesal Penal",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Derecho_Procesal_Penal_de170d32f6.pdf"
+    },
+    {
+      "nombre": "Derecho Procesal Constitucional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Derecho_Procesal_Constitucional_cc1a7e911a.pdf"
+    },
+    {
+      "nombre": "Tecnología Educativa",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Tecnologia_Educativa_336eeab533.pdf"
+    },
+    {
+      "nombre": "Derechos Humanos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Derechos_Humanos_ba9ac5b881.pdf"
+    },
+    {
+      "nombre": "Desarrollo Sustentable y Gestión Ambiental",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Desarrollo_Sustentable_Gestion_Ambiental_efbdc0fa74.pdf"
+    },
+    {
+      "nombre": "Responsabilidad Social",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Responsabilidad_Social_d9f8ccaa29.pdf"
+    },
+    {
+      "nombre": "Dirección de Empresas Turísticas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Direccionde_Empresas_Turisticas_836ab2c91e.pdf"
+    },
+    {
+      "nombre": "Logística y Cadena de Suministro",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Mae_Logistica_Cadena_Suministro_115bf52dfd.pdf"
+    },
+    {
+      "nombre": "Gestión Directiva de Instituciones en Salud",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Gestion_Directivade_Institucionesde_Salud_c24e223693.pdf"
+    },
+    {
+      "nombre": "Alta Dirección y Gobierno Corporativo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Alta_Direcciony_Gobierno_Corporativo_FT_d3a3d982f5.pdf"
+    },
+    {
+      "nombre": "Arquitectura de Software",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Arquitecturade_Software_FT_9dc5562efa.pdf"
+    },
+    {
+      "nombre": "Automatización de Procesos y Análisis Predictivo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Automatizacionde_Procesosy_Analisis_Predictivo_FT_8c292df536.pdf"
+    },
+    {
+      "nombre": "Automatización y Robótica Industrial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Automatizaciony_Robotica_Industrial_FT_a2b44cdc75.pdf"
+    },
+    {
+      "nombre": "Desarrollo de Videojuegos y Realidad Extendida",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Desarrollode_Videojuegosy_Realidad_Extendida_FT_48f7b9fa78.pdf"
+    },
+    {
+      "nombre": "Educación Inteligente y Diseño Instruccional con Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Educacion_Inteligentey_Diseno_Instruccionalcon_Inteligencia_Artificial_FT_eefef3d612.pdf"
+    },
+    {
+      "nombre": "Ingeniería de Datos e Infraestructura",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Ingenieriade_Datose_Infraestructura_FT_0515445840.pdf"
+    },
+    {
+      "nombre": "Innovación Estratégica con Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Innovacion_Estrategicacon_Inteligencia_Artificial_FT_e89aa6e054.pdf"
+    },
+    {
+      "nombre": "Innovación Educativa y Diseño Instruccional",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Innovacion_Educativay_Diseno_Instruccional_FT_3b1609caa9.pdf"
+    },
+    {
+      "nombre": "Soluciones de Inteligencia Artificial para Negocios y Servicios",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Solucionesde_Inteligencia_Artificialpara_Negociosy_Servicios_FT_77eb8c43b9.pdf"
+    },
+    {
+      "nombre": "Valuación Inmobiliaria",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Maestria_Valuacion_Inmobiliaria_FT_ec0921abd8.pdf"
+    },
+    {
+      "nombre": "Interfaces Inteligentes y Tecnología Inmersiva",
+      "url": "https://dbyiwwn1ggdry.cloudfront.net/generador-de-fichas-pdf-dev/MX_Maestria_en__Interfaces_Inteligentes_y_Tecnolog%C3%ADa_Inmersiva_Nuevos_Programas_Bloque_2_1779211091380_966430.pdf"
+    },
+    {
+      "nombre": "Infraestructura y Cómputo en la Nube",
+      "url": "https://dbyiwwn1ggdry.cloudfront.net/generador-de-fichas-pdf-dev/MX_Maestria_en__Infraestructura_y_C%C3%B3mputo_en_la_Nube_Nuevos_Programas_Bloque_2_1779211102468_280015.pdf"
+    },
+    {
+      "nombre": "Mindfulness (Conciencia Plena Aplicada)",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/UtelMx_FichasTecnicas_Maestria_Mindfulness.pdf"
+    },
+    {
+      "nombre": "Administración en Mercadotecnia Estratégica",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestria_Administracion_Mercadotecnia_Estrategica_d554867895.pdf"
+    },
+    {
+      "nombre": "Administración de Negocios",
+      "url": "https://cmsutel.s3.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Maestr_a_Administracion_De_Negocios_mar24_compressed_50f45c7fd0.pdf"
+    }
+  ],
+  "Máster Internacionales": [
+    {
+      "nombre": "Máster Internacional en Soluciones Avanzadas en Ciberseguridad",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Soluciones_Avanzadas_en_Ciberseguridad_90243c716b.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Análisis de datos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Analisis_de_Datos_5fbdb989e0.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Desarrollo de Software y Estructuras de Datos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Desarrollo_de_Software_y_Estructura_de_Datos_4f865afc57.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Machine Learning",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Machine_Learning_c08998e648.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Ciencia de Datos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Ciencia_de_Datos_f4a9f8761f.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Psicología de la Ansiedad, la Depresión y las Conductas Adictivas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Psicologia_de_la_Ansiedad_la_Depresion_y_las_Conductas_Adictivas_b05230d62b.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Dirección de Proyectos y Liderazgo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Direccion_de_Proyectos_y_Liderazgo_8ad1cf8a6e.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Pensamiento Crítico para la Toma de Decisiones",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Pensamiento_Critico_para_la_Toma_de_Decisiones_2600788ada.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Neurociencia Médica",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Neurociencia_Medica_dea8cbe761.pdf"
+    },
+    {
+      "nombre": "Máster Internacional en Gestión en Hotelería y Turismo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Creatividad_Fichas_Tecnicas_Gestion_en_Hoteleria_y_Turismo_5c8b55773e.pdf"
+    }
+  ],
+  "Doctorados": [
+    {
+      "nombre": "Gestión e Innovación Tecnológica",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Gestion_Innovacion_Tecnologica_24c42d74ef.pdf"
+    },
+    {
+      "nombre": "Administración Estratégica Empresarial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Administracion_Estrategica_Empresarial_5bb2d9e86b.pdf"
+    },
+    {
+      "nombre": "Educación",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Educacion_b4ac3b5c4d.pdf"
+    },
+    {
+      "nombre": "Finanzas",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Finanzas_7736c87a7b.pdf"
+    },
+    {
+      "nombre": "Derecho",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Derecho_548bd3ee4a.pdf"
+    },
+    {
+      "nombre": "Desarrollo Humano",
+      "url": "https://cmsutel.s3.amazonaws.com/Utel_Mx_Fichas_Tecnicas_Doctorado_Desarrollo_Humano_12a469616c.pdf"
+    },
+    {
+      "nombre": "Alta Dirección y Gobierno Corporativo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Doctorado_Alta_Direcciony_Gobierno_Corporativo_FT_36e8f6d5ab.pdf"
+    },
+    {
+      "nombre": "Ciberseguridad de Sistemas Autónomos",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Doctorado_Ciberseguridadde_Sistemas_Autonomos_FT_8aa66c0d04.pdf"
+    },
+    {
+      "nombre": "Ciencia de Datos e Inteligencia Artificial",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Doctorado_Cienciade_Datose_Inteligencia_Artificial_FT_350899c42a.pdf"
+    },
+    {
+      "nombre": "Ciberseguridad y Gestión de Riesgos Digitales",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Doctorado_Ciberseguridady_Gestionde_Riesgos_Digitales_FT_7af690caaf.pdf"
+    },
+    {
+      "nombre": "Urbanismo",
+      "url": "https://cmsutel.s3.us-east-1.amazonaws.com/Utel_Universidad_Editorial_Mx_Doctorado_Urbanismo_FT_9636ece9e8.pdf"
+    }
+  ]
+}

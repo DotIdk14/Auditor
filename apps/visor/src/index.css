@@ -5,6 +5,42 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: "Quicksand", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Compatibilidad de shades no estándar usadas por el cotizador UTEL */
+  --color-slate-350: #cbd5e1;
+  --color-slate-450: #94a3b8;
+  --color-slate-850: #242424;
+  --color-gray-150: #e2e8f0;
+  --color-gray-450: #94a3b8;
+  --color-gray-650: #475569;
+  --color-indigo-150: #d2eed6;
+  --color-indigo-650: #2e913b;
+  --color-red-650: #dc2626;
+  --color-rose-450: #fb7185;
+  --color-emerald-150: #d1fae5;
+}
+
+/* Dark variant por clase (el visor alterna .dark en <html>) */
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Paleta UTEL scoped al módulo del cotizador (no contamina al visor) ──
+   Indigo = acento dinámico (var(--primary-*) definidas en runtime por el módulo) */
+.cotizador-app {
+  --color-indigo-50: var(--primary-50, #ebf7ec);
+  --color-indigo-100: var(--primary-100, #d2eed6);
+  --color-indigo-400: var(--primary-400, #4de265);
+  --color-indigo-500: var(--primary-500, #3fb34d);
+  --color-indigo-600: var(--primary-600, #39b54a);
+  --color-indigo-700: var(--primary-700, #2e913b);
+  --color-indigo-900: var(--primary-900, #1a4d26);
+  --color-blue-600: #005691;
+  --color-blue-700: #004575;
+  --color-slate-50: #f4f7f6;
+  --color-slate-100: #e7eeed;
+  --color-slate-200: #d8e2e0;
+  --color-slate-800: #2d2d2d;
+  --color-slate-900: #1e1e1e;
+  --color-slate-950: #121212;
 }
 
 html, body {

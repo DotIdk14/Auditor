@@ -1,8 +1,7 @@
 import { SpeechesDropdown } from './SpeechesDropdown';
+import { CotizadorModule } from '../../../cotizador/CotizadorModule';
 
 interface Props { darkMode: boolean; }
-
-const COTIZADOR_URL = 'https://cotizador-idk.vercel.app/';
 
 export function NewCallView({ darkMode }: Props) {
   return (
@@ -12,12 +11,7 @@ export function NewCallView({ darkMode }: Props) {
       </div>
       <div className="lg:col-span-2 min-w-0">
         <div className={`rounded-xl border overflow-hidden h-[calc(100vh-11rem)] lg:sticky lg:top-2 ${darkMode ? 'bg-zinc-900 border-white/5' : 'bg-white border-stone-200'}`}>
-          <iframe
-            src={COTIZADOR_URL}
-            title="Cotizador"
-            className="w-full h-full border-0"
-            allow="clipboard-write"
-          />
+          <CotizadorModule darkMode={darkMode} />
         </div>
       </div>
     </div>
