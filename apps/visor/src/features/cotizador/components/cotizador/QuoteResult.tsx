@@ -41,6 +41,7 @@ import { ProgramHoverAccordion } from './ProgramHoverAccordion';
 import { RESUMENES, findResumen } from '../../data/resumenesData';
 import { PreciosConfig } from '../../types';
 import { useAuthStore } from '../../../../auth/authStore';
+import type { QuoteContactContext } from '../ContactPicker';
 
 export interface QuoteSnapshot {
   programa: string;
@@ -92,6 +93,7 @@ interface QuoteResultProps {
 
   // Save quote
   onSaveQuote?: (snapshot: QuoteSnapshot) => void;
+  contactContext?: QuoteContactContext;
 }
 
 // Esta parte es la que muestra cuánto dinero tiene que pagar el alumno al final.
@@ -115,7 +117,8 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
   platziPreview,
   precios,
   selectedJornada = 'intensiva',
-  onSaveQuote
+  onSaveQuote,
+  contactContext
 }) => {
   // Estado para la gestión de la propuesta académica: 'revision' o 'aprobada'
   const [proposalStatus, setProposalStatus] = useState<'revision' | 'aprobada'>('revision');
@@ -511,6 +514,12 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
     const printCreatedDate = createdDateStr || formatDateSp(today);
     const printExpiryDate = expiryDateStr || formatDateSp(validityDate);
 
+    const contactName = contactContext
+      ? contactContext.mode === 'new'
+        ? (contactContext.fullName || '').trim()
+        : (contactContext.contact?.full_name || '').trim()
+      : '';
+
     const startDateVal = selectedStartDate || 'Inmediato';
     const durationVal = activeTab === 'dip' 
       ? (currentDipDur === '6m' ? '6 meses' : '8 meses')
@@ -653,6 +662,16 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
             margin-bottom: 1px;
           }
           .meta-details .meta-advisor span {
+            color: #1a1a1a;
+            font-weight: 600;
+          }
+          .meta-details .meta-contact {
+            font-size: 11.5px;
+            color: #39b54a;
+            font-weight: 800;
+            margin-bottom: 1px;
+          }
+          .meta-details .meta-contact span {
             color: #1a1a1a;
             font-weight: 600;
           }
@@ -1159,6 +1178,7 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
             </div>
             <div class="meta-details">
               <div class="meta-advisor">Asesor: <span>${advisorName}</span></div>
+              ${contactName ? `<div class="meta-contact">Cliente: <span>${contactName}</span></div>` : ''}
               <div class="meta-title">Programa de interés:</div>
               <div class="meta-prog">${progName}</div>
               <div class="meta-dur-title">Duración:</div>
@@ -1735,8 +1755,9 @@ export const QuoteResult: React.FC<QuoteResultProps> = ({
                 <input
                   type="text"
                   value={advisorName}
-                  onChange={(e) => setAdvisorName(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-gray-800 dark:text-slate-200 border-none p-0 focus:ring-0 focus:outline-none w-32 placeholder-gray-400"
+                  readOnly
+                  title={advisorName || 'Nombre de asesor'}
+                  className="bg-transparent text-xs font-bold text-gray-800 dark:text-slate-200 border-none p-0 focus:ring-0 focus:outline-none w-32 placeholder-gray-400 cursor-default"
                   placeholder="Nombre de asesor"
                 />
               </div>

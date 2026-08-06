@@ -782,6 +782,7 @@ export function CotizadorModule({ darkMode, speechesPanel }: CotizadorModuleProp
                     platziPreview={adminConfig.platziPreview}
                     precios={precios}
                     selectedJornada={selectedJornada}
+                    contactContext={contactContext}
                     onSaveQuote={(snapshot) => {
                       setSaveKey(k => k + 1);
                       setSaveSnapshot(snapshot);
